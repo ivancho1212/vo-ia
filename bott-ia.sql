@@ -1,0 +1,222 @@
+-- Eliminar la base de datos si ya existe
+DROP DATABASE IF EXISTS chatbot_platform;
+
+-- Crear la base de datos
+CREATE DATABASE chatbot_platform CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE chatbot_platform;
+
+-- Tabla de roles
+CREATE TABLE roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT
+);
+
+-- Tabla de tipos de documento
+CREATE TABLE document_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    abbreviation VARCHAR(10)
+);
+
+-- Tabla de usuarios
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    role_id INT NOT NULL,
+    document_type_id INT,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    address TEXT,
+    document_number VARCHAR(50),
+    document_photo_url TEXT,
+    avatar_url TEXT,
+    is_verified BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES roles(id),
+    FOREIGN KEY (document_type_id) REFERENCES document_types(id)
+);
+
+-- Tabla de bots
+CREATE TABLE bots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    api_key VARCHAR(255) NOT NULL UNIQUE,
+    model_used VARCHAR(50) DEFAULT 'gpt-4',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Tabla de documentos subidos
+CREATE TABLE uploaded_documents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    user_id INT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(20),
+    file_path TEXT NOT NULL,
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    indexed BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Tabla de estilos personalizados del widget
+CREATE TABLE bot_styles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    theme ENUM('light', 'dark', 'custom') DEFAULT 'light',
+    primary_color VARCHAR(20) DEFAULT '#000000',
+    secondary_color VARCHAR(20) DEFAULT '#ffffff',
+    font_family VARCHAR(100) DEFAULT 'Arial',
+    avatar_url TEXT,
+    position ENUM('bottom-right', 'bottom-left', 'top-right', 'top-left') DEFAULT 'bottom-right',
+    custom_css TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+-- Tabla de conversaciones
+CREATE TABLE conversations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    user_id INT,
+    title VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Tabla de prompts (interacciones)
+CREATE TABLE prompts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    user_id INT NOT NULL,
+    conversation_id INT,
+    prompt_text TEXT NOT NULL,
+    response_text LONGTEXT,
+    tokens_used INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+);
+
+-- Tabla de planes
+CREATE TABLE plans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    max_tokens INT NOT NULL,
+    bots_limit INT DEFAULT 1,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Suscripciones de usuarios a planes
+CREATE TABLE subscriptions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    plan_id INT NOT NULL,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
+    status ENUM('active', 'expired', 'canceled') DEFAULT 'active',
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (plan_id) REFERENCES plans(id)
+);
+
+-- Tabla de facturación por uso
+CREATE TABLE billing (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    bot_id INT,
+    subscription_id INT,
+    amount DECIMAL(10, 2) NOT NULL,
+    tokens_used INT NOT NULL,
+    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (bot_id) REFERENCES bots(id),
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(id)
+);
+
+-- Resumen de uso mensual para OpenAI
+CREATE TABLE openai_usage_summary (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    month VARCHAR(7) NOT NULL, -- formato YYYY-MM
+    total_tokens INT NOT NULL,
+    total_amount DECIMAL(10, 2) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de integraciones (widgets o API)
+CREATE TABLE bot_integrations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    integration_type ENUM('widget', 'api') DEFAULT 'widget',
+    allowed_domain VARCHAR(255),
+    api_token VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+-- Historial de actividad del usuario
+CREATE TABLE activity_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    action VARCHAR(100),
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Tabla de soporte (tickets)
+CREATE TABLE support_tickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    status ENUM('open', 'in_progress', 'closed') DEFAULT 'open',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Respuestas del soporte
+CREATE TABLE support_responses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ticket_id INT NOT NULL,
+    responder_id INT,
+    message TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ticket_id) REFERENCES support_tickets(id),
+    FOREIGN KEY (responder_id) REFERENCES users(id)
+);
+ALTER TABLE prompts ADD COLUMN source ENUM('widget', 'api', 'mobile', 'admin') DEFAULT 'widget';
+CREATE TABLE bot_actions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    trigger_phrase VARCHAR(255),
+    action_type ENUM('reply', 'redirect', 'show_html', 'custom') NOT NULL,
+    payload TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+ALTER TABLE plans ADD CONSTRAINT unique_plan_name UNIQUE (name);
+CREATE TABLE plan_changes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    plan_id INT NOT NULL,
+    changed_by INT NOT NULL,
+    field_changed VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    changed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (plan_id) REFERENCES plans(id),
+    FOREIGN KEY (changed_by) REFERENCES users(id)
+);
+
