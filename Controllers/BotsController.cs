@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System;
 
 namespace Voia.Api.Controllers
 {
@@ -17,55 +20,89 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Bot>>> GetBots()
+        public async Task<ActionResult<IEnumerable<Bot>>> GetBots(
+           [FromQuery] bool? isActive,
+           [FromQuery] string? name = null)
         {
-            return await _context.Bots.Include(b => b.User).ToListAsync();
-        }
-
-        [HttpGet("{id}")]
-        public async Task<ActionResult<Bot>> GetBot(int id)
-        {
-            var bot = await _context.Bots.Include(b => b.User).FirstOrDefaultAsync(b => b.Id == id);
-
-            if (bot == null)
+            try
             {
-                return NotFound();
-            }
+                var query = _context.Bots
+                                    .Include(b => b.User)  // Incluye la relación User para que no sea null
+                                    .AsQueryable();
 
-            return bot;
+                if (isActive.HasValue)
+                {
+                    query = query.Where(b => b.IsActive == isActive.Value);
+                }
+
+                if (!string.IsNullOrEmpty(name))
+                {
+                    query = query.Where(b => b.Name.Contains(name));
+                }
+
+                var bots = await query.ToListAsync();
+
+                if (bots.Count == 0)
+                {
+                    return Ok(new { Message = "No bots found" });
+                }
+
+                return Ok(bots);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred", Details = ex.Message });
+            }
         }
 
+
+
+        // POST: api/Bots
         [HttpPost]
-        public async Task<ActionResult<Bot>> CreateBot(Bot bot)
+        public async Task<ActionResult<Bot>> CreateBot([FromBody] Bot bot)
         {
+            bot.CreatedAt = DateTime.UtcNow;
+            bot.UpdatedAt = DateTime.UtcNow;
+
             _context.Bots.Add(bot);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetBot), new { id = bot.Id }, bot);
+
+            return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, bot);
         }
 
+        // PUT: api/Bots/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBot(int id, Bot bot)
+        public async Task<IActionResult> UpdateBot(int id, [FromBody] Bot botUpdate)
         {
-            if (id != bot.Id)
-                return BadRequest();
+            var bot = await _context.Bots.FindAsync(id);
+            if (bot == null)
+                return NotFound(new { Message = "Bot not found" });
 
-            _context.Entry(bot).State = EntityState.Modified;
+            bot.Name = botUpdate.Name;
+            bot.Description = botUpdate.Description;
+            bot.ApiKey = botUpdate.ApiKey;
+            bot.ModelUsed = botUpdate.ModelUsed;
+            bot.IsActive = botUpdate.IsActive;
+            bot.UpdatedAt = DateTime.UtcNow;
+
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(bot);
         }
 
+        // DELETE: api/Bots/{id}
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteBot(int id)
         {
             var bot = await _context.Bots.FindAsync(id);
             if (bot == null)
-                return NotFound();
+                return NotFound(new { Message = "Bot not found" });
 
             _context.Bots.Remove(bot);
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
+
     }
 }
