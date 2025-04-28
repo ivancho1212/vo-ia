@@ -107,3 +107,13 @@ C:\Users\Puesto7\Documents\voia\Voia.Api\obj\Debug\net8.0\refint\Voia.Api.dll
 C:\Users\Puesto7\Documents\voia\Voia.Api\obj\Debug\net8.0\Voia.Api.pdb
 C:\Users\Puesto7\Documents\voia\Voia.Api\obj\Debug\net8.0\Voia.Api.genruntimeconfig.cache
 C:\Users\Puesto7\Documents\voia\Voia.Api\obj\Debug\net8.0\ref\Voia.Api.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\package-lock.json
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\package.json
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.Diagnostics.Abstractions.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.Hosting.Abstractions.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.Logging.Abstractions.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.ObjectPool.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Microsoft.Extensions.Options.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\Newtonsoft.Json.dll
+C:\Users\Puesto7\Documents\voia\Voia.Api\bin\Debug\net8.0\System.Net.WebSockets.WebSocketProtocol.dll

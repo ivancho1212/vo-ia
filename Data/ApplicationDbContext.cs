@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models;
+using Voia.Api.Models.Conversations;
 
 namespace Voia.Api.Data
 {
     public class ApplicationDbContext : DbContext
     {
+        public DbSet<Conversation> Conversations { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Role> Roles { get; set; }
         public DbSet<Bot> Bots { get; set; }
