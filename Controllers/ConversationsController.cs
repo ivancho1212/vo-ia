@@ -34,7 +34,6 @@ namespace Voia.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<Conversation>> CreateConversation(CreateConversationDto dto)
         {
-            // Verificar si el BotId y el UserId son válidos
             var user = await _context.Users.FindAsync(dto.UserId);
             if (user == null)
             {
@@ -51,7 +50,9 @@ namespace Voia.Api.Controllers
             {
                 UserId = dto.UserId,
                 BotId = dto.BotId,
-                Title = dto.Title,  // Asegúrate de que el título se pase desde el DTO
+                Title = dto.Title,
+                UserMessage = dto.UserMessage,
+                BotResponse = dto.BotResponse,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -60,5 +61,43 @@ namespace Voia.Api.Controllers
 
             return CreatedAtAction(nameof(GetConversations), new { id = conversation.Id }, conversation);
         }
+
+        // PUT: api/conversations/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateConversation(int id, UpdateConversationDto dto)
+        {
+            var conversation = await _context.Conversations.FindAsync(id);
+
+            if (conversation == null)
+            {
+                return NotFound($"Conversation with ID {id} not found.");
+            }
+
+            // Actualiza solo los campos permitidos
+            conversation.Title = dto.Title ?? conversation.Title;
+            conversation.UserMessage = dto.UserMessage ?? conversation.UserMessage;
+            conversation.BotResponse = dto.BotResponse ?? conversation.BotResponse;
+
+            _context.Conversations.Update(conversation);
+            await _context.SaveChangesAsync();
+
+            return Ok(conversation);
+        }
+        // DELETE: api/conversations/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteConversation(int id)
+        {
+            var conversation = await _context.Conversations.FindAsync(id);
+            if (conversation == null)
+            {
+                return NotFound(new { message = $"Conversation with ID {id} not found." });
+            }
+
+            _context.Conversations.Remove(conversation);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Conversation with ID {id} was deleted successfully." });
+        }
+
     }
 }
