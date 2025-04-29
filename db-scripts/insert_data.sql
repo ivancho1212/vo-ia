@@ -136,3 +136,63 @@ INSERT INTO plan_changes (plan_id, changed_by, field_changed, old_value, new_val
 VALUES 
   (1, 29, 'price', '9.99', '10.99'),  -- Cambio de precio para el plan 1 hecho por el usuario 29
   (2, 30, 'max_tokens', '50000', '60000');  -- Cambio en los tokens máximos para el plan 2 hecho por el usuario 30
+
+-- Insertar en la tabla interests (intereses disponibles)
+INSERT INTO interests (name) VALUES 
+('Tecnología'), 
+('Deportes'), 
+('Música'), 
+('Cine'), 
+('Arte'),
+('Literatura');
+
+-- Insertar en la tabla bots (bots ya existentes)
+-- Asegúrate de tener algún bot creado previamente
+INSERT INTO bots (user_id, name, description, api_key, model_used, created_at)
+VALUES
+(29, 'Bot de Asistencia', 'Un bot que ayuda con tareas diarias.', 'clave_asistencia', 'gpt-4', NOW()),
+(30, 'Bot de Ventas', 'Un bot que ayuda a realizar ventas.', 'clave_ventas', 'gpt-4', NOW());
+
+-- Insertar en la tabla bot_profiles (perfil de los bots)
+INSERT INTO bot_profiles (bot_id, name, avatar_url, bio, personality_traits, language, tone, restrictions)
+VALUES
+(21, 'Bot de Asistencia', 'https://example.com/avatar1.png', 'Bot amigable y siempre dispuesto a ayudar.', 'Amigable, paciente, eficiente', 'es', 'formal', 'No discutir sobre temas políticos o religiosos.'),
+(22, 'Bot de Ventas', 'https://example.com/avatar2.png', 'Bot enfocado en realizar ventas con empatía.', 'Persuasivo, carismático, directo', 'es', 'amistoso', 'Evitar conversaciones personales.');
+
+-- Insertar en la tabla user_preferences (preferencias de los usuarios)
+-- Asegúrate de tener usuarios creados previamente
+INSERT INTO user_preferences (user_id, interest_id) VALUES 
+(29, 1),  -- Usuario 29 interesado en tecnología
+(29, 3),  -- Usuario 29 interesado en música
+(30, 4),  -- Usuario 30 interesado en cine
+(30, 2);  -- Usuario 30 interesado en deportes
+
+-- Insertar en la tabla user_bot_relations (relaciones entre usuarios y bots)
+-- Supongamos que el usuario 1 quiere interactuar con el bot de asistencia en una relación de "coach"
+INSERT INTO user_bot_relations (user_id, bot_id, relationship_type, interaction_score, last_interaction) VALUES
+(29, 21, 'coach', 10, NOW()),
+(30, 22, 'romántico', 5, NOW());
+
+-- Insertar en la tabla user_consents (consentimientos de los usuarios)
+-- Supongamos que el usuario 1 consiente el uso de datos y generación de imágenes
+INSERT INTO user_consents (user_id, consent_type, granted, granted_at) VALUES
+(29, 'uso de datos', TRUE, NOW()),
+(30, 'generación de imágenes', TRUE, NOW());
+
+-- Insertar en la tabla training_data_sessions (sesiones de entrenamiento)
+-- Suponiendo que el usuario 1 entrena el bot de asistencia
+INSERT INTO training_data_sessions (user_id, bot_id, data_summary, data_type, status) VALUES
+(29, 21, 'Entrenamiento sobre respuestas de soporte al cliente.', 'text', 'pending'),
+(30, 22, 'Entrenamiento sobre ventas y negociación.', 'text', 'processing');
+
+-- Insertar en la tabla ai_model_configs (configuraciones de los modelos)
+-- Configuración para el bot de asistencia con el modelo GPT-4
+INSERT INTO ai_model_configs (bot_id, model_name, temperature, max_tokens, frequency_penalty, presence_penalty) VALUES
+(21, 'gpt-4', 0.7, 512, 0.2, 0.1),
+(22, 'gpt-4', 0.8, 600, 0.1, 0.0);
+
+-- Insertar en la tabla generated_images (imágenes generadas)
+-- Supongamos que el usuario 1 genera una imagen relacionada con el bot de asistencia
+INSERT INTO generated_images (user_id, bot_id, prompt, image_url) VALUES
+(29, 21, 'Imagen de un asistente amigable', 'https://example.com/assistant_image1.png'),
+(30, 22, 'Imagen de un vendedor carismático', 'https://example.com/sales_bot_image2.png');

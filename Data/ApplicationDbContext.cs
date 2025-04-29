@@ -5,6 +5,7 @@ using Voia.Api.Models.Prompts;
 using Voia.Api.Models.Plans;
 using Voia.Api.Models.Subscriptions;
 using Voia.Api.Models.SupportTicket; 
+using Voia.Api.Models.BotProfiles;
 
 namespace Voia.Api.Data
 {
@@ -12,7 +13,6 @@ namespace Voia.Api.Data
     {
         public DbSet<Conversation> Conversations { get; set; }
         public DbSet<User> Users { get; set; }
-        public DbSet<Role> Roles { get; set; }
         public DbSet<Bot> Bots { get; set; }
         public DbSet<BotStyle> BotStyles { get; set; }
         public DbSet<Prompt> Prompts { get; set; }
@@ -20,7 +20,7 @@ namespace Voia.Api.Data
         public DbSet<Subscription> Subscriptions { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
         public DbSet<SupportResponse> SupportResponses { get; set; }
-
+        public DbSet<BotProfile> BotProfiles { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
