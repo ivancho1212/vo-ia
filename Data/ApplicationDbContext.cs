@@ -3,6 +3,7 @@ using Voia.Api.Models;
 using Voia.Api.Models.Conversations;
 using Voia.Api.Models.Prompts;
 using Voia.Api.Models.Plans;
+using Voia.Api.Models.Subscriptions;
 
 namespace Voia.Api.Data
 {
@@ -15,6 +16,7 @@ namespace Voia.Api.Data
         public DbSet<BotStyle> BotStyles { get; set; }
         public DbSet<Prompt> Prompts { get; set; }
         public DbSet<Plan> Plans { get; set; }
+        public DbSet<Subscription> Subscriptions { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
