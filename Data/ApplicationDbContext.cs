@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models;
 using Voia.Api.Models.Conversations;
+using Voia.Api.Models.Prompts;
 
 namespace Voia.Api.Data
 {
@@ -11,6 +12,7 @@ namespace Voia.Api.Data
         public DbSet<Role> Roles { get; set; }
         public DbSet<Bot> Bots { get; set; }
         public DbSet<BotStyle> BotStyles { get; set; }
+        public DbSet<Prompt> Prompts { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
