@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="..\build\Voia.Api.props" />
-</Project>
