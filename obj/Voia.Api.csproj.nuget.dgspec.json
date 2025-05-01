@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj": {}
+    "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj": {
+    "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj",
+        "projectUniqueName": "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj",
         "projectName": "Voia.Api",
-        "projectPath": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj",
-        "packagesPath": "C:\\Users\\Puesto7\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\obj\\",
+        "projectPath": "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj",
+        "packagesPath": "/Users/ivanherrera/.nuget/packages/",
+        "outputPath": "/Users/ivanherrera/Documents/vo-ia/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\Puesto7\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/Users/ivanherrera/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -37,8 +37,7 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        },
-        "SdkAnalysisLevel": "9.0.200"
+        }
       },
       "frameworks": {
         "net8.0": {
@@ -86,7 +85,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.408/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

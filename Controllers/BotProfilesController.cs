@@ -80,38 +80,35 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetBotProfileById), new { bot_id = botProfile.BotId }, botProfile);
         }
 
-
-
-
-        // PUT: api/bot_profiles/{bot_id}
         [HttpPut("{bot_id}")]
-        public async Task<IActionResult> UpdateBotProfile(int bot_id, [FromBody] BotProfile botProfile)
+        public async Task<IActionResult> UpdateBotProfile(int bot_id, [FromBody] UpdateBotProfile updatedProfile)
         {
-            if (bot_id != botProfile.BotId)
+            if (bot_id != updatedProfile.BotId)
             {
                 return BadRequest(new { message = "Bot ID mismatch." });
             }
 
-            var existingProfile = await _context.BotProfiles.FindAsync(bot_id);
+            var existingProfile = await _context.BotProfiles.FirstOrDefaultAsync(b => b.BotId == bot_id);
             if (existingProfile == null)
             {
                 return NotFound(new { message = "Bot profile not found." });
             }
 
-            // Actualizamos los campos
-            existingProfile.Name = botProfile.Name;
-            existingProfile.AvatarUrl = botProfile.AvatarUrl;
-            existingProfile.Bio = botProfile.Bio;
-            existingProfile.PersonalityTraits = botProfile.PersonalityTraits;
-            existingProfile.Language = botProfile.Language;
-            existingProfile.Tone = botProfile.Tone;
-            existingProfile.Restrictions = botProfile.Restrictions;
+            // Actualiza los campos permitidos
+            existingProfile.Name = updatedProfile.Name;
+            existingProfile.AvatarUrl = updatedProfile.AvatarUrl;
+            existingProfile.Bio = updatedProfile.Bio;
+            existingProfile.PersonalityTraits = updatedProfile.PersonalityTraits;
+            existingProfile.Language = updatedProfile.Language;
+            existingProfile.Tone = updatedProfile.Tone;
+            existingProfile.Restrictions = updatedProfile.Restrictions;
             existingProfile.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
             return Ok(existingProfile);
         }
+
 
         // DELETE: api/bot_profiles/{bot_id}
         [HttpDelete("{bot_id}")]

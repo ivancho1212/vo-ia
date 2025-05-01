@@ -1,12 +1,11 @@
 {
   "Version": 1,
-  "Hash": "outluVMlCs6tENA6cvu5db6ZJPpimuo4BAdTwGNOCvM=",
+  "Hash": "vWO+M16QhKwqzvtNfFNlZFgM7Jj5ZWGMn4zTGc3u/z4=",
   "Source": "Voia.Api",
   "BasePath": "_content/Voia.Api",
   "Mode": "Default",
   "ManifestType": "Build",
   "ReferencedProjectsConfiguration": [],
   "DiscoveryPatterns": [],
-  "Assets": [],
-  "Endpoints": []
+  "Assets": []
 }

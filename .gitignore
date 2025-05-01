@@ -1,0 +1,32 @@
+# Ignore build output
+bin/
+obj/
+
+# Ignore Rider files
+.idea/
+
+# Ignore Visual Studio files
+.vscode/
+*.user
+*.suo
+
+# Ignore Mac system files
+.DS_Store
+
+# Ignore NuGet packages
+*.nupkg
+*.snupkg
+*.nuspec
+*.psmdcp
+
+# Ignore logs
+*.log
+
+# Ignore runtime files
+*.dll
+*.exe
+*.pdb
+
+# Ignore others
+*.tmp
+*.bak
