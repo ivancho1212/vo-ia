@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj": {}
+    "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj": {}
   },
   "projects": {
-    "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj": {
+    "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj",
+        "projectUniqueName": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj",
         "projectName": "Voia.Api",
-        "projectPath": "/Users/ivanherrera/Documents/vo-ia/Voia.Api.csproj",
-        "packagesPath": "/Users/ivanherrera/.nuget/packages/",
-        "outputPath": "/Users/ivanherrera/Documents/vo-ia/obj/",
+        "projectPath": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\Voia.Api.csproj",
+        "packagesPath": "C:\\Users\\Puesto7\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Puesto7\\Documents\\voia\\Voia.Api\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/Users/ivanherrera/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\Puesto7\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -37,12 +37,21 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "9.0.200"
       },
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
           "dependencies": {
+            "Microsoft.AspNetCore.Authentication.JwtBearer": {
+              "target": "Package",
+              "version": "[8.0.0, )"
+            },
+            "Microsoft.AspNetCore.Identity": {
+              "target": "Package",
+              "version": "[2.3.1, )"
+            },
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
               "version": "[8.0.15, )"
@@ -57,6 +66,10 @@
               "target": "Package",
               "version": "[8.0.0, )"
             },
+            "Microsoft.IdentityModel.Tokens": {
+              "target": "Package",
+              "version": "[8.9.0, )"
+            },
             "Pomelo.EntityFrameworkCore.MySql": {
               "target": "Package",
               "version": "[8.0.0, )"
@@ -64,6 +77,10 @@
             "Swashbuckle.AspNetCore": {
               "target": "Package",
               "version": "[6.6.2, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.9.0, )"
             }
           },
           "imports": [
@@ -85,7 +102,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.408/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.203/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
