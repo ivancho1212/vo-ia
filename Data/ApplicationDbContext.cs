@@ -8,6 +8,8 @@ using Voia.Api.Models.SupportTicket;
 using Voia.Api.Models.BotProfiles;
 using Voia.Api.Models.AiModelConfigs;
 using Voia.Api.Models.TrainingDataSessions;
+using Voia.Api.Models.GeneratedImages;
+
 
 
 namespace Voia.Api.Data
@@ -26,6 +28,7 @@ namespace Voia.Api.Data
         public DbSet<BotProfile> BotProfiles { get; set; }
         public DbSet<AiModelConfig> AiModelConfigs { get; set; }
         public DbSet<TrainingDataSession> TrainingDataSessions { get; set; }
+        public DbSet<GeneratedImage> GeneratedImages { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
