@@ -9,6 +9,7 @@ using Voia.Api.Models.BotProfiles;
 using Voia.Api.Models.AiModelConfigs;
 using Voia.Api.Models.TrainingDataSessions;
 using Voia.Api.Models.GeneratedImages;
+using Voia.Api.Models.UserPreferences;
 
 
 
@@ -29,6 +30,7 @@ namespace Voia.Api.Data
         public DbSet<AiModelConfig> AiModelConfigs { get; set; }
         public DbSet<TrainingDataSession> TrainingDataSessions { get; set; }
         public DbSet<GeneratedImage> GeneratedImages { get; set; }
+        public DbSet<UserPreference> UserPreferences { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
