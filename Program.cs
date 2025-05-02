@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
+using Voia.Api.Hubs; // <<--- Agrega esta línea
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 );
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR(); // <<--- Agrega esta línea para usar SignalR
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -26,6 +28,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapHub<ChatHub>("/chatHub"); // <<--- Mapear el Hub para que funcione en esta URL
 
 app.Run();

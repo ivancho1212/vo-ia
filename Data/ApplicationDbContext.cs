@@ -1,13 +1,43 @@
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models;
+using Voia.Api.Models.Conversations;
+using Voia.Api.Models.Prompts;
+using Voia.Api.Models.Plans;
+using Voia.Api.Models.Subscriptions;
+using Voia.Api.Models.SupportTicket; 
+using Voia.Api.Models.BotProfiles;
+using Voia.Api.Models.AiModelConfigs;
+using Voia.Api.Models.TrainingDataSessions;
+using Voia.Api.Models.GeneratedImages;
+using Voia.Api.Models.UserPreferences;
+using Voia.Api.Models.UserBotRelations;
+using Voia.Api.Models.BotActions;
+using Voia.Api.Models.BotIntegrations;
+
+
 
 namespace Voia.Api.Data
 {
     public class ApplicationDbContext : DbContext
     {
+        public DbSet<Conversation> Conversations { get; set; }
         public DbSet<User> Users { get; set; }
-        public DbSet<Role> Roles { get; set; }
         public DbSet<Bot> Bots { get; set; }
+        public DbSet<BotStyle> BotStyles { get; set; }
+        public DbSet<Prompt> Prompts { get; set; }
+        public DbSet<Plan> Plans { get; set; }
+        public DbSet<Subscription> Subscriptions { get; set; }
+        public DbSet<SupportTicket> SupportTickets { get; set; }
+        public DbSet<SupportResponse> SupportResponses { get; set; }
+        public DbSet<BotProfile> BotProfiles { get; set; }
+        public DbSet<AiModelConfig> AiModelConfigs { get; set; }
+        public DbSet<TrainingDataSession> TrainingDataSessions { get; set; }
+        public DbSet<GeneratedImage> GeneratedImages { get; set; }
+        public DbSet<UserPreference> UserPreferences { get; set; }
+        public DbSet<UserBotRelation> UserBotRelations { get; set; }
+        public DbSet<BotAction> BotActions { get; set; }
+        public DbSet<BotIntegration> BotIntegrations { get; set; }
+
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -56,15 +86,12 @@ namespace Voia.Api.Data
                 .Property(u => u.DocumentPhotoUrl)
                 .HasColumnName("document_photo_url");
 
-            // Relación entre User y Role
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Role)
-                .WithMany(r => r.Users) // Asegúrate de que la propiedad Users esté en el modelo Role
+                .WithMany(r => r.Users) 
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-
-            // --- MAPEO CAMPOS Bot ---
             modelBuilder.Entity<Bot>()
                 .Property(b => b.UserId)
                 .HasColumnName("user_id");
@@ -102,12 +129,32 @@ namespace Voia.Api.Data
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
 
-            // Relación entre Bot y User
             modelBuilder.Entity<Bot>()
                 .HasOne(b => b.User)
                 .WithMany()
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<BotStyle>(entity =>
+{
+            entity.ToTable("bot_styles"); // Aquí se indica el nombre real de la tabla
+
+            // Ahora mapeamos cada propiedad al nombre real de columna en la base de datos
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.BotId).HasColumnName("bot_id");
+            entity.Property(e => e.Theme).HasColumnName("theme");
+            entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
+            entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
+            entity.Property(e => e.FontFamily).HasColumnName("font_family");
+            entity.Property(e => e.AvatarUrl).HasColumnName("avatar_url");
+            entity.Property(e => e.Position).HasColumnName("position");
+            entity.Property(e => e.CustomCss).HasColumnName("custom_css");
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .ValueGeneratedOnAddOrUpdate(); // Esto es para que respete el valor automático
+        });
+
         }
+        
     }
 }

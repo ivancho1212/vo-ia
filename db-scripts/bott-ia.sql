@@ -93,6 +93,10 @@ CREATE TABLE conversations (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+ALTER TABLE conversations
+ADD COLUMN user_message TEXT NULL,
+ADD COLUMN bot_response TEXT NULL;
+
 -- Tabla de prompts (interacciones)
 CREATE TABLE prompts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -220,3 +224,97 @@ CREATE TABLE plan_changes (
     FOREIGN KEY (changed_by) REFERENCES users(id)
 );
 
+ALTER USER 'root'@'localhost' IDENTIFIED BY '1234';
+FLUSH PRIVILEGES;
+-- Tabla para extender el perfil de los bots
+
+CREATE TABLE bot_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    name VARCHAR(100),
+    avatar_url TEXT,
+    bio TEXT,
+    personality_traits TEXT,
+    language VARCHAR(20) DEFAULT 'es',
+    tone VARCHAR(50), -- Ej: formal, amistoso, romántico
+    restrictions TEXT, -- Reglas de comportamiento
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+-- Tabla para guardar los intereses de los usuarios
+CREATE TABLE interests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL
+);
+
+-- Tabla intermedia: intereses de cada usuario
+CREATE TABLE user_preferences (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    interest_id INT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (interest_id) REFERENCES interests(id) ON DELETE CASCADE
+);
+
+-- Tabla para relacionar usuarios con sus bots personalizados
+CREATE TABLE user_bot_relations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    bot_id INT NOT NULL,
+    relationship_type ENUM('amistad', 'romántico', 'coach', 'asistente', 'otro') DEFAULT 'otro',
+    interaction_score INT DEFAULT 0,
+    last_interaction DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+-- Tabla para consentimiento del usuario sobre el uso de datos
+CREATE TABLE user_consents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    consent_type VARCHAR(100) NOT NULL, -- Ej: uso de datos, generación de imágenes, fine-tune
+    granted BOOLEAN DEFAULT FALSE,
+    granted_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Tabla para registrar sesiones de entrenamiento (fine-tuning)
+CREATE TABLE training_data_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    bot_id INT,
+    data_summary TEXT,
+    data_type ENUM('text', 'document', 'audio', 'image') DEFAULT 'text',
+    status ENUM('pending', 'processing', 'completed', 'failed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+-- Tabla para guardar configuraciones personalizadas por modelo
+CREATE TABLE ai_model_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    model_name VARCHAR(100) NOT NULL, -- Ej: gpt-4, mistral, claude
+    temperature DECIMAL(3,2) DEFAULT 0.7,
+    max_tokens INT DEFAULT 512,
+    frequency_penalty DECIMAL(3,2) DEFAULT 0,
+    presence_penalty DECIMAL(3,2) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+-- Tabla para guardar imágenes generadas (opcional)
+CREATE TABLE generated_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    bot_id INT,
+    prompt TEXT NOT NULL,
+    image_url TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
