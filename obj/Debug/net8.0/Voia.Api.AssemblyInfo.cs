@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Voia.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+99857129a97181eae103bd3554e1b9d176561785")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6990884fb3a855555d49ea0843a8ac02dda70024")]
 [assembly: System.Reflection.AssemblyProductAttribute("Voia.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Voia.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

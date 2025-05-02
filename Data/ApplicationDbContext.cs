@@ -11,6 +11,7 @@ using Voia.Api.Models.TrainingDataSessions;
 using Voia.Api.Models.GeneratedImages;
 using Voia.Api.Models.UserPreferences;
 using Voia.Api.Models.UserBotRelations;
+using Voia.Api.Models.BotActions;
 
 
 
@@ -33,6 +34,7 @@ namespace Voia.Api.Data
         public DbSet<GeneratedImage> GeneratedImages { get; set; }
         public DbSet<UserPreference> UserPreferences { get; set; }
         public DbSet<UserBotRelation> UserBotRelations { get; set; }
+        public DbSet<BotAction> BotActions { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
