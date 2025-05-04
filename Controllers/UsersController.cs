@@ -1,8 +1,10 @@
+// Controllers/UsersController.cs
 using Microsoft.AspNetCore.Mvc;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models.DTOs;
+using Voia.Api.Services; // Asegúrate de agregar esta referencia
 
 namespace Voia.Api.Controllers
 {
@@ -11,10 +13,12 @@ namespace Voia.Api.Controllers
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly JwtService _jwtService; // Servicio JWT para generar el token
 
-        public UsersController(ApplicationDbContext context)
+        public UsersController(ApplicationDbContext context, JwtService jwtService)
         {
             _context = context;
+            _jwtService = jwtService; // Inyección de dependencias
         }
 
         // GET: api/Users
@@ -73,7 +77,6 @@ namespace Voia.Api.Controllers
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
@@ -139,6 +142,25 @@ namespace Voia.Api.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // POST: api/Users/login
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
+        {
+            // Buscar al usuario por email y contraseña
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == loginRequest.Email && u.Password == loginRequest.Password); // **En producción usar hash para la contraseña**
+
+            if (user == null)
+            {
+                return Unauthorized("Credenciales inválidas");
+            }
+
+            // Generar el token
+            var token = _jwtService.GenerateToken(user);
+            return Ok(new { token });
         }
     }
 }
