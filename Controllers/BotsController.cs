@@ -55,40 +55,60 @@ namespace Voia.Api.Controllers
             }
         }
 
-
-
-        // POST: api/Bots
         [HttpPost]
-        public async Task<ActionResult<Bot>> CreateBot([FromBody] Bot bot)
+        public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
         {
-            bot.CreatedAt = DateTime.UtcNow;
-            bot.UpdatedAt = DateTime.UtcNow;
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            var bot = new Bot
+            {
+                Name = botDto.Name,
+                Description = botDto.Description,
+                ApiKey = botDto.ApiKey,
+                ModelUsed = botDto.ModelUsed,
+                IsActive = botDto.IsActive,
+                UserId = botDto.UserId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
             _context.Bots.Add(bot);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, bot);
+            // 👉 Vuelve a consultar el bot e incluye el usuario relacionado
+            var createdBot = await _context.Bots
+                .Include(b => b.User)
+                .FirstOrDefaultAsync(b => b.Id == bot.Id);
+
+            return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, createdBot);
         }
 
         // PUT: api/Bots/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBot(int id, [FromBody] Bot botUpdate)
+        public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             var bot = await _context.Bots.FindAsync(id);
             if (bot == null)
                 return NotFound(new { Message = "Bot not found" });
 
-            bot.Name = botUpdate.Name;
-            bot.Description = botUpdate.Description;
-            bot.ApiKey = botUpdate.ApiKey;
-            bot.ModelUsed = botUpdate.ModelUsed;
-            bot.IsActive = botUpdate.IsActive;
+            bot.Name = botDto.Name;
+            bot.Description = botDto.Description;
+            bot.ApiKey = botDto.ApiKey;
+            bot.ModelUsed = botDto.ModelUsed;
+            bot.IsActive = botDto.IsActive;
             bot.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
             return Ok(bot);
         }
+
 
         // DELETE: api/Bots/{id}
         [HttpDelete("{id}")]
@@ -98,11 +118,13 @@ namespace Voia.Api.Controllers
             if (bot == null)
                 return NotFound(new { Message = "Bot not found" });
 
-            _context.Bots.Remove(bot);
-            await _context.SaveChangesAsync();
+            bot.IsActive = false;
+            bot.UpdatedAt = DateTime.UtcNow;
 
-            return NoContent();
+            await _context.SaveChangesAsync();
+            return Ok(new { Message = "Bot disabled (soft deleted)" });
         }
+
 
     }
 }

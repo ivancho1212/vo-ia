@@ -43,7 +43,31 @@ INSERT INTO conversations (bot_id, user_id, title)
 VALUES
   (15, 29, 'Admin Bot Conversation'),  -- Conversación con el Admin Bot
   (16, 30, 'User Bot Conversation');    -- Conversación con el User Bot
-SELECT * FROM conversations;
+
+-- Actualizar la conversación con id = 3
+UPDATE conversations
+SET user_message = 'Hola, soy Admin User preguntando algo.',
+    bot_response = 'Hola Admin User, aquí está tu respuesta.'
+WHERE id = 3;
+
+-- Actualizar la conversación con id = 4
+UPDATE conversations
+SET user_message = 'Hola, soy Regular User, necesito ayuda.',
+    bot_response = 'Hola Regular User, ¿en qué puedo ayudarte?'
+WHERE id = 4;
+
+-- Actualizar la conversación con id = 5
+UPDATE conversations
+SET user_message = 'Admin User haciendo otra consulta.',
+    bot_response = 'Admin User, esta es tu otra respuesta.'
+WHERE id = 5;
+
+-- Actualizar la conversación con id = 6
+UPDATE conversations
+SET user_message = 'Regular User preguntando nuevamente.',
+    bot_response = 'Aquí tienes una nueva respuesta para ti, Regular User.'
+WHERE id = 6;
+
 
 -- Insertar conversaciones
 INSERT INTO conversations (bot_id, user_id, title)
