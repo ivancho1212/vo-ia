@@ -2,12 +2,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using System.Linq;
 
 namespace Voia.Api.Controllers
 {
+    [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class BotsController : ControllerBase
@@ -19,16 +22,23 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
+        /// <summary>
+        /// Obtiene todos los bots filtrados por nombre o estado.
+        /// </summary>
+        /// <param name="isActive">Filtra por estado activo o no activo.</param>
+        /// <param name="name">Filtra por el nombre del bot.</param>
+        /// <returns>Lista de bots.</returns>
+        /// <response code="200">Devuelve una lista de bots.</response>
+        /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Bot>>> GetBots(
-           [FromQuery] bool? isActive,
-           [FromQuery] string? name = null)
+        [HasPermission("CanViewBots")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetBots([FromQuery] bool? isActive, [FromQuery] string? name = null)
         {
             try
             {
                 var query = _context.Bots
-                                    .Include(b => b.User)  // Incluye la relación User para que no sea null
-                                    .AsQueryable();
+                    .Include(b => b.User) // Incluye la relación User para que no sea null
+                    .AsQueryable();
 
                 if (isActive.HasValue)
                 {
@@ -55,12 +65,28 @@ namespace Voia.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Crea un nuevo bot.
+        /// </summary>
+        /// <param name="botDto">Datos del bot a crear.</param>
+        /// <returns>El bot creado.</returns>
+        /// <response code="201">Devuelve el bot creado.</response>
+        /// <response code="400">Si los datos son inválidos o el bot ya existe.</response>
         [HttpPost]
+        [HasPermission("CanCreateBot")]
         public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
+            }
+
+            // Verificar duplicados por nombre
+            var existingBot = await _context.Bots
+                .FirstOrDefaultAsync(b => b.Name == botDto.Name);
+            if (existingBot != null)
+            {
+                return BadRequest(new { Message = "A bot with the same name already exists." });
             }
 
             var bot = new Bot
@@ -78,7 +104,6 @@ namespace Voia.Api.Controllers
             _context.Bots.Add(bot);
             await _context.SaveChangesAsync();
 
-            // 👉 Vuelve a consultar el bot e incluye el usuario relacionado
             var createdBot = await _context.Bots
                 .Include(b => b.User)
                 .FirstOrDefaultAsync(b => b.Id == bot.Id);
@@ -86,8 +111,16 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, createdBot);
         }
 
-        // PUT: api/Bots/{id}
+        /// <summary>
+        /// Actualiza la información de un bot existente.
+        /// </summary>
+        /// <param name="id">ID del bot a actualizar.</param>
+        /// <param name="botDto">Datos para actualizar el bot.</param>
+        /// <returns>El bot actualizado.</returns>
+        /// <response code="200">Devuelve el bot actualizado.</response>
+        /// <response code="404">Si el bot no se encuentra.</response>
         [HttpPut("{id}")]
+        [HasPermission("CanUpdateBot")]
         public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
         {
             if (!ModelState.IsValid)
@@ -109,9 +142,15 @@ namespace Voia.Api.Controllers
             return Ok(bot);
         }
 
-
-        // DELETE: api/Bots/{id}
+        /// <summary>
+        /// Elimina un bot (soft delete).
+        /// </summary>
+        /// <param name="id">ID del bot a eliminar.</param>
+        /// <returns>Mensaje de confirmación.</returns>
+        /// <response code="200">Bot desactivado correctamente.</response>
+        /// <response code="404">Si el bot no se encuentra.</response>
         [HttpDelete("{id}")]
+        [HasPermission("CanDeleteBot")]
         public async Task<IActionResult> DeleteBot(int id)
         {
             var bot = await _context.Bots.FindAsync(id);
@@ -125,6 +164,25 @@ namespace Voia.Api.Controllers
             return Ok(new { Message = "Bot disabled (soft deleted)" });
         }
 
+        /// <summary>
+        /// Obtiene un bot por su ID.
+        /// </summary>
+        /// <param name="id">ID del bot.</param>
+        /// <returns>Bot encontrado.</returns>
+        /// <response code="200">Devuelve el bot encontrado.</response>
+        /// <response code="404">Si el bot no se encuentra.</response>
+        [HttpGet("{id}")]
+        [HasPermission("CanViewBot")]
+        public async Task<ActionResult<Bot>> GetBotById(int id)
+        {
+            var bot = await _context.Bots
+                .Include(b => b.User)
+                .FirstOrDefaultAsync(b => b.Id == id);
 
+            if (bot == null)
+                return NotFound(new { Message = "Bot not found" });
+
+            return Ok(bot);
+        }
     }
 }

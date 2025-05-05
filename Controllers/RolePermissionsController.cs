@@ -16,7 +16,12 @@ namespace Voia.Api.Controllers
         {
             _context = context;
         }
-
+        /// <summary>
+        /// Obtiene todos los permisos asignados a un rol específico.
+        /// </summary>
+        /// <param name="roleId">ID del rol.</param>
+        /// <returns>Lista de permisos asignados al rol.</returns>
+        /// <response code="200">Permisos obtenidos correctamente.</response>
         // Obtener todos los permisos de un rol
         [HttpGet("{roleId}")]
         [HasPermission("ViewRolePermissions")]
@@ -30,17 +35,26 @@ namespace Voia.Api.Controllers
 
             return Ok(permissions);
         }
-
+        /// <summary>
+        /// Asigna un permiso a un rol.
+        /// </summary>
+        /// <param name="dto">Objeto que contiene el ID del rol y del permiso.</param>
+        /// <returns>Resultado de la operación.</returns>
+        /// <response code="200">Permiso asignado correctamente.</response>
+        /// <response code="400">El permiso ya está asignado al rol.</response>
         // Asignar un permiso a un rol
         [HttpPost("assign")]
         [HasPermission("AssignPermissionToRole")]
         public async Task<IActionResult> AssignPermissionToRole([FromBody] RolePermissionDto dto)
         {
+            // Verificar si el permiso ya está asignado al rol
             var exists = await _context.RolePermissions
                 .AnyAsync(rp => rp.RoleId == dto.RoleId && rp.PermissionId == dto.PermissionId);
 
             if (exists)
+            {
                 return BadRequest(new { Message = "Permission already assigned to role" });
+            }
 
             _context.RolePermissions.Add(new RolePermission
             {
@@ -52,6 +66,13 @@ namespace Voia.Api.Controllers
             return Ok(new { Message = "Permission assigned successfully" });
         }
 
+        /// <summary>
+        /// Revoca un permiso previamente asignado a un rol.
+        /// </summary>
+        /// <param name="dto">Objeto que contiene el ID del rol y del permiso.</param>
+        /// <returns>Resultado de la operación.</returns>
+        /// <response code="200">Permiso revocado correctamente.</response>
+        /// <response code="404">Permiso no encontrado para este rol.</response>
         // Revocar un permiso de un rol
         [HttpDelete("revoke")]
         [HasPermission("RevokePermissionFromRole")]
