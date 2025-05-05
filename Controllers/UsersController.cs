@@ -26,7 +26,7 @@ namespace Voia.Api.Controllers
 
         // GET: api/Users
         [HttpGet]
-        [HasPermission("CanViewUsers")]
+        //[HasPermission("CanViewUsers")]
         public async Task<IActionResult> GetUsers()
         {
             var users = await _context.Users

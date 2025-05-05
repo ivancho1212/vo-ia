@@ -17,7 +17,13 @@ public class HasPermissionAttribute : AuthorizeAttribute, IAuthorizationFilter
     public void OnAuthorization(AuthorizationFilterContext context)
     {
         var db = context.HttpContext.RequestServices.GetService(typeof(ApplicationDbContext)) as ApplicationDbContext;
-        var userId = int.Parse(context.HttpContext.User.FindFirst("id")?.Value ?? "0");
+
+        var userIdClaim = context.HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+        {
+            context.Result = new ForbidResult();
+            return;
+        }
 
         var user = db.Users
             .Include(u => u.Role)
@@ -31,3 +37,4 @@ public class HasPermissionAttribute : AuthorizeAttribute, IAuthorizationFilter
         }
     }
 }
+

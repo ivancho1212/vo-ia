@@ -156,9 +156,13 @@ INSERT INTO Permissions (Name, Description) VALUES
 ('CanManageRoles', 'Puede crear, editar o eliminar roles'),
 ('CanAccessSupportTickets', 'Puede ver y responder tickets de soporte');
 
+INSERT INTO roles (id, name, description)
+VALUES (3, 'Support', 'Soporte técnico');
+
+
 -- Ejemplo: El rol Admin tiene todos los permisos
 INSERT INTO RolePermissions (RoleId, PermissionId)
-SELECT 1, Id FROM Permissions;
+SELECT 32, Id FROM Permissions;
 
 -- El rol Support solo tiene acceso a tickets
 INSERT INTO RolePermissions (RoleId, PermissionId)
@@ -166,3 +170,9 @@ VALUES (3, (SELECT Id FROM Permissions WHERE Name = 'CanAccessSupportTickets'));
 
 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (3, 1);
 INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (5, 1); -- CanViewUsers
+
+INSERT INTO RolePermissions (RoleId, PermissionId)
+SELECT 32, Id FROM Permissions
+ON DUPLICATE KEY UPDATE RoleId = RoleId;
+
+SELECT * FROM RolePermissions WHERE RoleId = 32;
