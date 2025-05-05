@@ -5,7 +5,7 @@ using Voia.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Hubs;
-using Microsoft.OpenApi.Models; // <-- Importante para Swagger JWT
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,10 +44,15 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
-// ✅ SWAGGER CON JWT
+// ✅ SWAGGER CON JWT + XML
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Voia API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo 
+    { 
+        Title = "Voia API", 
+        Version = "v1",
+        Description = "API para la gestión de usuarios, roles, permisos y chat."
+    });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -73,6 +78,11 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+
+    // Documentación XML (asegúrate de que esté habilitado en el .csproj)
+    var xmlFilename = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+    c.IncludeXmlComments(xmlPath);
 });
 
 var app = builder.Build();
@@ -81,10 +91,13 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Voia API v1");
+        c.RoutePrefix = string.Empty; // Opcional: hace que Swagger se muestre en la raíz
+    });
 }
 
-app.UseHttpsRedirection();
 app.UseAuthentication(); 
 app.UseAuthorization();
 
