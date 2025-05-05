@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
+using Voia.Api.Models.DTOs;
 
 namespace Voia.Api.Controllers
 {
@@ -16,7 +17,9 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
+        // Obtener todos los permisos de un rol
         [HttpGet("{roleId}")]
+        [HasPermission("ViewRolePermissions")]
         public async Task<ActionResult<IEnumerable<Permission>>> GetPermissionsByRole(int roleId)
         {
             var permissions = await _context.RolePermissions
@@ -25,33 +28,37 @@ namespace Voia.Api.Controllers
                 .Select(rp => rp.Permission)
                 .ToListAsync();
 
-            return permissions;
+            return Ok(permissions);
         }
 
+        // Asignar un permiso a un rol
         [HttpPost("assign")]
-        public async Task<IActionResult> AssignPermissionToRole(int roleId, int permissionId)
+        [HasPermission("AssignPermissionToRole")]
+        public async Task<IActionResult> AssignPermissionToRole([FromBody] RolePermissionDto dto)
         {
             var exists = await _context.RolePermissions
-                .AnyAsync(rp => rp.RoleId == roleId && rp.PermissionId == permissionId);
+                .AnyAsync(rp => rp.RoleId == dto.RoleId && rp.PermissionId == dto.PermissionId);
 
             if (exists)
                 return BadRequest(new { Message = "Permission already assigned to role" });
 
             _context.RolePermissions.Add(new RolePermission
             {
-                RoleId = roleId,
-                PermissionId = permissionId
+                RoleId = dto.RoleId,
+                PermissionId = dto.PermissionId
             });
 
             await _context.SaveChangesAsync();
             return Ok(new { Message = "Permission assigned successfully" });
         }
 
+        // Revocar un permiso de un rol
         [HttpDelete("revoke")]
-        public async Task<IActionResult> RevokePermissionFromRole(int roleId, int permissionId)
+        [HasPermission("RevokePermissionFromRole")]
+        public async Task<IActionResult> RevokePermissionFromRole([FromBody] RolePermissionDto dto)
         {
             var rp = await _context.RolePermissions
-                .FirstOrDefaultAsync(r => r.RoleId == roleId && r.PermissionId == permissionId);
+                .FirstOrDefaultAsync(r => r.RoleId == dto.RoleId && r.PermissionId == dto.PermissionId);
 
             if (rp == null)
                 return NotFound(new { Message = "Permission not found for this role" });
