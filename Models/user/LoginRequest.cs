@@ -1,7 +1,6 @@
-// Models/LoginRequest.cs
-namespace Voia.Api.Models
+namespace Voia.Api.Models.DTOs
 {
-    public class LoginRequest
+    public class LoginDto
     {
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;

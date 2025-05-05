@@ -4,16 +4,18 @@ using Voia.Api.Data;
 using Voia.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models.DTOs;
-using Voia.Api.Services; // Asegúrate de agregar esta referencia
+using Voia.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Voia.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        private readonly JwtService _jwtService; // Servicio JWT para generar el token
+        private readonly JwtService _jwtService;
 
         public UsersController(ApplicationDbContext context, JwtService jwtService)
         {
@@ -23,6 +25,7 @@ namespace Voia.Api.Controllers
 
         // GET: api/Users
         [HttpGet]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetUsers()
         {
             var users = await _context.Users
@@ -51,9 +54,45 @@ namespace Voia.Api.Controllers
 
             return Ok(userDtos);
         }
+        [HttpGet("me")]
+        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            var userId = int.Parse(User.FindFirst("id")!.Value);
+            var user = await _context.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                return NotFound(new { Message = "User not found" });
+
+            var userDto = new GetUserDto
+            {
+                Id = user.Id,
+                Name = user.Name,
+                Email = user.Email,
+                Phone = user.Phone,
+                Address = user.Address,
+                DocumentNumber = user.DocumentNumber,
+                DocumentPhotoUrl = user.DocumentPhotoUrl,
+                AvatarUrl = user.AvatarUrl,
+                IsVerified = user.IsVerified,
+                CreatedAt = user.CreatedAt,
+                UpdatedAt = user.UpdatedAt,
+                Role = new RoleDto
+                {
+                    Id = user.Role.Id,
+                    Name = user.Role.Name
+                }
+            };
+
+            return Ok(userDto);
+        }
+
 
         // POST: api/Users
         [HttpPost]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> PostUser(CreateUserDto createUserDto)
         {
             if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
@@ -86,6 +125,7 @@ namespace Voia.Api.Controllers
 
         // PUT: api/Users/{id}
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> PutUser(int id, UpdateUserDto updateUserDto)
         {
             // Validación de que los IDs coinciden
@@ -130,6 +170,7 @@ namespace Voia.Api.Controllers
 
         // DELETE: api/Users/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _context.Users.FindAsync(id);
@@ -144,23 +185,21 @@ namespace Voia.Api.Controllers
             return NoContent();
         }
 
-        // POST: api/Users/login
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginRequest loginRequest)
+        public async Task<IActionResult> Login(LoginDto loginDto)
         {
-            // Buscar al usuario por email y contraseña
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == loginRequest.Email && u.Password == loginRequest.Password); // **En producción usar hash para la contraseña**
+                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            if (user == null)
+            if (user == null || user.Password != loginDto.Password)
             {
                 return Unauthorized("Credenciales inválidas");
             }
 
-            // Generar el token
-            var token = _jwtService.GenerateToken(user);
-            return Ok(new { token });
+            var token = _jwtService.GenerateToken(user); // Asegúrate que este método exista y funcione
+            return Ok(new { Token = token });
         }
+
     }
 }

@@ -318,3 +318,17 @@ CREATE TABLE generated_images (
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (bot_id) REFERENCES bots(id)
 );
+
+CREATE TABLE Permissions (
+    Id INT PRIMARY KEY AUTO_INCREMENT,
+    Name VARCHAR(100) NOT NULL,
+    Description TEXT
+);
+
+CREATE TABLE RolePermissions (
+    RoleId INT,
+    PermissionId INT,
+    PRIMARY KEY (RoleId, PermissionId),
+    FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
+    FOREIGN KEY (PermissionId) REFERENCES Permissions(Id) ON DELETE CASCADE
+);

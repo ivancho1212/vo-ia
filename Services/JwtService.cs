@@ -21,18 +21,19 @@ namespace Voia.Api.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role.Name) // Asegúrate de incluir el Role en el user
+                new Claim(ClaimTypes.Role, user.Role.Name)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
-            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            // Retrieve the secret key from configuration and encode it
+            var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
+            var credentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
                 audience: _config["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddDays(7),
-                signingCredentials: creds
+                expires: DateTime.Now.AddHours(1), // Example expiration time
+                signingCredentials: credentials
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);

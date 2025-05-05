@@ -54,7 +54,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthentication(); // <-- NO OLVIDES ESTO
+app.UseAuthentication(); 
 app.UseAuthorization();
 
 app.MapControllers();

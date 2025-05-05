@@ -37,6 +37,10 @@ namespace Voia.Api.Data
         public DbSet<UserBotRelation> UserBotRelations { get; set; }
         public DbSet<BotAction> BotActions { get; set; }
         public DbSet<BotIntegration> BotIntegrations { get; set; }
+        public DbSet<Role> Roles { get; set; } = null!;
+        public DbSet<Permission> Permissions { get; set; }
+        public DbSet<RolePermission> RolePermissions { get; set; }
+
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -91,6 +95,19 @@ namespace Voia.Api.Data
                 .WithMany(r => r.Users) 
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RolePermission>()
+                .HasKey(rp => new { rp.RoleId, rp.PermissionId });
+
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Role)
+                .WithMany(r => r.RolePermissions)
+                .HasForeignKey(rp => rp.RoleId);
+
+            modelBuilder.Entity<RolePermission>()
+                .HasOne(rp => rp.Permission)
+                .WithMany(p => p.RolePermissions)
+                .HasForeignKey(rp => rp.PermissionId);
 
             modelBuilder.Entity<Bot>()
                 .Property(b => b.UserId)

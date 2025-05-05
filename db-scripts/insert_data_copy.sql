@@ -148,3 +148,21 @@ INSERT INTO support_responses (ticket_id, responder_id, message)
 VALUES 
   (1, @admin_user_id, 'We are investigating the issue with Admin Bot and will update soon.'),
   (2, @regular_user_id, 'We have identified the problem with the User Bot and are working on it.');
+
+INSERT INTO Permissions (Name, Description) VALUES
+('CanViewUsers', 'Puede ver la lista de usuarios'),
+('CanEditUsers', 'Puede editar usuarios'),
+('CanDeleteUsers', 'Puede eliminar usuarios'),
+('CanManageRoles', 'Puede crear, editar o eliminar roles'),
+('CanAccessSupportTickets', 'Puede ver y responder tickets de soporte');
+
+-- Ejemplo: El rol Admin tiene todos los permisos
+INSERT INTO RolePermissions (RoleId, PermissionId)
+SELECT 1, Id FROM Permissions;
+
+-- El rol Support solo tiene acceso a tickets
+INSERT INTO RolePermissions (RoleId, PermissionId)
+VALUES (3, (SELECT Id FROM Permissions WHERE Name = 'CanAccessSupportTickets'));
+
+INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (3, 1);
+INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (5, 1); -- CanViewUsers
