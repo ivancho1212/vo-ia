@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims; // Agrega arriba del archivo si no lo tienes
 
 namespace Voia.Api.Controllers
 {
@@ -25,7 +26,7 @@ namespace Voia.Api.Controllers
 
         // GET: api/Users
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [HasPermission("CanViewUsers")]
         public async Task<IActionResult> GetUsers()
         {
             var users = await _context.Users
@@ -54,11 +55,12 @@ namespace Voia.Api.Controllers
 
             return Ok(userDtos);
         }
+
         [HttpGet("me")]
         [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
         public async Task<IActionResult> GetMyProfile()
         {
-            var userId = int.Parse(User.FindFirst("id")!.Value);
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             var user = await _context.Users
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Id == userId);
@@ -92,7 +94,7 @@ namespace Voia.Api.Controllers
 
         // POST: api/Users
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [HasPermission("CanEditUsers")]
         public async Task<IActionResult> PostUser(CreateUserDto createUserDto)
         {
             if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
@@ -125,7 +127,7 @@ namespace Voia.Api.Controllers
 
         // PUT: api/Users/{id}
         [HttpPut("{id}")]
-        [Authorize(Roles = "Admin")]
+[       HasPermission("CanEditUsers")]
         public async Task<IActionResult> PutUser(int id, UpdateUserDto updateUserDto)
         {
             // Validación de que los IDs coinciden
@@ -170,7 +172,7 @@ namespace Voia.Api.Controllers
 
         // DELETE: api/Users/{id}
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
+        [HasPermission("CanDeleteUsers")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _context.Users.FindAsync(id);
@@ -185,21 +187,32 @@ namespace Voia.Api.Controllers
             return NoContent();
         }
 
+        [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto loginDto)
         {
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+                .FirstOrDefaultAsync(u => u.Email == loginDto.Email && u.Password == loginDto.Password);
 
-            if (user == null || user.Password != loginDto.Password)
+            if (user == null)
+                return Unauthorized();
+
+            var token = _jwtService.GenerateToken(user);
+
+            return Ok(new
             {
-                return Unauthorized("Credenciales inválidas");
-            }
-
-            var token = _jwtService.GenerateToken(user); // Asegúrate que este método exista y funcione
-            return Ok(new { Token = token });
+                token,
+                user = new
+                {
+                    user.Id,
+                    user.Name,
+                    user.Email,
+                    Role = new { user.Role.Id, user.Role.Name }
+                }
+            });
         }
+
 
     }
 }

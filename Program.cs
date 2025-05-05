@@ -5,11 +5,12 @@ using Voia.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Hubs;
+using Microsoft.OpenApi.Models; // <-- Importante para Swagger JWT
 
 var builder = WebApplication.CreateBuilder(args);
 
 // CONFIGURAR SERVICIOS
-builder.Services.AddScoped<JwtService>(); // Asegúrate de haber creado este archivo en /Services
+builder.Services.AddScoped<JwtService>();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
@@ -42,7 +43,37 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+// ✅ SWAGGER CON JWT
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Voia API", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Ingresa el token JWT con el prefijo 'Bearer ', por ejemplo: Bearer eyJhbGciOi..."
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
