@@ -25,6 +25,11 @@ namespace Voia.Api.Controllers
             _context = context;
             _jwtService = jwtService; // Inyección de dependencias
         }
+        /// <summary>
+        /// Obtiene la lista de todos los usuarios con su información de rol.
+        /// </summary>
+        /// <returns>Una lista de usuarios.</returns>
+        /// <response code="200">Retorna la lista de usuarios</response>
 
         // GET: api/Users
         [HttpGet]
@@ -57,7 +62,12 @@ namespace Voia.Api.Controllers
 
             return Ok(userDtos);
         }
-
+        /// <summary>
+        /// Obtiene el perfil del usuario autenticado.
+        /// </summary>
+        /// <returns>Datos del usuario actual.</returns>
+        /// <response code="200">Usuario encontrado.</response>
+        /// <response code="404">Usuario no encontrado.</response>
         [HttpGet("me")]
         [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
         public async Task<IActionResult> GetMyProfile()
@@ -93,7 +103,13 @@ namespace Voia.Api.Controllers
             return Ok(userDto);
         }
 
-
+        /// <summary>
+        /// Crea un nuevo usuario.
+        /// </summary>
+        /// <param name="createUserDto">Objeto con los datos del nuevo usuario.</param>
+        /// <returns>El usuario creado.</returns>
+        /// <response code="201">Usuario creado exitosamente</response>
+        /// <response code="400">Error de validación o email duplicado</response>
         // POST: api/Users
         [HttpPost]
         [HasPermission("CanEditUsers")]
@@ -210,7 +226,13 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { Message = "An error occurred while updating the user" });
             }
         }
-
+        /// <summary>
+        /// Elimina un usuario por su ID.
+        /// </summary>
+        /// <param name="id">ID del usuario a eliminar.</param>
+        /// <returns>Resultado de la operación.</returns>
+        /// <response code="204">Usuario eliminado correctamente.</response>
+        /// <response code="404">Usuario no encontrado.</response>
         // DELETE: api/Users/{id}
         [HttpDelete("{id}")]
         [HasPermission("CanDeleteUsers")]
@@ -227,7 +249,13 @@ namespace Voia.Api.Controllers
 
             return NoContent();
         }
-
+        /// <summary>
+        /// Autentica a un usuario y genera un token JWT.
+        /// </summary>
+        /// <param name="loginDto">Credenciales del usuario.</param>
+        /// <returns>Token JWT y datos del usuario.</returns>
+        /// <response code="200">Autenticación exitosa.</response>
+        /// <response code="401">Credenciales incorrectas.</response>
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto loginDto)

@@ -5,9 +5,11 @@ using Voia.Api.Models.BotProfiles;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Voia.Api.Controllers
 {
+    [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class BotProfilesController : ControllerBase
@@ -19,8 +21,14 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        // GET: api/bot_profiles
+        /// <summary>
+        /// Obtiene todos los perfiles de bots.
+        /// </summary>
+        /// <returns>Lista de perfiles de bots.</returns>
+        /// <response code="200">Devuelve la lista de perfiles de bots.</response>
+        /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
+        [HasPermission("CanViewBotProfiles")]
         public async Task<ActionResult<IEnumerable<BotProfile>>> GetBotProfiles()
         {
             var botProfiles = await _context.BotProfiles
@@ -29,8 +37,15 @@ namespace Voia.Api.Controllers
             return Ok(botProfiles);
         }
 
-        // GET: api/bot_profiles/{bot_id}
+        /// <summary>
+        /// Obtiene el perfil de un bot por su ID.
+        /// </summary>
+        /// <param name="bot_id">ID del bot para obtener su perfil.</param>
+        /// <returns>El perfil del bot.</returns>
+        /// <response code="200">Devuelve el perfil del bot.</response>
+        /// <response code="404">Si no se encuentra el perfil del bot.</response>
         [HttpGet("{bot_id}")]
+        [HasPermission("CanViewBotProfiles")]
         public async Task<ActionResult<BotProfile>> GetBotProfileById(int bot_id)
         {
             var botProfile = await _context.BotProfiles
@@ -45,7 +60,15 @@ namespace Voia.Api.Controllers
             return Ok(botProfile);
         }
 
+        /// <summary>
+        /// Crea un perfil de bot.
+        /// </summary>
+        /// <param name="createBotProfile">Datos para crear el perfil del bot.</param>
+        /// <returns>El perfil de bot creado.</returns>
+        /// <response code="200">Devuelve el perfil de bot creado.</response>
+        /// <response code="400">Si el BotId no existe en la base de datos.</response>
         [HttpPost]
+        [HasPermission("CanCreateBotProfiles")]
         public async Task<ActionResult<BotProfile>> CreateBotProfile([FromBody] CreateBotProfile createBotProfile)
         {
             if (!ModelState.IsValid)
@@ -80,7 +103,17 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetBotProfileById), new { bot_id = botProfile.BotId }, botProfile);
         }
 
+        /// <summary>
+        /// Actualiza el perfil de un bot.
+        /// </summary>
+        /// <param name="bot_id">ID del bot cuyo perfil se desea actualizar.</param>
+        /// <param name="updatedProfile">Datos para actualizar el perfil del bot.</param>
+        /// <returns>El perfil actualizado del bot.</returns>
+        /// <response code="200">Devuelve el perfil actualizado del bot.</response>
+        /// <response code="404">Si no se encuentra el perfil del bot.</response>
+        /// <response code="400">Si hay un desajuste de ID entre el perfil y el bot.</response>
         [HttpPut("{bot_id}")]
+        [HasPermission("CanUpdateBotProfiles")]
         public async Task<IActionResult> UpdateBotProfile(int bot_id, [FromBody] UpdateBotProfile updatedProfile)
         {
             if (bot_id != updatedProfile.BotId)
@@ -109,9 +142,15 @@ namespace Voia.Api.Controllers
             return Ok(existingProfile);
         }
 
-
-        // DELETE: api/bot_profiles/{bot_id}
+        /// <summary>
+        /// Elimina el perfil de un bot.
+        /// </summary>
+        /// <param name="bot_id">ID del bot cuyo perfil se desea eliminar.</param>
+        /// <returns>Mensaje de confirmación.</returns>
+        /// <response code="204">El perfil fue eliminado correctamente.</response>
+        /// <response code="404">Si no se encuentra el perfil del bot.</response>
         [HttpDelete("{bot_id}")]
+        [HasPermission("CanDeleteBotProfiles")]
         public async Task<IActionResult> DeleteBotProfile(int bot_id)
         {
             var botProfile = await _context.BotProfiles.FindAsync(bot_id);
