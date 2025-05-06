@@ -40,6 +40,17 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
@@ -97,6 +108,8 @@ if (app.Environment.IsDevelopment())
         c.RoutePrefix = string.Empty; // Opcional: hace que Swagger se muestre en la raíz
     });
 }
+
+app.UseCors("AllowFrontend"); // 👈 Este debe ir aquí
 
 app.UseAuthentication(); 
 app.UseAuthorization();
