@@ -176,3 +176,111 @@ SELECT 32, Id FROM Permissions
 ON DUPLICATE KEY UPDATE RoleId = RoleId;
 
 SELECT * FROM RolePermissions WHERE RoleId = 32;
+
+INSERT INTO Permissions (Name, Description) VALUES
+-- AiModelConfigs
+('CanViewAiModelConfigs', 'Puede ver configuraciones de modelos de IA'),
+('CanCreateAiModelConfigs', 'Puede crear configuraciones de modelos de IA'),
+('CanUpdateAiModelConfigs', 'Puede actualizar configuraciones de modelos de IA'),
+('CanDeleteAiModelConfigs', 'Puede eliminar configuraciones de modelos de IA'),
+
+-- BotActions
+('CanViewBotActions', 'Puede ver acciones de bots'),
+('CanCreateBotActions', 'Puede crear acciones de bots'),
+('CanUpdateBotActions', 'Puede actualizar acciones de bots'),
+('CanDeleteBotActions', 'Puede eliminar acciones de bots'),
+
+-- BotIntegrations
+('CanViewBotIntegrations', 'Puede ver integraciones de bots'),
+('CanCreateBotIntegrations', 'Puede crear integraciones de bots'),
+('CanUpdateBotIntegrations', 'Puede actualizar integraciones de bots'),
+('CanDeleteBotIntegrations', 'Puede eliminar integraciones de bots'),
+
+-- BotProfiles
+('CanViewBotProfiles', 'Puede ver perfiles de bots'),
+('CanCreateBotProfiles', 'Puede crear perfiles de bots'),
+('CanUpdateBotProfiles', 'Puede actualizar perfiles de bots'),
+('CanDeleteBotProfiles', 'Puede eliminar perfiles de bots'),
+
+-- Bots
+('CanViewBots', 'Puede ver bots'),
+('CanCreateBot', 'Puede crear bots'),
+('CanUpdateBot', 'Puede actualizar bots'),
+('CanDeleteBot', 'Puede eliminar bots'),
+('CanViewBot', 'Puede ver un bot específico'),
+
+-- BotStyles
+('CanViewBotStyles', 'Puede ver estilos de bots'),
+('CanUpdateBotStyles', 'Puede actualizar estilos de bots'),
+('CanCreateBotStyles', 'Puede crear estilos de bots'),
+('CanDeleteBotStyles', 'Puede eliminar estilos de bots'),
+
+-- Conversations
+('CanViewConversations', 'Puede ver conversaciones'),
+('CanCreateConversations', 'Puede crear conversaciones'),
+('CanUpdateConversations', 'Puede actualizar conversaciones'),
+('CanDeleteConversations', 'Puede eliminar conversaciones'),
+
+-- GeneratedImages
+('CanViewGeneratedImages', 'Puede ver imágenes generadas'),
+('CanCreateGeneratedImages', 'Puede crear imágenes generadas'),
+('CanUpdateGeneratedImages', 'Puede actualizar imágenes generadas'),
+('CanDeleteGeneratedImages', 'Puede eliminar imágenes generadas'),
+
+-- Permissions
+('CanManagePermissions', 'Puede gestionar permisos'),
+
+-- Plans
+('CanViewPlans', 'Puede ver planes'),
+('CanCreatePlans', 'Puede crear planes'),
+('CanUpdatePlans', 'Puede actualizar planes'),
+('CanDeletePlans', 'Puede eliminar planes'),
+
+-- Prompts
+('CanViewPrompts', 'Puede ver prompts'),
+('CanCreatePrompts', 'Puede crear prompts'),
+('CanUpdatePrompts', 'Puede actualizar prompts'),
+('CanDeletePrompts', 'Puede eliminar prompts'),
+
+-- Role Permissions
+('ViewRolePermissions', 'Puede ver permisos asignados a roles'),
+('AssignPermissionToRole', 'Puede asignar permisos a roles'),
+('RevokePermissionFromRole', 'Puede revocar permisos de roles'),
+
+-- Roles
+('CanManageRoles', 'Puede gestionar roles'),
+
+-- Subscriptions
+('CanViewSubscriptions', 'Puede ver suscripciones'),
+('CanCreateSubscriptions', 'Puede crear suscripciones'),
+('CanUpdateSubscriptions', 'Puede actualizar suscripciones'),
+('CanDeleteSubscriptions', 'Puede eliminar suscripciones'),
+
+-- SupportResponses
+('CanViewSupportResponses', 'Puede ver respuestas de soporte'),
+('CanCreateSupportResponses', 'Puede crear respuestas de soporte'),
+('CanUpdateSupportResponses', 'Puede actualizar respuestas de soporte'),
+('CanDeleteSupportResponses', 'Puede eliminar respuestas de soporte'),
+
+-- SupportTickets
+('CanViewSupportTickets', 'Puede ver tickets de soporte'),
+('CanCreateSupportTickets', 'Puede crear tickets de soporte'),
+('CanUpdateSupportTickets', 'Puede actualizar tickets de soporte'),
+('CanDeleteSupportTickets', 'Puede eliminar tickets de soporte'),
+
+-- TrainingDataSessions
+('CanViewTrainingDataSessions', 'Puede ver sesiones de datos de entrenamiento'),
+('CanCreateTrainingDataSessions', 'Puede crear sesiones de datos de entrenamiento'),
+('CanUpdateTrainingDataSessions', 'Puede actualizar sesiones de datos de entrenamiento'),
+('CanDeleteTrainingDataSessions', 'Puede eliminar sesiones de datos de entrenamiento'),
+
+-- UserBotRelations
+('CanViewUserBotRelations', 'Puede ver relaciones entre usuarios y bots'),
+('CanCreateUserBotRelation', 'Puede crear relaciones entre usuarios y bots'),
+('CanEditUserBotRelations', 'Puede editar relaciones entre usuarios y bots'),
+('CanDeleteUserBotRelations', 'Puede eliminar relaciones entre usuarios y bots'),
+
+-- UserPreferences
+('CanViewUserPreferences', 'Puede ver preferencias de usuario'),
+('CanEditUserPreferences', 'Puede editar preferencias de usuario'),
+('CanDeleteUserPreferences', 'Puede eliminar preferencias de usuario');

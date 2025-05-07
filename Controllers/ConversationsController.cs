@@ -32,9 +32,19 @@ namespace Voia.Api.Controllers
         public async Task<ActionResult<IEnumerable<Conversation>>> GetConversations()
         {
             var conversations = await _context.Conversations
-                .Include(c => c.User)  // Incluye los datos del usuario
-                .Include(c => c.Bot)   // Incluye los datos del bot
+                .Include(c => c.User)
+                .Include(c => c.Bot)
+                .Select(c => new
+                {
+                    c.Id,
+                    Title = c.Title ?? string.Empty,  // Manejo de NULL en Title
+                    UserMessage = c.UserMessage ?? string.Empty,  // Manejo de NULL en UserMessage
+                    BotResponse = c.BotResponse ?? string.Empty,  // Manejo de NULL en BotResponse
+                    User = c.User != null ? new { c.User.Name, c.User.Email } : null,
+                    Bot = c.Bot != null ? new { c.Bot.Name } : null
+                })
                 .ToListAsync();
+
             return Ok(conversations);
         }
 

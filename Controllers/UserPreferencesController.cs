@@ -26,7 +26,7 @@ namespace Voia.Api.Controllers
         /// <returns>Lista de preferencias de usuario.</returns>
         // GET: api/UserPreferences
         [HttpGet]
-        [HasPermission("CanViewUserPreferences")]
+        [HasPermission("CanViewUsers")]
         public async Task<ActionResult<IEnumerable<UserPreference>>> GetAll()
         {
             return await _context.UserPreferences.ToListAsync();
@@ -39,7 +39,7 @@ namespace Voia.Api.Controllers
         /// <returns>Preferencia de usuario.</returns>
         // GET: api/UserPreferences/5
         [HttpGet("{id}")]
-        [HasPermission("CanViewUserPreferences")]
+        [HasPermission("CanViewUsers")]
         public async Task<ActionResult<UserPreference>> GetById(int id)
         {
             var preference = await _context.UserPreferences.FindAsync(id);
@@ -56,7 +56,7 @@ namespace Voia.Api.Controllers
         /// <returns>Preferencia de usuario creada.</returns>
         // POST: api/UserPreferences
         [HttpPost]
-        [HasPermission("CanEditUserPreferences")]
+        [HasPermission("CanViewUsers")]
         public async Task<ActionResult<UserPreference>> Create([FromBody] CreateUserPreferenceDto dto)
         {
             // Verificar si ya existe la preferencia para este usuario
@@ -88,7 +88,7 @@ namespace Voia.Api.Controllers
         /// <returns>Estado de la operación.</returns>
         // PUT: api/UserPreferences/5
         [HttpPut("{id}")]
-        [HasPermission("CanEditUserPreferences")]
+        [HasPermission("CanViewUsers")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateUserPreferenceDto dto)
         {
             var preference = await _context.UserPreferences.FindAsync(id);
@@ -108,7 +108,7 @@ namespace Voia.Api.Controllers
         /// <returns>Estado de la operación.</returns>
         // DELETE: api/UserPreferences/5
         [HttpDelete("{id}")]
-        [HasPermission("CanDeleteUserPreferences")]
+        [HasPermission("CanViewUsers")]
         public async Task<IActionResult> Delete(int id)
         {
             var preference = await _context.UserPreferences.FindAsync(id);
