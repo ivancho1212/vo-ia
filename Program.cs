@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.Extensions.DependencyInjection;
 using System.Text;
 using Voia.Api.Services;
 using Microsoft.EntityFrameworkCore;
@@ -11,19 +10,8 @@ using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 // CONFIGURAR SERVICIOS
+builder.Services.AddScoped<JwtService>();
 
-// Configuración de CORS (para acceder desde dominios específicos)
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowSpecificOrigin", builder =>
-    {
-        builder.WithOrigins("https://miappfrontend.com")  // Tu frontend
-               .AllowAnyMethod()
-               .AllowAnyHeader();
-    });
-});
-
-// Configuración de DBContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -31,10 +19,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
-// Servicio de JWT
-builder.Services.AddScoped<JwtService>();
-
-// Configuración de Autenticación y Autorización con JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -71,7 +55,7 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
-// Configuración de Swagger con JWT + XML
+// ✅ SWAGGER CON JWT + XML
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo 
@@ -81,7 +65,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API para la gestión de usuarios, roles, permisos y chat."
     });
 
-    // Seguridad JWT en Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -116,11 +99,6 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // MIDDLEWARE
-
-// Asegúrate de usar HTTPS en todo momento
-app.UseHttpsRedirection();
-
-// Habilitar Swagger solo en desarrollo
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -136,11 +114,7 @@ app.UseCors("AllowFrontend"); // 👈 Este debe ir aquí
 app.UseAuthentication(); 
 app.UseAuthorization();
 
-// Mapeo de controladores
 app.MapControllers();
-
-// Mapeo de SignalR (para chat en tiempo real)
 app.MapHub<ChatHub>("/chatHub");
 
-// Ejecutar la aplicación
 app.Run();

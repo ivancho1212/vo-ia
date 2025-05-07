@@ -113,7 +113,7 @@ namespace Voia.Api.Controllers
         // POST: api/Users
         [HttpPost]
         [HasPermission("CanEditUsers")]
-        public async Task<IActionResult> PostUser(CreateUserDto createUserDto)
+        public async Task<IActionResult> PostUser(AdminCreateUserDto createUserDto)
         {
             if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
             {
@@ -124,7 +124,7 @@ namespace Voia.Api.Controllers
             {
                 Name = createUserDto.Name,
                 Email = createUserDto.Email,
-                Password = createUserDto.Password, // Encriptar la contraseña
+                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
                 RoleId = createUserDto.RoleId,
                 DocumentTypeId = createUserDto.DocumentTypeId,
                 Phone = createUserDto.Phone,
@@ -147,44 +147,62 @@ namespace Voia.Api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(CreateUserDto createUserDto)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            try
             {
-                return BadRequest(new { Message = "Email is already in use" });
+                // Validación de email duplicado
+                if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+                {
+                    return BadRequest(new { Message = "El email ya está en uso" });
+                }
+
+                // Validación de documento duplicado
+                if (await _context.Users.AnyAsync(u => u.DocumentNumber == createUserDto.DocumentNumber))
+                {
+                    return BadRequest(new { Message = "El número de documento ya está en uso" });
+                }
+
+                // Validación de teléfono duplicado
+                if (await _context.Users.AnyAsync(u => u.Phone == createUserDto.Phone))
+                {
+                    return BadRequest(new { Message = "El número de teléfono ya está en uso" });
+                }
+
+                // Asignar roleId fijo (2)
+                const int fixedRoleId = 2;
+
+                // Creación del usuario
+                var user = new User
+                {
+                    Name = createUserDto.Name,
+                    Email = createUserDto.Email,
+                    Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
+                    RoleId = fixedRoleId, // Asegura que todos los usuarios desde el frontend tengan rol 2
+                    DocumentTypeId = createUserDto.DocumentTypeId,
+                    Phone = createUserDto.Phone,
+                    Address = createUserDto.Address,
+                    DocumentNumber = createUserDto.DocumentNumber,
+                    DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
+                    AvatarUrl = createUserDto.AvatarUrl,
+                    IsVerified = false,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { Message = "Usuario registrado exitosamente" });
             }
-
-            // Puedes asignar el rol por defecto si el cliente no lo manda
-            var defaultRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "User");
-            if (defaultRole == null)
+            catch (Exception ex)
             {
-                return StatusCode(500, new { Message = "Default role not found" });
+                // En producción, considera registrar el error en un sistema de logs en vez de mostrarlo
+                return StatusCode(500, new { Message = "Error interno del servidor", Details = ex.Message });
             }
-
-            var user = new User
-            {
-                Name = createUserDto.Name,
-                Email = createUserDto.Email,
-                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                RoleId = defaultRole.Id,
-                DocumentTypeId = createUserDto.DocumentTypeId,
-                Phone = createUserDto.Phone,
-                Address = createUserDto.Address,
-                DocumentNumber = createUserDto.DocumentNumber,
-                DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
-                AvatarUrl = createUserDto.AvatarUrl,
-                IsVerified = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            return Ok(new { Message = "User registered successfully" });
         }
 
         // PUT: api/Users/{id}
         [HttpPut("{id}")]
-[       HasPermission("CanEditUsers")]
+        [HasPermission("CanEditUsers")]
         public async Task<IActionResult> PutUser(int id, UpdateUserDto updateUserDto)
         {
             // Validación de que los IDs coinciden
