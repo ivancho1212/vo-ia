@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims; 
+using System.Security.Claims;
+using BCrypt.Net;
+
 
 namespace Voia.Api.Controllers
 {
@@ -140,16 +142,46 @@ namespace Voia.Api.Controllers
 
             return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
-        /// <summary>
-        /// Actualiza un usuario existente.
-        /// </summary>
-        /// <param name="id">ID del usuario a actualizar.</param>
-        /// <param name="updateUserDto">DTO con los nuevos datos del usuario.</param>
-        /// <returns>Usuario actualizado.</returns>
-        /// <response code="200">Usuario actualizado correctamente.</response>
-        /// <response code="400">Los IDs no coinciden o datos inválidos.</response>
-        /// <response code="404">Usuario no encontrado.</response>
-        /// <response code="500">Error en la actualización del usuario.</response>
+
+        [AllowAnonymous]
+        [HttpPost("register")]
+        public async Task<IActionResult> Register(CreateUserDto createUserDto)
+        {
+            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            {
+                return BadRequest(new { Message = "Email is already in use" });
+            }
+
+            // Puedes asignar el rol por defecto si el cliente no lo manda
+            var defaultRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "User");
+            if (defaultRole == null)
+            {
+                return StatusCode(500, new { Message = "Default role not found" });
+            }
+
+            var user = new User
+            {
+                Name = createUserDto.Name,
+                Email = createUserDto.Email,
+                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
+                RoleId = defaultRole.Id,
+                DocumentTypeId = createUserDto.DocumentTypeId,
+                Phone = createUserDto.Phone,
+                Address = createUserDto.Address,
+                DocumentNumber = createUserDto.DocumentNumber,
+                DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
+                AvatarUrl = createUserDto.AvatarUrl,
+                IsVerified = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "User registered successfully" });
+        }
+
         // PUT: api/Users/{id}
         [HttpPut("{id}")]
 [       HasPermission("CanEditUsers")]
@@ -230,7 +262,12 @@ namespace Voia.Api.Controllers
         {
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == loginDto.Email && u.Password == loginDto.Password);
+                .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+
+            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
+            {
+                return Unauthorized(new { Message = "Invalid credentials" });
+            }
 
             if (user == null)
                 return Unauthorized();

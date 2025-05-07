@@ -56,11 +56,18 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
+});
+
+builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -124,11 +131,9 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-// Usar CORS para manejar las solicitudes entre diferentes orígenes
-app.UseCors("AllowSpecificOrigin");
+app.UseCors("AllowFrontend"); // 👈 Este debe ir aquí
 
-// Autenticación y autorización
-app.UseAuthentication();
+app.UseAuthentication(); 
 app.UseAuthorization();
 
 // Mapeo de controladores
