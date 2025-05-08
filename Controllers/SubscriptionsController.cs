@@ -28,11 +28,28 @@ namespace Voia.Api.Controllers
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
         [HasPermission("CanViewSubscriptions")]
-        public async Task<ActionResult<IEnumerable<Subscription>>> GetSubscriptions()
+        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetSubscriptions()
         {
-            var subscriptions = await _context.Subscriptions.ToListAsync();
+            var subscriptions = await _context.Subscriptions
+                .Include(s => s.User)
+                .Include(s => s.Plan)
+                .Select(s => new SubscriptionDto
+                {
+                    Id = s.Id,
+                    UserId = s.UserId,
+                    UserName = s.User.Name,
+                    UserEmail = s.User.Email,
+                    PlanId = s.PlanId,
+                    PlanName = s.Plan.Name,
+                    StartedAt = s.StartedAt,
+                    ExpiresAt = s.ExpiresAt,
+                    Status = s.Status
+                })
+                .ToListAsync();
+
             return Ok(subscriptions);
         }
+
 
         /// <summary>
         /// Crea una nueva suscripción.

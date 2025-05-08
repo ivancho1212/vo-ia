@@ -1,4 +1,3 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Voia.Api.Models.Plans;
@@ -12,17 +11,16 @@ namespace Voia.Api.Models.Subscriptions
 
         [Required]
         [ForeignKey("User")]
-
         [Column("user_id")]
         public int UserId { get; set; }
-        
+
         [Required]
         [ForeignKey("Plan")]
         [Column("plan_id")]
         public int PlanId { get; set; }
 
         [Column("started_at")]
-        public DateTime? StartedAt { get; set; }= DateTime.UtcNow;
+        public DateTime? StartedAt { get; set; } = DateTime.UtcNow;
 
         [Column("expires_at")]
         public DateTime? ExpiresAt { get; set; }
@@ -30,7 +28,7 @@ namespace Voia.Api.Models.Subscriptions
         [MaxLength(10)]
         public string Status { get; set; } = "active";
 
-        // Relaciones (opcional, si tienes modelos de User y Plan)
+        // Relaciones
         public User? User { get; set; }
         public Plan? Plan { get; set; }
     }

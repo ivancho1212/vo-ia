@@ -8,6 +8,7 @@ using Voia.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using BCrypt.Net;
+using Voia.Api.Models.Subscriptions;
 
 
 namespace Voia.Api.Controllers
@@ -73,12 +74,20 @@ namespace Voia.Api.Controllers
         public async Task<IActionResult> GetMyProfile()
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
             var user = await _context.Users
                 .Include(u => u.Role)
+                .Include(u => u.Subscriptions)
+                    .ThenInclude(s => s.Plan)
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
                 return NotFound(new { Message = "User not found" });
+
+            // Obtener la última suscripción activa (ajusta la lógica si es necesario)
+            var activeSubscription = user.Subscriptions
+                .OrderByDescending(s => s.StartedAt)
+                .FirstOrDefault();
 
             var userDto = new GetUserDto
             {
@@ -97,10 +106,82 @@ namespace Voia.Api.Controllers
                 {
                     Id = user.Role.Id,
                     Name = user.Role.Name
-                }
+                },
+                Subscription = activeSubscription != null
+                    ? new SubscriptionDto
+                    {
+                        Id = activeSubscription.Id,
+                        UserId = user.Id,
+                        UserName = user.Name,
+                        UserEmail = user.Email,
+                        PlanId = activeSubscription.Plan.Id,
+                        PlanName = activeSubscription.Plan.Name,
+                        StartedAt = activeSubscription.StartedAt,
+                        ExpiresAt = activeSubscription.ExpiresAt,
+                        Status = activeSubscription.Status
+                    }
+                    : null
+
+
             };
 
             return Ok(userDto);
+        }
+
+        
+        [HttpPut("me/avatar")]
+        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+        public async Task<IActionResult> UploadAvatar(IFormFile file)
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                return NotFound(new { Message = "User not found" });
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { Message = "Archivo no válido" });
+
+            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var savePath = Path.Combine("wwwroot", "uploads", fileName);
+
+            using (var stream = new FileStream(savePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            user.AvatarUrl = $"/uploads/{fileName}";
+            await _context.SaveChangesAsync();
+
+            return Ok(new { avatarUrl = user.AvatarUrl });
+        }
+       
+       
+        [HttpPut("me/document-photo")]
+        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+        public async Task<IActionResult> UploadDocumentPhoto(IFormFile file)
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (user == null)
+                return NotFound(new { Message = "Usuario no encontrado" });
+
+            if (file == null || file.Length == 0)
+                return BadRequest(new { Message = "Archivo no válido" });
+
+            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var savePath = Path.Combine("wwwroot", "uploads", fileName);
+
+            using (var stream = new FileStream(savePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            user.DocumentPhotoUrl = $"/uploads/{fileName}";
+            await _context.SaveChangesAsync();
+
+            return Ok(new { documentPhotoUrl = user.DocumentPhotoUrl });
         }
 
         /// <summary>
@@ -279,7 +360,9 @@ namespace Voia.Api.Controllers
         public async Task<IActionResult> Login(LoginDto loginDto)
         {
             var user = await _context.Users
-                .Include(u => u.Role)
+                .Include(u => u.Role) // Cargando el rol del usuario
+                .Include(u => u.Subscriptions) // Incluir las suscripciones del usuario
+                .ThenInclude(s => s.Plan) // Incluir el plan asociado a la suscripción
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
@@ -287,8 +370,13 @@ namespace Voia.Api.Controllers
                 return Unauthorized(new { Message = "Invalid credentials" });
             }
 
-            if (user == null)
-                return Unauthorized();
+            // Verificar que el usuario tenga al menos una suscripción activa
+            var activeSubscription = user.Subscriptions?.FirstOrDefault(s => s.Status == "active");
+            if (activeSubscription != null)
+            {
+                var plan = activeSubscription.Plan; // Obtener el plan del usuario
+                // Aquí también podrías agregar cualquier validación de plan
+            }
 
             var token = _jwtService.GenerateToken(user);
 
@@ -300,11 +388,11 @@ namespace Voia.Api.Controllers
                     user.Id,
                     user.Name,
                     user.Email,
-                    Role = new { user.Role.Id, user.Role.Name }
+                    Role = new { user.Role.Id, user.Role.Name },
+                    Plan = activeSubscription?.Plan != null ? new { activeSubscription.Plan.Id, activeSubscription.Plan.Name } : null // Incluir el plan si existe
                 }
             });
         }
-
 
     }
 }

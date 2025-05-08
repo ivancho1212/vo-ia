@@ -1,4 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using Voia.Api.Models.Plans;
+using Voia.Api.Models.Subscriptions; // ✅ Este using es necesario
+
 
 namespace Voia.Api.Models
 {
@@ -10,8 +15,9 @@ public class User
     public string Email { get; set; }
     public string Password { get; set; }
 
-    [Column("role_id")] // Esta línea especifica que el nombre de la columna en la base de datos es 'role_id'
+    [Column("role_id")] 
     public int RoleId { get; set; }
+
 
     public int? DocumentTypeId { get; set; }
     public string Phone { get; set; }
@@ -23,7 +29,10 @@ public class User
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    public Role Role { get; set; }  // Asegúrate de que la relación con Role esté definida correctamente
-}
+    public Role Role { get; set; }  
+    
+    public ICollection<Subscription> Subscriptions { get; set; }
+
+    }
 
 }

@@ -109,8 +109,8 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseCors("AllowFrontend"); // 👈 Este debe ir aquí
-
+app.UseStaticFiles();         
+app.UseCors("AllowFrontend");
 app.UseAuthentication(); 
 app.UseAuthorization();
 
