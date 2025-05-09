@@ -223,6 +223,53 @@ namespace Voia.Api.Controllers
 
             return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
+        
+        /// <summary>
+        /// Actualiza el perfil del usuario autenticado.
+        /// </summary>
+        /// <param name="updateDto">Datos a actualizar.</param>
+        /// <returns>Perfil actualizado.</returns>
+        [HttpPut("me")]
+        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+        public async Task<IActionResult> UpdateMyProfile(UpdateMyProfileDto updateDto)
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var user = await _context.Users.FindAsync(userId);
+
+            if (user == null)
+                return NotFound(new { Message = "Usuario no encontrado" });
+
+            // Validaciones (email, documento o teléfono duplicado)
+            if (!string.Equals(user.Email, updateDto.Email, StringComparison.OrdinalIgnoreCase)
+                && await _context.Users.AnyAsync(u => u.Email == updateDto.Email))
+            {
+                return BadRequest(new { Message = "El email ya está en uso" });
+            }
+
+            if (!string.Equals(user.DocumentNumber, updateDto.DocumentNumber, StringComparison.OrdinalIgnoreCase)
+                && await _context.Users.AnyAsync(u => u.DocumentNumber == updateDto.DocumentNumber))
+            {
+                return BadRequest(new { Message = "El número de documento ya está en uso" });
+            }
+
+            if (!string.Equals(user.Phone, updateDto.Phone, StringComparison.OrdinalIgnoreCase)
+                && await _context.Users.AnyAsync(u => u.Phone == updateDto.Phone))
+            {
+                return BadRequest(new { Message = "El número de teléfono ya está en uso" });
+            }
+
+            // Actualizar datos
+            user.Name = updateDto.Name;
+            user.Email = updateDto.Email;
+            user.Phone = updateDto.Phone;
+            user.Address = updateDto.Address;
+            user.DocumentNumber = updateDto.DocumentNumber;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { Message = "Perfil actualizado correctamente" });
+        }
 
         [AllowAnonymous]
         [HttpPost("register")]
@@ -277,7 +324,7 @@ namespace Voia.Api.Controllers
             catch (Exception ex)
             {
                 // En producción, considera registrar el error en un sistema de logs en vez de mostrarlo
-                return StatusCode(500, new { Message = "Error interno del servidor", Details = ex.Message });
+                return StatusCode(500, new { Message = "Error interno del servidor", Details = ex.ToString() });
             }
         }
 
