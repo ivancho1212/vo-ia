@@ -42,7 +42,6 @@ namespace Voia.Api.Data
         public DbSet<RolePermission> RolePermissions { get; set; }
 
 
-
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
 
@@ -93,6 +92,18 @@ namespace Voia.Api.Data
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Role)
                 .WithMany(r => r.Users) 
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            // Configuración de la relación User - Subscription
+            modelBuilder.Entity<User>()
+                .HasMany(u => u.Subscriptions)  // Un usuario puede tener muchas suscripciones
+                .WithOne(s => s.User)           // Una suscripción pertenece a un solo usuario
+                .HasForeignKey(s => s.UserId);  // Relación con la clave foránea 'UserId'
+            
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Role)
+                .WithMany(r => r.Users)
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 

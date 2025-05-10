@@ -183,47 +183,6 @@ namespace Voia.Api.Controllers
 
             return Ok(new { documentPhotoUrl = user.DocumentPhotoUrl });
         }
-
-        /// <summary>
-        /// Crea un nuevo usuario.
-        /// </summary>
-        /// <param name="createUserDto">Objeto con los datos del nuevo usuario.</param>
-        /// <returns>El usuario creado.</returns>
-        /// <response code="201">Usuario creado exitosamente</response>
-        /// <response code="400">Error de validación o email duplicado</response>
-        // POST: api/Users
-        [HttpPost]
-        [HasPermission("CanEditUsers")]
-        public async Task<IActionResult> PostUser(AdminCreateUserDto createUserDto)
-        {
-            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
-            {
-                return BadRequest(new { Message = "Email is already in use" });
-            }
-
-            var user = new User
-            {
-                Name = createUserDto.Name,
-                Email = createUserDto.Email,
-                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                RoleId = createUserDto.RoleId,
-                DocumentTypeId = createUserDto.DocumentTypeId,
-                Phone = createUserDto.Phone,
-                Address = createUserDto.Address,
-                DocumentNumber = createUserDto.DocumentNumber,
-                DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
-                AvatarUrl = createUserDto.AvatarUrl,
-                IsVerified = createUserDto.IsVerified,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
-        }
-        
         /// <summary>
         /// Actualiza el perfil del usuario autenticado.
         /// </summary>
@@ -270,6 +229,47 @@ namespace Voia.Api.Controllers
 
             return Ok(new { Message = "Perfil actualizado correctamente" });
         }
+
+        /// <summary>
+        /// Crea un nuevo usuario.
+        /// </summary>
+        /// <param name="createUserDto">Objeto con los datos del nuevo usuario.</param>
+        /// <returns>El usuario creado.</returns>
+        /// <response code="201">Usuario creado exitosamente</response>
+        /// <response code="400">Error de validación o email duplicado</response>
+        // POST: api/Users
+        [HttpPost]
+        [HasPermission("CanEditUsers")]
+        public async Task<IActionResult> PostUser(AdminCreateUserDto createUserDto)
+        {
+            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            {
+                return BadRequest(new { Message = "Email is already in use" });
+            }
+
+            var user = new User
+            {
+                Name = createUserDto.Name,
+                Email = createUserDto.Email,
+                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
+                RoleId = createUserDto.RoleId,
+                DocumentTypeId = createUserDto.DocumentTypeId,
+                Phone = createUserDto.Phone,
+                Address = createUserDto.Address,
+                DocumentNumber = createUserDto.DocumentNumber,
+                DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
+                AvatarUrl = createUserDto.AvatarUrl,
+                IsVerified = createUserDto.IsVerified,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
+        }
+        
 
         [AllowAnonymous]
         [HttpPost("register")]
