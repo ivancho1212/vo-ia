@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Voia.Api.Models
 {
+    [Table("permissions")]
     public class Permission
     {
         public int Id { get; set; }

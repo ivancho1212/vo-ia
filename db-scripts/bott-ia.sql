@@ -319,16 +319,18 @@ CREATE TABLE generated_images (
     FOREIGN KEY (bot_id) REFERENCES bots(id)
 );
 
-CREATE TABLE Permissions (
-    Id INT PRIMARY KEY AUTO_INCREMENT,
-    Name VARCHAR(100) NOT NULL,
-    Description TEXT
+-- Tabla de permisos
+CREATE TABLE permissions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    description TEXT
 );
 
-CREATE TABLE RolePermissions (
-    RoleId INT,
-    PermissionId INT,
-    PRIMARY KEY (RoleId, PermissionId),
-    FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
-    FOREIGN KEY (PermissionId) REFERENCES Permissions(Id) ON DELETE CASCADE
+-- Tabla intermedia roles-permisos
+CREATE TABLE rolepermissions (
+    role_id INT,
+    permission_id INT,
+    PRIMARY KEY (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );

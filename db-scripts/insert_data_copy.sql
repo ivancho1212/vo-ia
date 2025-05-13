@@ -149,7 +149,7 @@ VALUES
   (1, @admin_user_id, 'We are investigating the issue with Admin Bot and will update soon.'),
   (2, @regular_user_id, 'We have identified the problem with the User Bot and are working on it.');
 
-INSERT INTO Permissions (Name, Description) VALUES
+INSERT INTO permissions (Name, Description) VALUES
 ('CanViewUsers', 'Puede ver la lista de usuarios'),
 ('CanEditUsers', 'Puede editar usuarios'),
 ('CanDeleteUsers', 'Puede eliminar usuarios'),
@@ -161,23 +161,20 @@ VALUES (3, 'Support', 'Soporte técnico');
 
 
 -- Ejemplo: El rol Admin tiene todos los permisos
-INSERT INTO RolePermissions (RoleId, PermissionId)
-SELECT 32, Id FROM Permissions;
+INSERT INTO rolepermissions (role_id, permission_id)
+SELECT 1, Id FROM permissions;
 
 -- El rol Support solo tiene acceso a tickets
-INSERT INTO RolePermissions (RoleId, PermissionId)
-VALUES (3, (SELECT Id FROM Permissions WHERE Name = 'CanAccessSupportTickets'));
+INSERT INTO rolepermissions (role_id, permission_id)
+VALUES (3, (SELECT Id FROM permissions WHERE Name = 'CanAccessSupportTickets'));
 
-INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (3, 1);
-INSERT INTO RolePermissions (RoleId, PermissionId) VALUES (5, 1); -- CanViewUsers
+INSERT INTO rolepermissions (role_id, permission_id) VALUES (3, 1);
 
-INSERT INTO RolePermissions (RoleId, PermissionId)
-SELECT 32, Id FROM Permissions
-ON DUPLICATE KEY UPDATE RoleId = RoleId;
+INSERT INTO rolepermissions (role_id, permission_id)
+SELECT 1, Id FROM permissions
+ON DUPLICATE KEY UPDATE role_id = role_id;
 
-SELECT * FROM RolePermissions WHERE RoleId = 32;
-
-INSERT INTO Permissions (Name, Description) VALUES
+INSERT INTO permissions (Name, Description) VALUES
 -- AiModelConfigs
 ('CanViewAiModelConfigs', 'Puede ver configuraciones de modelos de IA'),
 ('CanCreateAiModelConfigs', 'Puede crear configuraciones de modelos de IA'),
@@ -227,8 +224,8 @@ INSERT INTO Permissions (Name, Description) VALUES
 ('CanUpdateGeneratedImages', 'Puede actualizar imágenes generadas'),
 ('CanDeleteGeneratedImages', 'Puede eliminar imágenes generadas'),
 
--- Permissions
-('CanManagePermissions', 'Puede gestionar permisos'),
+-- permissions
+('CanManagepermissions', 'Puede gestionar permisos'),
 
 -- Plans
 ('CanViewPlans', 'Puede ver planes'),
@@ -242,8 +239,8 @@ INSERT INTO Permissions (Name, Description) VALUES
 ('CanUpdatePrompts', 'Puede actualizar prompts'),
 ('CanDeletePrompts', 'Puede eliminar prompts'),
 
--- Role Permissions
-('ViewRolePermissions', 'Puede ver permisos asignados a roles'),
+-- Role permissions
+('Viewrolepermissions', 'Puede ver permisos asignados a roles'),
 ('AssignPermissionToRole', 'Puede asignar permisos a roles'),
 ('RevokePermissionFromRole', 'Puede revocar permisos de roles'),
 
