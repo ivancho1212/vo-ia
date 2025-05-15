@@ -28,11 +28,54 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la lista de todos los planes.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        [HasPermission("CanViewPlans")]
+        [AllowAnonymous] // Permite el acceso público a este método
         public async Task<ActionResult<IEnumerable<Plan>>> GetPlans()
         {
             var plans = await _context.Plans.ToListAsync();
             return Ok(plans);
+        }
+        /// <summary>
+        /// Obtiene el plan asociado a la suscripción del usuario autenticado.
+        /// </summary>
+        /// <returns>Información del plan actual del usuario.</returns>
+        /// <response code="200">Devuelve el plan actual del usuario.</response>
+        /// <response code="404">Si no se encuentra la suscripción activa.</response>
+        [HttpGet("my-plan")]
+        [Authorize] // Cualquier usuario autenticado
+        public async Task<IActionResult> GetMyPlan()
+        {
+            var userIdClaim = User.FindFirst("sub") ?? User.FindFirst("id") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null)
+                return Unauthorized(new { message = "No se pudo obtener el ID del usuario." });
+
+            var userId = userIdClaim.Value;
+
+            // Buscar la suscripción activa del usuario
+            var subscription = await _context.Subscriptions
+                .Include(s => s.Plan)
+                .FirstOrDefaultAsync(s =>
+                    s.UserId == int.Parse(userId) &&
+                    s.Status == "active" &&
+                    s.ExpiresAt > DateTime.UtcNow);
+
+            if (subscription == null)
+                return NotFound(new { message = "No se encontró una suscripción activa para este usuario." });
+
+            var plan = subscription.Plan;
+
+            return Ok(new
+            {
+                plan.Id,
+                plan.Name,
+                plan.Description,
+                plan.Price,
+                plan.MaxTokens,
+                plan.BotsLimit,
+                plan.IsActive,
+                subscription.StartedAt,
+                subscription.ExpiresAt
+            });
         }
 
         /// <summary>

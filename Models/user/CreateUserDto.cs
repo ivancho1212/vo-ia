@@ -16,7 +16,8 @@ namespace Voia.Api.Models.DTOs
         public string Password { get; set; }
 
         [Required(ErrorMessage = "El tipo de documento es obligatorio.")]
-        public int? DocumentTypeId { get; set; }
+        public int DocumentTypeId { get; set; }
+
 
         [Required(ErrorMessage = "El número de teléfono es obligatorio.")]
         [RegularExpression(@"^3\d{9}$", ErrorMessage = "Teléfono inválido. Debe comenzar con 3 y tener 10 dígitos.")]
