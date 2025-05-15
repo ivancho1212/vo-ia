@@ -58,9 +58,9 @@ builder.Services.AddEndpointsApiExplorer();
 // ✅ SWAGGER CON JWT + XML
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo 
-    { 
-        Title = "Voia API", 
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Voia API",
         Version = "v1",
         Description = "API para la gestión de usuarios, roles, permisos y chat."
     });
@@ -109,10 +109,10 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseStaticFiles();         
-app.UseCors("AllowFrontend");
-app.UseAuthentication(); 
-app.UseAuthorization();
+app.UseStaticFiles();
+app.UseCors("AllowFrontend");  // Asegúrate de que CORS esté antes de la autenticación
+app.UseAuthentication();       // Ahora la autenticación
+app.UseAuthorization();        // Y autorización
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");

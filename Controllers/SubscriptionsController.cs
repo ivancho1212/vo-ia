@@ -5,10 +5,11 @@ using Voia.Api.Data;
 using Voia.Api.Models.Subscriptions;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Security.Claims;
 
 namespace Voia.Api.Controllers
 {
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class SubscriptionsController : ControllerBase
@@ -20,12 +21,7 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        /// <summary>
-        /// Obtiene todas las suscripciones.
-        /// </summary>
-        /// <returns>Lista de suscripciones.</returns>
-        /// <response code="200">Devuelve la lista de suscripciones.</response>
-        /// <response code="500">Si ocurre un error interno.</response>
+        // Solo para Admins
         [HttpGet]
         [HasPermission("CanViewSubscriptions")]
         public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetSubscriptions()
@@ -50,25 +46,28 @@ namespace Voia.Api.Controllers
             return Ok(subscriptions);
         }
 
-
-        /// <summary>
-        /// Crea una nueva suscripción.
-        /// </summary>
-        /// <param name="dto">Datos de la nueva suscripción.</param>
-        /// <returns>La suscripción recién creada.</returns>
-        /// <response code="201">La suscripción fue creada exitosamente.</response>
-        /// <response code="400">Si los datos de la suscripción no son válidos.</response>
-        [HttpPost]
-        [HasPermission("CanCreateSubscriptions")]
-        public async Task<ActionResult<Subscription>> CreateSubscription([FromBody] CreateSubscriptionDto dto)
+        // Público: cualquier usuario autenticado puede suscribirse
+        [HttpPost("subscribe")]
+        public async Task<ActionResult<Subscription>> Subscribe([FromBody] CreateSubscriptionDto dto)
         {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            // Evitar múltiples suscripciones activas del mismo usuario, si aplica
+            var existing = await _context.Subscriptions
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active");
+
+            if (existing != null)
+            {
+                return BadRequest(new { message = "Ya tienes una suscripción activa." });
+            }
+
             var subscription = new Subscription
             {
-                UserId = dto.UserId,
+                UserId = userId,
                 PlanId = dto.PlanId,
                 StartedAt = dto.StartedAt,
                 ExpiresAt = dto.ExpiresAt,
-                Status = dto.Status
+                Status = "active"
             };
 
             _context.Subscriptions.Add(subscription);
@@ -77,63 +76,35 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetSubscriptions), new { id = subscription.Id }, subscription);
         }
 
-        /// <summary>
-        /// Actualiza una suscripción existente.
-        /// </summary>
-        /// <param name="id">ID de la suscripción a actualizar.</param>
-        /// <param name="updateSubscriptionDto">Datos de la suscripción actualizada.</param>
-        /// <returns>Respuesta de la operación de actualización.</returns>
-        /// <response code="200">La suscripción fue actualizada correctamente.</response>
-        /// <response code="400">Si los datos de la suscripción son inválidos.</response>
-        /// <response code="404">Si no se encuentra la suscripción a actualizar.</response>
+        // Solo para Admins
         [HttpPut("{id}")]
         [HasPermission("CanUpdateSubscriptions")]
-        public async Task<IActionResult> UpdateSubscription(int id, [FromBody] UpdateSubscriptionDto updateSubscriptionDto)
+        public async Task<IActionResult> UpdateSubscription(int id, [FromBody] UpdateSubscriptionDto updateDto)
         {
             var subscription = await _context.Subscriptions.FindAsync(id);
             if (subscription == null)
-            {
                 return NotFound(new { message = "Subscription not found." });
-            }
 
-            // Solo actualizamos los campos que no sean nulos
-            if (updateSubscriptionDto.UserId.HasValue)
-            {
-                subscription.UserId = updateSubscriptionDto.UserId.Value;
-            }
+            if (updateDto.UserId.HasValue)
+                subscription.UserId = updateDto.UserId.Value;
 
-            if (updateSubscriptionDto.PlanId.HasValue)
-            {
-                subscription.PlanId = updateSubscriptionDto.PlanId.Value;
-            }
+            if (updateDto.PlanId.HasValue)
+                subscription.PlanId = updateDto.PlanId.Value;
 
-            if (updateSubscriptionDto.StartedAt.HasValue)
-            {
-                subscription.StartedAt = updateSubscriptionDto.StartedAt.Value;
-            }
+            if (updateDto.StartedAt.HasValue)
+                subscription.StartedAt = updateDto.StartedAt.Value;
 
-            if (updateSubscriptionDto.ExpiresAt.HasValue)
-            {
-                subscription.ExpiresAt = updateSubscriptionDto.ExpiresAt.Value;
-            }
+            if (updateDto.ExpiresAt.HasValue)
+                subscription.ExpiresAt = updateDto.ExpiresAt.Value;
 
-            if (!string.IsNullOrEmpty(updateSubscriptionDto.Status))
-            {
-                subscription.Status = updateSubscriptionDto.Status;
-            }
+            if (!string.IsNullOrEmpty(updateDto.Status))
+                subscription.Status = updateDto.Status;
 
             await _context.SaveChangesAsync();
-
-            return NoContent(); // 204 No Content
+            return NoContent();
         }
 
-        /// <summary>
-        /// Elimina una suscripción por su ID.
-        /// </summary>
-        /// <param name="id">ID de la suscripción a eliminar.</param>
-        /// <returns>Resultado de la eliminación.</returns>
-        /// <response code="204">La suscripción fue eliminada correctamente.</response>
-        /// <response code="404">Si no se encuentra la suscripción a eliminar.</response>
+        // Solo para Admins
         [HttpDelete("{id}")]
         [HasPermission("CanDeleteSubscriptions")]
         public async Task<IActionResult> DeleteSubscription(int id)
@@ -144,7 +115,6 @@ namespace Voia.Api.Controllers
 
             _context.Subscriptions.Remove(subscription);
             await _context.SaveChangesAsync();
-
             return NoContent();
         }
     }

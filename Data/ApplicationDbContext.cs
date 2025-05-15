@@ -109,8 +109,16 @@ namespace Voia.Api.Data
 
             // Configuración de la tabla y columnas en snake_case para la tabla 'rolepermissions'
             modelBuilder.Entity<RolePermission>().ToTable("rolepermissions");
+
+            modelBuilder.Entity<RolePermission>().HasKey(rp => new { rp.RoleId, rp.PermissionId });
+
             modelBuilder.Entity<RolePermission>()
-                .HasKey(rp => new { rp.RoleId, rp.PermissionId });
+                .Property(rp => rp.RoleId)
+                .HasColumnName("role_id");
+
+            modelBuilder.Entity<RolePermission>()
+                .Property(rp => rp.PermissionId)
+                .HasColumnName("permission_id");
 
             modelBuilder.Entity<RolePermission>()
                 .HasOne(rp => rp.Role)
@@ -122,8 +130,6 @@ namespace Voia.Api.Data
                 .WithMany(p => p.RolePermissions)
                 .HasForeignKey(rp => rp.PermissionId);
 
-            // Configuración de la tabla y columnas en snake_case para la tabla 'roles'
-            modelBuilder.Entity<Role>().ToTable("roles");
 
             modelBuilder.Entity<Bot>()
                 .Property(b => b.UserId)
