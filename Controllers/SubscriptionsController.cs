@@ -75,6 +75,71 @@ namespace Voia.Api.Controllers
 
             return CreatedAtAction(nameof(GetSubscriptions), new { id = subscription.Id }, subscription);
         }
+        // GET: api/subscriptions/me
+        [HttpGet("me")]
+        public async Task<ActionResult<SubscriptionDto>> GetMySubscription()
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            var subscription = await _context.Subscriptions
+                .Include(s => s.Plan)
+                .Include(s => s.User)
+                .Where(s => s.UserId == userId && s.Status == "active")
+                .OrderByDescending(s => s.StartedAt)
+                .Select(s => new SubscriptionDto
+                {
+                    Id = s.Id,
+                    UserId = s.UserId,
+                    UserName = s.User.Name,
+                    UserEmail = s.User.Email,
+                    PlanId = s.PlanId,
+                    PlanName = s.Plan.Name,
+                    StartedAt = s.StartedAt,
+                    ExpiresAt = s.ExpiresAt,
+                    Status = s.Status
+                })
+                .FirstOrDefaultAsync();
+
+            if (subscription == null)
+            {
+                return NotFound(new { message = "No tienes una suscripción activa." });
+            }
+
+            return Ok(subscription);
+        }
+        // PUT: /api/plans/change
+        [HttpPut("change")]
+        public async Task<ActionResult> ChangeSubscription([FromBody] ChangePlanDto dto)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+            var existing = await _context.Subscriptions
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active");
+
+            if (existing == null)
+            {
+                return NotFound(new { message = "No tienes una suscripción activa para cambiar." });
+            }
+
+            // Opcional: Marcar la suscripción anterior como cancelada (o expired)
+            existing.Status = "canceled";
+            _context.Subscriptions.Update(existing);
+
+            var newSubscription = new Subscription
+            {
+                UserId = userId,
+                PlanId = dto.PlanId,
+                StartedAt = dto.StartedAt,
+                ExpiresAt = dto.ExpiresAt,
+                Status = "active"
+            };
+
+            _context.Subscriptions.Add(newSubscription);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Plan actualizado con éxito." });
+        }
+
 
         // Solo para Admins
         [HttpPut("{id}")]
