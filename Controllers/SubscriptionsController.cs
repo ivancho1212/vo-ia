@@ -87,23 +87,38 @@ namespace Voia.Api.Controllers
                 .Where(s => s.UserId == userId && s.Status == "active")
                 .OrderByDescending(s => s.StartedAt)
                 .Select(s => new SubscriptionDto
-                {
-                    Id = s.Id,
-                    UserId = s.UserId,
-                    UserName = s.User.Name,
-                    UserEmail = s.User.Email,
-                    PlanId = s.PlanId,
-                    PlanName = s.Plan.Name,
-                    StartedAt = s.StartedAt,
-                    ExpiresAt = s.ExpiresAt,
-                    Status = s.Status
-                })
+                    {
+                        Id = s.Id,
+                        UserId = s.UserId,
+                        UserName = s.User.Name,
+                        UserEmail = s.User.Email,
+
+                        PlanId = s.PlanId,
+                        PlanName = s.Plan.Name,
+                        PlanDescription = s.Plan.Description,
+                        PlanPrice = s.Plan.Price,
+                        PlanMaxTokens = s.Plan.MaxTokens,
+                        PlanBotsLimit = s.Plan.BotsLimit.Value,
+                        PlanIsActive = s.Plan.IsActive.Value,
+
+                        StartedAt = s.StartedAt,
+                        ExpiresAt = s.ExpiresAt,
+                        Status = s.Status
+                    })
+
+
                 .FirstOrDefaultAsync();
 
             if (subscription == null)
-            {
-                return NotFound(new { message = "No tienes una suscripción activa." });
-            }
+                {
+                    // Puedes devolver un objeto vacío, null o una estructura estándar con status
+                    return Ok(new
+                    {
+                        plan = (object)null,
+                        message = "No tienes una suscripción activa."
+                    });
+                }
+
 
             return Ok(subscription);
         }
@@ -182,5 +197,26 @@ namespace Voia.Api.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+        // PUT: /api/subscriptions/cancel
+            [HttpPut("cancel")]
+            public async Task<ActionResult> CancelSubscription()
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+
+                var subscription = await _context.Subscriptions
+                    .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active");
+
+                if (subscription == null)
+                {
+                    return NotFound(new { message = "No tienes una suscripción activa para cancelar." });
+                }
+
+                subscription.Status = "canceled";
+                _context.Subscriptions.Update(subscription);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { message = "Suscripción cancelada correctamente." });
+            }
+
     }
 }
