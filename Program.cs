@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Security.Claims;
 using Voia.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
@@ -35,8 +36,12 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key!))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key!)),
+        
+        // ✅ ESTA LÍNEA es la clave
+        RoleClaimType = ClaimTypes.Role
     };
+
 });
 
 builder.Services.AddAuthorization();

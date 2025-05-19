@@ -21,13 +21,14 @@ namespace Voia.Api.Services
         {
             string normalizedRole = user.Role.Name switch
             {
-                "Administrador" => "Admin",
-                "Usuario" => "User",
-                "Soporte" => "Support",
-                "Entrenador" => "Trainer",
-                "Espectador" => "Viewer",
+                "Administrador" or "Admin" => "Admin",
+                "Usuario" or "User" => "User",
+                "Soporte" or "Support" => "Support",
+                "Entrenador" or "Trainer" => "Trainer",
+                "Espectador" or "Viewer" => "Viewer",
                 _ => user.Role.Name
             };
+
 
             var claims = new[]
             {

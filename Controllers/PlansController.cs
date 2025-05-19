@@ -34,6 +34,15 @@ namespace Voia.Api.Controllers
             var plans = await _context.Plans.ToListAsync();
             return Ok(plans);
         }
+
+        [HttpGet("admin")]
+        [Authorize(Roles = "Admin")]
+        public async Task<ActionResult<IEnumerable<Plan>>> GetAllPlansForAdmin()
+        {
+            var plans = await _context.Plans.ToListAsync();
+            return Ok(plans);
+        }
+
         /// <summary>
         /// Obtiene el plan asociado a la suscripción del usuario autenticado.
         /// </summary>
@@ -110,11 +119,14 @@ namespace Voia.Api.Controllers
         /// <response code="400">Si los datos son inválidos.</response>
         /// <response code="404">Si no se encuentra el plan.</response>
         [HttpPut("{id}")]
-        [HasPermission("CanUpdatePlans")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> UpdatePlan(int id, [FromBody] Plan plan)
         {
             if (id != plan.Id)
                 return BadRequest(new { message = "El ID del plan no coincide." });
+
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
 
             var existingPlan = await _context.Plans.FindAsync(id);
             if (existingPlan == null)
@@ -131,6 +143,7 @@ namespace Voia.Api.Controllers
 
             return NoContent();
         }
+
 
         /// <summary>
         /// Elimina un plan por su ID.
