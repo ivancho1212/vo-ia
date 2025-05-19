@@ -334,3 +334,11 @@ CREATE TABLE rolepermissions (
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
     FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );
+
+ALTER TABLE plan_changes
+DROP FOREIGN KEY plan_changes_ibfk_1;
+
+ALTER TABLE plan_changes
+ADD CONSTRAINT plan_changes_ibfk_1
+FOREIGN KEY (plan_id) REFERENCES plans(id)
+ON DELETE CASCADE;

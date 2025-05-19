@@ -96,7 +96,7 @@ namespace Voia.Api.Controllers
         /// <response code="400">Si los datos del plan son inválidos.</response>
         /// <response code="409">Si ya existe un plan con el mismo nombre.</response>
         [HttpPost]
-        [HasPermission("CanCreatePlans")]
+        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<Plan>> CreatePlan([FromBody] Plan plan)
         {
             // Validar nombre único
@@ -108,6 +108,7 @@ namespace Voia.Api.Controllers
 
             return CreatedAtAction(nameof(GetPlans), new { id = plan.Id }, plan);
         }
+
 
         /// <summary>
         /// Actualiza un plan existente.
@@ -153,17 +154,31 @@ namespace Voia.Api.Controllers
         /// <response code="204">El plan fue eliminado correctamente.</response>
         /// <response code="404">Si no se encuentra el plan.</response>
         [HttpDelete("{id}")]
-        [HasPermission("CanDeletePlans")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeletePlan(int id)
         {
             var plan = await _context.Plans.FindAsync(id);
             if (plan == null)
                 return NotFound(new { message = "Plan no encontrado." });
 
+            // ✅ Validación: por ejemplo, verificar si el plan está activo
+            if (plan.IsActive ?? false)
+            {
+                return BadRequest(new { message = "No se puede eliminar un plan activo. Desactívelo primero." });
+            }
+
+            // ✅ Validación: por ejemplo, verificar si el plan tiene suscripciones asociadas
+            bool hasSubscriptions = await _context.Subscriptions.AnyAsync(s => s.PlanId == id);
+            if (hasSubscriptions)
+            {
+                return BadRequest(new { message = "No se puede eliminar el plan porque tiene suscripciones asociadas." });
+            }
+
             _context.Plans.Remove(plan);
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
+
     }
 }
