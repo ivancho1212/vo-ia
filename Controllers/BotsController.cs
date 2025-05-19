@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
+using System.Security.Claims;
 
 namespace Voia.Api.Controllers
 {
@@ -65,6 +66,27 @@ namespace Voia.Api.Controllers
             }
         }
 
+        [HttpGet("me")]
+        [HasPermission("CanViewBots")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst("id")!.Value);
+
+                var bots = await _context.Bots
+                    .Include(b => b.User)
+                    .Where(b => b.UserId == userId && b.IsActive)
+                    .ToListAsync();
+
+                return Ok(bots);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An error occurred", Details = ex.Message });
+            }
+        }
+
         /// <summary>
         /// Crea un nuevo bot.
         /// </summary>
@@ -77,13 +99,16 @@ namespace Voia.Api.Controllers
         public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
         {
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
-            // Verificar duplicados por nombre
-            var existingBot = await _context.Bots
-                .FirstOrDefaultAsync(b => b.Name == botDto.Name);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized();
+
+            int userId = int.Parse(userIdClaim.Value);
+
+            // Verifica si ya existe un bot con el mismo nombre
+            var existingBot = await _context.Bots.FirstOrDefaultAsync(b => b.Name == botDto.Name);
             if (existingBot != null)
             {
                 return BadRequest(new { Message = "A bot with the same name already exists." });
@@ -96,7 +121,7 @@ namespace Voia.Api.Controllers
                 ApiKey = botDto.ApiKey,
                 ModelUsed = botDto.ModelUsed,
                 IsActive = botDto.IsActive,
-                UserId = botDto.UserId,
+                UserId = userId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -104,11 +129,7 @@ namespace Voia.Api.Controllers
             _context.Bots.Add(bot);
             await _context.SaveChangesAsync();
 
-            var createdBot = await _context.Bots
-                .Include(b => b.User)
-                .FirstOrDefaultAsync(b => b.Id == bot.Id);
-
-            return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, createdBot);
+            return CreatedAtAction(nameof(GetBots), new { id = bot.Id }, bot);
         }
 
         /// <summary>
