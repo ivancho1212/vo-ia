@@ -40,7 +40,16 @@ namespace Voia.Api.Data
         public DbSet<Role> Roles { get; set; } = null!;
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
-
+        public DbSet<BotTrainingConfig> BotTrainingConfigs { get; set; }
+        public DbSet<KnowledgeChunk> KnowledgeChunks { get; set; }
+        public DbSet<BotTemplate> BotTemplates { get; set; }
+        public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
+        public DbSet<BotDataSubmission> BotDataSubmissions { get; set; }
+        public DbSet<BotInstallationSetting> BotInstallationSettings { get; set; }
+        public DbSet<BotIaProvider> BotIaProviders { get; set; }
+        public DbSet<TokenUsageLog> TokenUsageLogs { get; set; }
+        public DbSet<BotTemplatePrompt> BotTemplatePrompts { get; set; }
+        public DbSet<BotCustomPrompt> BotCustomPrompts { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }

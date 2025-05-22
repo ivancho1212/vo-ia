@@ -342,3 +342,121 @@ ALTER TABLE plan_changes
 ADD CONSTRAINT plan_changes_ibfk_1
 FOREIGN KEY (plan_id) REFERENCES plans(id)
 ON DELETE CASCADE;
+
+CREATE TABLE bot_training_configs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bot_id INT NOT NULL,
+  training_type ENUM('url', 'form_data', 'manual_prompt', 'document') NOT NULL,
+  data TEXT NOT NULL, -- puede ser texto plano, JSON con preguntas/respuestas, URL, etc.
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+CREATE TABLE knowledge_chunks (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bot_id INT NOT NULL,
+  content TEXT NOT NULL,
+  metadata JSON,
+  embedding_vector BLOB, -- si usarás búsqueda semántica por vectores (con FAISS, Pinecone, etc.)
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (bot_id) REFERENCES bots(id)
+);
+
+-- 1. bot_templates: para bots preconfigurados (plantillas)
+CREATE TABLE IF NOT EXISTS bot_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    ia_provider_id INT NOT NULL, -- referencia a proveedor IA (bot_ia_providers)
+    default_style_id INT,         -- referencia a estilo por defecto (bot_styles si tienes)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 2. bot_data_capture_fields: campos que un bot puede capturar (formularios, datos)
+CREATE TABLE IF NOT EXISTS bot_data_capture_fields (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,                 -- bot que usa el campo
+    field_name VARCHAR(100) NOT NULL,   -- nombre del campo (ej: "email", "telefono")
+    field_type VARCHAR(50) NOT NULL,    -- tipo (texto, número, email, fecha, etc)
+    is_required BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+-- 3. bot_data_submissions: datos capturados por el bot, enviados por usuarios
+CREATE TABLE IF NOT EXISTS bot_data_submissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    capture_field_id INT NOT NULL,
+    submission_value TEXT,
+    submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+    FOREIGN KEY (capture_field_id) REFERENCES bot_data_capture_fields(id) ON DELETE CASCADE
+);
+
+-- 4. bot_installation_settings: configuración para instalar el bot en plataformas externas
+CREATE TABLE IF NOT EXISTS bot_installation_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    installation_method ENUM('script', 'sdk', 'endpoint') NOT NULL DEFAULT 'script',
+    installation_instructions TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+-- 5. bot_ia_providers: proveedores de IA a los que un bot puede estar asociado
+CREATE TABLE IF NOT EXISTS bot_ia_providers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,  -- ej: "OpenAI", "Google Gemini", "DeepSeek"
+    api_endpoint VARCHAR(255) NOT NULL,
+    api_key VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 6. token_usage_logs: para registrar uso de tokens por usuario y bot
+CREATE TABLE IF NOT EXISTS token_usage_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    bot_id INT NOT NULL,
+    tokens_used INT NOT NULL,
+    usage_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+CREATE TABLE bot_template_prompts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_template_id INT NOT NULL,
+    role ENUM('system', 'user', 'assistant') NOT NULL DEFAULT 'system',
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_template_id) REFERENCES bot_templates(id) ON DELETE CASCADE
+);
+
+CREATE TABLE bot_custom_prompts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,                         -- referencia al bot creado (tabla bots)
+    role ENUM('system', 'user', 'assistant') NOT NULL DEFAULT 'system',
+    content TEXT NOT NULL,                        -- prompt o ejemplo de conversación
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+CREATE TABLE bot_training_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    session_name VARCHAR(255),
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE
+);
+
+ALTER TABLE bot_custom_prompts
+ADD COLUMN training_session_id INT NULL,
+ADD FOREIGN KEY (training_session_id) REFERENCES bot_training_sessions(id) ON DELETE SET NULL;
