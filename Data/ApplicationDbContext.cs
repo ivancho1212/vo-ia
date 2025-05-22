@@ -182,7 +182,20 @@ namespace Voia.Api.Data
                 .WithMany()
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            // Configuración para Bot
+            modelBuilder.Entity<Bot>()
+                .HasOne(b => b.User)
+                .WithMany()
+                .HasForeignKey(b => b.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+                
+            modelBuilder.Entity<BotCustomPrompt>()
+                .Property(p => p.Role)
+                .HasConversion<string>();
+
+            // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>
+
 {
     entity.ToTable("bot_styles"); // Aquí se indica el nombre real de la tabla
 

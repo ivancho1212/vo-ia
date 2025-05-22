@@ -14,7 +14,7 @@ namespace Voia.Api.Models
         public int BotId { get; set; }
 
         [Required]
-        public string Role { get; set; }  // <-- Usa string
+        public string Role { get; set; } = "system"; // enum: system, user, assistant
 
         [Required]
         public string Content { get; set; }
