@@ -13,6 +13,7 @@ using Voia.Api.Models.UserPreferences;
 using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.BotActions;
 using Voia.Api.Models.BotIntegrations;
+using Voia.Api.Models.BotTrainingSession;
 
 
 
@@ -50,6 +51,8 @@ namespace Voia.Api.Data
         public DbSet<TokenUsageLog> TokenUsageLogs { get; set; }
         public DbSet<BotTemplatePrompt> BotTemplatePrompts { get; set; }
         public DbSet<BotCustomPrompt> BotCustomPrompts { get; set; }
+        public DbSet<BotTrainingSession> BotTrainingSessions { get; set; }
+
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
