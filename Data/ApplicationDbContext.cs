@@ -14,6 +14,7 @@ using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.BotActions;
 using Voia.Api.Models.BotIntegrations;
 using Voia.Api.Models.BotTrainingSession;
+using Voia.Api.Models.StyleTemplate;
 
 
 
@@ -52,6 +53,7 @@ namespace Voia.Api.Data
         public DbSet<BotTemplatePrompt> BotTemplatePrompts { get; set; }
         public DbSet<BotCustomPrompt> BotCustomPrompts { get; set; }
         public DbSet<BotTrainingSession> BotTrainingSessions { get; set; }
+        public DbSet<StyleTemplate> StyleTemplates { get; set; }
 
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -191,7 +193,7 @@ namespace Voia.Api.Data
                 .WithMany()
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
-                
+
             modelBuilder.Entity<BotCustomPrompt>()
                 .Property(p => p.Role)
                 .HasConversion<string>();

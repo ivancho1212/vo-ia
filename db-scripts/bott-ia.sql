@@ -460,3 +460,30 @@ CREATE TABLE bot_training_sessions (
 ALTER TABLE bot_custom_prompts
 ADD COLUMN training_session_id INT NULL,
 ADD FOREIGN KEY (training_session_id) REFERENCES bot_training_sessions(id) ON DELETE SET NULL;
+
+CREATE TABLE style_templates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL, -- Relaciona el estilo con el usuario creador
+    name VARCHAR(100) NOT NULL, -- Nombre del estilo personalizado (ej. "Estilo Verde Claro")
+    theme ENUM('light', 'dark', 'custom') DEFAULT 'light',
+    primary_color VARCHAR(20) DEFAULT '#000000',
+    secondary_color VARCHAR(20) DEFAULT '#ffffff',
+    font_family VARCHAR(100) DEFAULT 'Arial',
+    avatar_url TEXT,
+    position ENUM(
+        'bottom-right', 'bottom-left', 'top-right', 'top-left',
+        'center-right', 'center-left', 'top-center', 'bottom-center'
+    ) DEFAULT 'bottom-right',
+    custom_css TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_style_templates_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+ALTER TABLE bot_styles
+ADD COLUMN style_template_id INT DEFAULT NULL AFTER bot_id,
+ADD CONSTRAINT fk_bot_styles_style_template
+FOREIGN KEY (style_template_id) REFERENCES style_templates(id)
+ON DELETE SET NULL;
+
