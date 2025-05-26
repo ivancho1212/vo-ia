@@ -487,3 +487,31 @@ ADD CONSTRAINT fk_bot_styles_style_template
 FOREIGN KEY (style_template_id) REFERENCES style_templates(id)
 ON DELETE SET NULL;
 
+ALTER TABLE bot_ia_providers ADD COLUMN status ENUM('active', 'inactive') DEFAULT 'active';
+
+ALTER TABLE bot_templates 
+  ADD COLUMN ai_model_config_id INT NOT NULL AFTER ia_provider_id;
+
+ALTER TABLE ai_model_configs 
+DROP COLUMN bot_id,
+ADD COLUMN ia_provider_id INT NOT NULL AFTER id;
+
+ALTER TABLE ai_model_configs
+ADD CONSTRAINT fk_ai_model_configs_ia_provider
+FOREIGN KEY (ia_provider_id) REFERENCES bot_ia_providers(id);
+
+ALTER TABLE ai_model_configs 
+  DROP COLUMN bot_id,
+  ADD COLUMN ia_provider_id INT NOT NULL AFTER id;
+
+ALTER TABLE ai_model_configs
+DROP COLUMN max_tokens;
+
+ALTER TABLE bot_templates
+  ADD CONSTRAINT fk_bot_templates_ai_model_config FOREIGN KEY (ai_model_config_id) REFERENCES ai_model_configs(id),
+  ADD CONSTRAINT fk_bot_templates_ia_provider FOREIGN KEY (ia_provider_id) REFERENCES bot_ia_providers(id);
+
+ALTER TABLE bot_templates
+ADD CONSTRAINT fk_bot_templates_style_template
+FOREIGN KEY (default_style_id) REFERENCES style_templates(id)
+ON DELETE SET NULL;
