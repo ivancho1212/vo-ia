@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Voia.Api.Models.BotIntegrations; // Ajusta el namespace según donde esté el modelo BotIaProvider
 
 namespace Voia.Api.Models
 {
@@ -18,7 +19,13 @@ namespace Voia.Api.Models
 
         public int UserId { get; set; }
         public User User { get; set; } // Navegación
+
+        // NUEVO: Propiedad FK para el proveedor de IA
+        [Column("ia_provider_id")]
+        public int IaProviderId { get; set; }
+
+        // NUEVO: Propiedad de navegación
+        [ForeignKey("IaProviderId")]
+        public BotIaProvider IaProvider { get; set; }
     }
-
-
 }

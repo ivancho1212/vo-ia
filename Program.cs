@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Hubs;
 using Microsoft.OpenApi.Models;
+using Voia.Api.Services;
+using Voia.Api.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +102,7 @@ builder.Services.AddSwaggerGen(c =>
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
     c.IncludeXmlComments(xmlPath);
 });
+builder.Services.AddScoped<IAiProviderService, AiProviderService>();
 
 var app = builder.Build();
 
@@ -123,3 +126,4 @@ app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
 
 app.Run();
+

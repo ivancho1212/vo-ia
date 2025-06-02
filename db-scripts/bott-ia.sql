@@ -515,3 +515,7 @@ ALTER TABLE bot_templates
 ADD CONSTRAINT fk_bot_templates_style_template
 FOREIGN KEY (default_style_id) REFERENCES style_templates(id)
 ON DELETE SET NULL;
+
+ALTER TABLE bots
+ADD COLUMN ia_provider_id INT NOT NULL DEFAULT 1,
+ADD CONSTRAINT fk_bots_ia_provider FOREIGN KEY (ia_provider_id) REFERENCES bot_ia_providers(id);

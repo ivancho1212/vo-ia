@@ -1,22 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models;
-using Voia.Api.Models.Conversations;
-using Voia.Api.Models.Prompts;
-using Voia.Api.Models.Plans;
-using Voia.Api.Models.Subscriptions;
-using Voia.Api.Models.SupportTicket;
-using Voia.Api.Models.BotProfiles;
 using Voia.Api.Models.AiModelConfigs;
-using Voia.Api.Models.TrainingDataSessions;
-using Voia.Api.Models.GeneratedImages;
-using Voia.Api.Models.UserPreferences;
-using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.BotActions;
 using Voia.Api.Models.BotIntegrations;
+using Voia.Api.Models.BotProfiles;
 using Voia.Api.Models.BotTrainingSession;
+using Voia.Api.Models.Conversations;
+using Voia.Api.Models.GeneratedImages;
+using Voia.Api.Models.Plans;
+using Voia.Api.Models.Prompts;
 using Voia.Api.Models.StyleTemplate;
-
-
+using Voia.Api.Models.Subscriptions;
+using Voia.Api.Models.SupportTicket;
+using Voia.Api.Models.TrainingDataSessions;
+using Voia.Api.Models.UserBotRelations;
+using Voia.Api.Models.UserPreferences;
+using Voia.Api.Models.BotConversation;
 
 namespace Voia.Api.Data
 {
@@ -54,7 +53,7 @@ namespace Voia.Api.Data
         public DbSet<BotCustomPrompt> BotCustomPrompts { get; set; }
         public DbSet<BotTrainingSession> BotTrainingSessions { get; set; }
         public DbSet<StyleTemplate> StyleTemplates { get; set; }
-
+        public DbSet<BotConversation> BotConversations { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -67,56 +66,55 @@ namespace Voia.Api.Data
             modelBuilder.Entity<User>().ToTable("users");
 
             // --- MAPEO CAMPOS User ---
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .Property(u => u.DocumentNumber)
                 .HasColumnName("document_number");
 
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .Property(u => u.DocumentTypeId)
                 .HasColumnName("document_type_id");
 
-            modelBuilder.Entity<User>()
-                .Property(u => u.Phone)
-                .HasColumnName("phone");
+            modelBuilder.Entity<User>().Property(u => u.Phone).HasColumnName("phone");
 
-            modelBuilder.Entity<User>()
-                .Property(u => u.Address)
-                .HasColumnName("address");
+            modelBuilder.Entity<User>().Property(u => u.Address).HasColumnName("address");
 
-            modelBuilder.Entity<User>()
-                .Property(u => u.IsVerified)
-                .HasColumnName("is_verified");
+            modelBuilder.Entity<User>().Property(u => u.IsVerified).HasColumnName("is_verified");
 
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .Property(u => u.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .Property(u => u.UpdatedAt)
                 .HasColumnName("updated_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
 
-            modelBuilder.Entity<User>()
-                .Property(u => u.AvatarUrl)
-                .HasColumnName("avatar_url");
+            modelBuilder.Entity<User>().Property(u => u.AvatarUrl).HasColumnName("avatar_url");
 
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .Property(u => u.DocumentPhotoUrl)
                 .HasColumnName("document_photo_url");
 
-            modelBuilder.Entity<User>()
+            modelBuilder
+                .Entity<User>()
                 .HasOne(u => u.Role)
                 .WithMany(r => r.Users)
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // Configuración de la relación User - Subscription
-            modelBuilder.Entity<User>()
-                .HasMany(u => u.Subscriptions)  // Un usuario puede tener muchas suscripciones
-                .WithOne(s => s.User)           // Una suscripción pertenece a un solo usuario
-                .HasForeignKey(s => s.UserId);  // Relación con la clave foránea 'UserId'
+            modelBuilder
+                .Entity<User>()
+                .HasMany(u => u.Subscriptions) // Un usuario puede tener muchas suscripciones
+                .WithOne(s => s.User) // Una suscripción pertenece a un solo usuario
+                .HasForeignKey(s => s.UserId); // Relación con la clave foránea 'UserId'
 
             // Configuración de la tabla y columnas en snake_case para la tabla 'permissions'
             modelBuilder.Entity<Permission>().ToTable("permissions");
@@ -126,101 +124,98 @@ namespace Voia.Api.Data
 
             modelBuilder.Entity<RolePermission>().HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
-            modelBuilder.Entity<RolePermission>()
+            modelBuilder
+                .Entity<RolePermission>()
                 .Property(rp => rp.RoleId)
                 .HasColumnName("role_id");
 
-            modelBuilder.Entity<RolePermission>()
+            modelBuilder
+                .Entity<RolePermission>()
                 .Property(rp => rp.PermissionId)
                 .HasColumnName("permission_id");
 
-            modelBuilder.Entity<RolePermission>()
+            modelBuilder
+                .Entity<RolePermission>()
                 .HasOne(rp => rp.Role)
                 .WithMany(r => r.RolePermissions)
                 .HasForeignKey(rp => rp.RoleId);
 
-            modelBuilder.Entity<RolePermission>()
+            modelBuilder
+                .Entity<RolePermission>()
                 .HasOne(rp => rp.Permission)
                 .WithMany(p => p.RolePermissions)
                 .HasForeignKey(rp => rp.PermissionId);
 
+            modelBuilder.Entity<Bot>().Property(b => b.UserId).HasColumnName("user_id");
 
-            modelBuilder.Entity<Bot>()
-                .Property(b => b.UserId)
-                .HasColumnName("user_id");
+            modelBuilder.Entity<Bot>().Property(b => b.Name).HasColumnName("name");
 
-            modelBuilder.Entity<Bot>()
-                .Property(b => b.Name)
-                .HasColumnName("name");
+            modelBuilder.Entity<Bot>().Property(b => b.Description).HasColumnName("description");
 
-            modelBuilder.Entity<Bot>()
-                .Property(b => b.Description)
-                .HasColumnName("description");
+            modelBuilder.Entity<Bot>().Property(b => b.ApiKey).HasColumnName("api_key");
 
-            modelBuilder.Entity<Bot>()
-                .Property(b => b.ApiKey)
-                .HasColumnName("api_key");
-
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .Property(b => b.ModelUsed)
                 .HasColumnName("model_used")
                 .HasMaxLength(255);
 
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .Property(b => b.IsActive)
                 .HasColumnName("is_active")
                 .HasDefaultValue(true);
 
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .Property(b => b.CreatedAt)
                 .HasColumnName("created_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .Property(b => b.UpdatedAt)
                 .HasColumnName("updated_at")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
 
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .HasOne(b => b.User)
                 .WithMany()
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
             // Configuración para Bot
-            modelBuilder.Entity<Bot>()
+            modelBuilder
+                .Entity<Bot>()
                 .HasOne(b => b.User)
                 .WithMany()
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            modelBuilder.Entity<BotCustomPrompt>()
-                .Property(p => p.Role)
-                .HasConversion<string>();
+            modelBuilder.Entity<BotCustomPrompt>().Property(p => p.Role).HasConversion<string>();
 
             // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>
+            {
+                entity.ToTable("bot_styles"); // Aquí se indica el nombre real de la tabla
 
-{
-    entity.ToTable("bot_styles"); // Aquí se indica el nombre real de la tabla
-
-    // Ahora mapeamos cada propiedad al nombre real de columna en la base de datos
-    entity.Property(e => e.Id).HasColumnName("id");
-    entity.Property(e => e.BotId).HasColumnName("bot_id");
-    entity.Property(e => e.Theme).HasColumnName("theme");
-    entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
-    entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
-    entity.Property(e => e.FontFamily).HasColumnName("font_family");
-    entity.Property(e => e.AvatarUrl).HasColumnName("avatar_url");
-    entity.Property(e => e.Position).HasColumnName("position");
-    entity.Property(e => e.CustomCss).HasColumnName("custom_css");
-    entity.Property(e => e.UpdatedAt)
-        .HasColumnName("updated_at")
-        .HasDefaultValueSql("CURRENT_TIMESTAMP")
-        .ValueGeneratedOnAddOrUpdate(); // Esto es para que respete el valor automático
-});
-
+                // Ahora mapeamos cada propiedad al nombre real de columna en la base de datos
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.BotId).HasColumnName("bot_id");
+                entity.Property(e => e.Theme).HasColumnName("theme");
+                entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
+                entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
+                entity.Property(e => e.FontFamily).HasColumnName("font_family");
+                entity.Property(e => e.AvatarUrl).HasColumnName("avatar_url");
+                entity.Property(e => e.Position).HasColumnName("position");
+                entity.Property(e => e.CustomCss).HasColumnName("custom_css");
+                entity
+                    .Property(e => e.UpdatedAt)
+                    .HasColumnName("updated_at")
+                    .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                    .ValueGeneratedOnAddOrUpdate(); // Esto es para que respete el valor automático
+            });
         }
-
     }
 }
