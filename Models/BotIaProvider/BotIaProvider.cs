@@ -22,7 +22,12 @@ namespace Voia.Api.Models
 
         [MaxLength(255)]
         [Column("api_key")]
-        public string ApiKey { get; set; }
+        public string? ApiKey { get; set; }  // ✅ Permite null
+
+
+        [Required]
+        [RegularExpression("^(active|inactive)$", ErrorMessage = "El estado debe ser 'active' o 'inactive'.")]
+        public string Status { get; set; } // ✅ Nuevo campo
 
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }

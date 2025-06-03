@@ -28,11 +28,31 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la lista de configuraciones del modelo AI.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        //[HasPermission("CanViewAiModelConfigs")]
-        public async Task<ActionResult<IEnumerable<AiModelConfig>>> GetAll()
+        public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetAll()
         {
-            return await _context.AiModelConfigs.ToListAsync();
+            var configs = await _context.AiModelConfigs
+                .Include(c => c.IaProvider) // <- esto es clave
+                .ToListAsync();
+
+            var result = configs.Select(c => new AiModelConfigDto
+            {
+                Id = c.Id,
+                ModelName = c.ModelName,
+                Temperature = c.Temperature,
+                FrequencyPenalty = c.FrequencyPenalty,
+                PresencePenalty = c.PresencePenalty,
+                CreatedAt = c.CreatedAt,
+                IaProvider = c.IaProvider == null ? null : new IaProviderDto
+                {
+                    Id = c.IaProvider.Id,
+                    Name = c.IaProvider.Name
+                }
+            });
+
+            return Ok(result);
         }
+
+
 
         /// <summary>
         /// Obtiene la configuración de un modelo AI por su ID.

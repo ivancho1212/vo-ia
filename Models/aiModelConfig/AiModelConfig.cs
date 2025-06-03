@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Voia.Api.Models;
 
 namespace Voia.Api.Models.AiModelConfigs
 {
@@ -30,6 +31,10 @@ namespace Voia.Api.Models.AiModelConfigs
 
         [Required]
         [Column("ia_provider_id")]
-        public int IaProviderId { get; set; } // <-- nuevo campo obligatorio
+        public int IaProviderId { get; set; }
+
+        // ✅ Propiedad de navegación
+        [ForeignKey("IaProviderId")]
+        public BotIaProvider IaProvider { get; set; }
     }
 }

@@ -7,7 +7,6 @@ using Microsoft.OpenApi.Models;
 using Voia.Api.Data;
 using Voia.Api.Hubs;
 using Voia.Api.Services;
-using Voia.Api.Services;
 using Voia.Api.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);

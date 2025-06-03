@@ -27,6 +27,7 @@ namespace Voia.Api.Controllers
                     Name = x.Name,
                     ApiEndpoint = x.ApiEndpoint,
                     ApiKey = x.ApiKey,
+                    Status = x.Status, // ✅ Agregado
                     CreatedAt = x.CreatedAt,
                     UpdatedAt = x.UpdatedAt
                 })
@@ -49,6 +50,7 @@ namespace Voia.Api.Controllers
                 Name = item.Name,
                 ApiEndpoint = item.ApiEndpoint,
                 ApiKey = item.ApiKey,
+                Status = item.Status, // ✅ Corregido
                 CreatedAt = item.CreatedAt,
                 UpdatedAt = item.UpdatedAt
             };
@@ -65,6 +67,7 @@ namespace Voia.Api.Controllers
                 Name = dto.Name,
                 ApiEndpoint = dto.ApiEndpoint,
                 ApiKey = dto.ApiKey,
+                Status = string.IsNullOrWhiteSpace(dto.Status) ? "active" : dto.Status, // ✅ Asignar status
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -78,6 +81,7 @@ namespace Voia.Api.Controllers
                 Name = entity.Name,
                 ApiEndpoint = entity.ApiEndpoint,
                 ApiKey = entity.ApiKey,
+                Status = entity.Status, // ✅ Incluir en respuesta
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = entity.UpdatedAt
             };
@@ -96,6 +100,7 @@ namespace Voia.Api.Controllers
             entity.Name = dto.Name;
             entity.ApiEndpoint = dto.ApiEndpoint;
             entity.ApiKey = dto.ApiKey;
+            entity.Status = dto.Status; // ✅ Asignar status actualizado
             entity.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
