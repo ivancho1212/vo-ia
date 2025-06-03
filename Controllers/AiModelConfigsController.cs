@@ -1,15 +1,15 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models.AiModelConfigs;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System;
-using Microsoft.AspNetCore.Authorization;
 
 namespace Voia.Api.Controllers
 {
-    [Authorize(Roles = "Admin,User")]
+    //[Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class AiModelConfigsController : ControllerBase
@@ -28,7 +28,7 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la lista de configuraciones del modelo AI.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        [HasPermission("CanViewAiModelConfigs")]
+        //[HasPermission("CanViewAiModelConfigs")]
         public async Task<ActionResult<IEnumerable<AiModelConfig>>> GetAll()
         {
             return await _context.AiModelConfigs.ToListAsync();
@@ -42,7 +42,7 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la configuración del modelo AI.</response>
         /// <response code="404">Si no se encuentra la configuración del modelo AI.</response>
         [HttpGet("{id}")]
-        [HasPermission("CanViewAiModelConfigs")]
+        //[HasPermission("CanViewAiModelConfigs")]
         public async Task<ActionResult<AiModelConfig>> GetById(int id)
         {
             var config = await _context.AiModelConfigs.FindAsync(id);
@@ -60,25 +60,25 @@ namespace Voia.Api.Controllers
         /// <response code="201">Devuelve la configuración del modelo AI creada.</response>
         /// <response code="400">Si el BotId proporcionado no existe.</response>
         [HttpPost]
-        [HasPermission("CanCreateAiModelConfigs")]
         public async Task<ActionResult<AiModelConfig>> Create([FromBody] AiModelConfigCreateDto dto)
         {
-            // Verificar si el BotId existe en la base de datos
-            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
-            if (!botExists)
-            {
-                return BadRequest(new { message = "BotId does not exist in the system." });
-            }
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+            // Validar que el proveedor existe (opcional, pero recomendado)
+            var providerExists = await _context.BotIaProviders.AnyAsync(p =>
+                p.Id == dto.IaProviderId
+            );
+            if (!providerExists)
+                return BadRequest(new { message = "IA Provider not found." });
 
             var config = new AiModelConfig
             {
-                BotId = dto.BotId,
                 ModelName = dto.ModelName,
                 Temperature = dto.Temperature,
-                MaxTokens = dto.MaxTokens,
                 FrequencyPenalty = dto.FrequencyPenalty,
                 PresencePenalty = dto.PresencePenalty,
-                CreatedAt = DateTime.UtcNow
+                IaProviderId = dto.IaProviderId, // asigna el campo!
+                CreatedAt = DateTime.UtcNow,
             };
 
             _context.AiModelConfigs.Add(config);
@@ -96,7 +96,7 @@ namespace Voia.Api.Controllers
         /// <response code="204">Configuración actualizada correctamente.</response>
         /// <response code="404">Si la configuración del modelo AI no existe.</response>
         [HttpPut("{id}")]
-        [HasPermission("CanUpdateAiModelConfigs")]
+        //[HasPermission("CanUpdateAiModelConfigs")]
         public async Task<IActionResult> Update(int id, [FromBody] AiModelConfigUpdateDto dto)
         {
             if (id != dto.Id)
@@ -107,10 +107,8 @@ namespace Voia.Api.Controllers
                 return NotFound(new { message = "Config not found." });
 
             // Actualizar campos
-            existing.BotId = dto.BotId;
             existing.ModelName = dto.ModelName;
             existing.Temperature = dto.Temperature;
-            existing.MaxTokens = dto.MaxTokens;
             existing.FrequencyPenalty = dto.FrequencyPenalty;
             existing.PresencePenalty = dto.PresencePenalty;
 
@@ -127,7 +125,7 @@ namespace Voia.Api.Controllers
         /// <response code="204">Configuración eliminada correctamente.</response>
         /// <response code="404">Si la configuración del modelo AI no existe.</response>
         [HttpDelete("{id}")]
-        [HasPermission("CanDeleteAiModelConfigs")]
+        //[HasPermission("CanDeleteAiModelConfigs")]
         public async Task<IActionResult> Delete(int id)
         {
             var config = await _context.AiModelConfigs.FindAsync(id);
