@@ -28,5 +28,8 @@ namespace Voia.Api.Models
 
         [Column("updated_at")]
         public DateTime? UpdatedAt { get; set; }
+
+        // 👇 Agrega esta línea
+        public ICollection<BotTemplatePrompt> Prompts { get; set; } = new List<BotTemplatePrompt>();
     }
 }

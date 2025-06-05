@@ -7,5 +7,6 @@ public class AiModelConfigDto
     public decimal? PresencePenalty { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int IaProviderId { get; set; }
-    public string IaProviderName { get; set; }  // <-- para mostrar el nombre del proveedor
+    public string IaProviderName { get; set; }
+    
 }

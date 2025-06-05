@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
-using Voia.Api.Data;
 
 namespace Voia.Api.Controllers
 {
@@ -21,8 +21,8 @@ namespace Voia.Api.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<BotTemplateResponseDto>>> GetAll()
         {
-            var templates = await _context.BotTemplates
-                .Select(t => new BotTemplateResponseDto
+            var templates = await _context
+                .BotTemplates.Select(t => new BotTemplateResponseDto
                 {
                     Id = t.Id,
                     Name = t.Name,
@@ -30,7 +30,7 @@ namespace Voia.Api.Controllers
                     IaProviderId = t.IaProviderId,
                     DefaultStyleId = t.DefaultStyleId,
                     CreatedAt = t.CreatedAt,
-                    UpdatedAt = t.UpdatedAt
+                    UpdatedAt = t.UpdatedAt,
                 })
                 .ToListAsync();
 
@@ -54,7 +54,7 @@ namespace Voia.Api.Controllers
                 IaProviderId = t.IaProviderId,
                 DefaultStyleId = t.DefaultStyleId,
                 CreatedAt = t.CreatedAt,
-                UpdatedAt = t.UpdatedAt
+                UpdatedAt = t.UpdatedAt,
             };
         }
 
@@ -69,7 +69,7 @@ namespace Voia.Api.Controllers
                 IaProviderId = dto.IaProviderId,
                 DefaultStyleId = dto.DefaultStyleId,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
             };
 
             _context.BotTemplates.Add(template);
@@ -83,7 +83,7 @@ namespace Voia.Api.Controllers
                 IaProviderId = template.IaProviderId,
                 DefaultStyleId = template.DefaultStyleId,
                 CreatedAt = template.CreatedAt,
-                UpdatedAt = template.UpdatedAt
+                UpdatedAt = template.UpdatedAt,
             };
 
             return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);

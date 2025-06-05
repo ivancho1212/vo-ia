@@ -13,6 +13,9 @@ namespace Voia.Api.Models.DTOs
         [Required]
         public int IaProviderId { get; set; }
 
+        [Required]
+        public int AiModelConfigId { get; set; } // <-- NUEVO
+
         public int? DefaultStyleId { get; set; }
     }
 }

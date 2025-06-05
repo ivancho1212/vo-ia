@@ -30,8 +30,8 @@ namespace Voia.Api.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetAll()
         {
-            var configs = await _context.AiModelConfigs
-                .Include(c => c.IaProvider) // <- esto es clave
+            var configs = await _context
+                .AiModelConfigs.Include(c => c.IaProvider) // <- esto es clave
                 .ToListAsync();
 
             var result = configs.Select(c => new AiModelConfigDto
@@ -42,17 +42,12 @@ namespace Voia.Api.Controllers
                 FrequencyPenalty = c.FrequencyPenalty,
                 PresencePenalty = c.PresencePenalty,
                 CreatedAt = c.CreatedAt,
-                IaProvider = c.IaProvider == null ? null : new IaProviderDto
-                {
-                    Id = c.IaProvider.Id,
-                    Name = c.IaProvider.Name
-                }
+                IaProviderName = c.IaProvider?.Name,
+                IaProviderId = c.IaProviderId,
             });
 
             return Ok(result);
         }
-
-
 
         /// <summary>
         /// Obtiene la configuración de un modelo AI por su ID.
