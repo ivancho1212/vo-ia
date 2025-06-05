@@ -93,10 +93,15 @@ public async Task<ActionResult<BotTemplateResponseDto>> Create(BotTemplateCreate
         return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);
     }
     catch (Exception ex)
+{
+    var errorMessage = ex.Message;
+    if (ex.InnerException != null)
     {
-        // Devuelve info del error para que puedas verlo en el cliente
-        return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+        errorMessage += " | Inner Exception: " + ex.InnerException.Message;
     }
+    return StatusCode(500, new { message = errorMessage, stackTrace = ex.StackTrace });
+}
+
 }
 
 
