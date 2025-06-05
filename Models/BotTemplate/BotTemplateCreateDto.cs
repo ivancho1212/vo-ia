@@ -1,21 +1,24 @@
+using System.Text.Json.Serialization;
 using System.ComponentModel.DataAnnotations;
 
-namespace Voia.Api.Models.DTOs
+public class BotTemplateCreateDto
 {
-    public class BotTemplateCreateDto
-    {
-        [Required]
-        [MaxLength(100)]
-        public string Name { get; set; }
+    [Required]
+    [MaxLength(100)]
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
 
-        public string? Description { get; set; }
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
 
-        [Required]
-        public int IaProviderId { get; set; }
+    [Required]
+    [JsonPropertyName("iaProviderId")]
+    public int IaProviderId { get; set; }
 
-        [Required]
-        public int AiModelConfigId { get; set; } // <-- NUEVO
+    [Required]
+    [JsonPropertyName("aiModelConfigId")]
+    public int AiModelConfigId { get; set; }
 
-        public int? DefaultStyleId { get; set; }
-    }
+    [JsonPropertyName("defaultStyleId")]
+    public int? DefaultStyleId { get; set; }
 }

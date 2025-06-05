@@ -59,37 +59,49 @@ namespace Voia.Api.Controllers
         }
 
         // POST: api/bottemplates
-        [HttpPost]
-        public async Task<ActionResult<BotTemplateResponseDto>> Create(BotTemplateCreateDto dto)
+[HttpPost]
+public async Task<ActionResult<BotTemplateResponseDto>> Create(BotTemplateCreateDto dto)
+{
+    try
+    {
+        var template = new BotTemplate
         {
-            var template = new BotTemplate
-            {
-                Name = dto.Name,
-                Description = dto.Description,
-                IaProviderId = dto.IaProviderId,
-                DefaultStyleId = dto.DefaultStyleId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-            };
+            Name = string.IsNullOrWhiteSpace(dto.Name) ? "Plantilla sin nombre" : dto.Name,
+            Description = dto.Description ?? "",
+            IaProviderId = dto.IaProviderId,
+            AiModelConfigId = dto.AiModelConfigId,
+            DefaultStyleId = dto.DefaultStyleId,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+        };
 
-            _context.BotTemplates.Add(template);
-            await _context.SaveChangesAsync();
+        _context.BotTemplates.Add(template);
+        await _context.SaveChangesAsync();
 
-            var responseDto = new BotTemplateResponseDto
-            {
-                Id = template.Id,
-                Name = template.Name,
-                Description = template.Description,
-                IaProviderId = template.IaProviderId,
-                DefaultStyleId = template.DefaultStyleId,
-                CreatedAt = template.CreatedAt,
-                UpdatedAt = template.UpdatedAt,
-            };
+        var responseDto = new BotTemplateResponseDto
+        {
+            Id = template.Id,
+            Name = template.Name,
+            Description = template.Description,
+            IaProviderId = template.IaProviderId,
+            AiModelConfigId = template.AiModelConfigId,
+            DefaultStyleId = template.DefaultStyleId,
+            CreatedAt = template.CreatedAt,
+            UpdatedAt = template.UpdatedAt,
+        };
 
-            return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);
-        }
+        return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);
+    }
+    catch (Exception ex)
+    {
+        // Devuelve info del error para que puedas verlo en el cliente
+        return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+    }
+}
 
-        // PUT: api/bottemplates/{id}
+
+
+
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, BotTemplateUpdateDto dto)
         {
@@ -98,16 +110,57 @@ namespace Voia.Api.Controllers
             if (template == null)
                 return NotFound();
 
-            template.Name = dto.Name;
-            template.Description = dto.Description;
-            template.IaProviderId = dto.IaProviderId;
-            template.DefaultStyleId = dto.DefaultStyleId;
+            // Validar AiModelConfigId si viene en el DTO
+            if (dto.AiModelConfigId.HasValue && dto.AiModelConfigId != template.AiModelConfigId)
+            {
+                var modelConfigExists = await _context.AiModelConfigs
+                    .AnyAsync(m => m.Id == dto.AiModelConfigId.Value);
+                if (!modelConfigExists)
+                    return BadRequest($"AiModelConfigId {dto.AiModelConfigId} no es válido.");
+
+                template.AiModelConfigId = dto.AiModelConfigId.Value;
+            }
+
+            // Validar IaProviderId si viene en el DTO
+            if (dto.IaProviderId.HasValue && dto.IaProviderId != template.IaProviderId)
+            {
+                var providerExists = await _context.BotIaProviders
+                    .AnyAsync(p => p.Id == dto.IaProviderId.Value);
+                if (!providerExists)
+                    return BadRequest($"IaProviderId {dto.IaProviderId} no es válido.");
+
+                template.IaProviderId = dto.IaProviderId.Value;
+            }
+
+            // Actualizar Name si viene
+            if (!string.IsNullOrWhiteSpace(dto.Name))
+                template.Name = dto.Name;
+
+            // Actualizar Description (puede ser string vacío, pero no null)
+            if (dto.Description != null)
+                template.Description = dto.Description;
+
+            // Actualizar DefaultStyleId si viene (nullable)
+            if (dto.DefaultStyleId.HasValue)
+                template.DefaultStyleId = dto.DefaultStyleId;
+
             template.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
-            return NoContent();
+            return Ok(new BotTemplateResponseDto
+            {
+                Id = template.Id,
+                Name = template.Name,
+                Description = template.Description,
+                IaProviderId = template.IaProviderId,
+                AiModelConfigId = template.AiModelConfigId,
+                DefaultStyleId = template.DefaultStyleId,
+                CreatedAt = template.CreatedAt,
+                UpdatedAt = template.UpdatedAt
+            });
         }
+
 
         // DELETE: api/bottemplates/{id}
         [HttpDelete("{id}")]

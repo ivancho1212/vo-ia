@@ -48,6 +48,37 @@ namespace Voia.Api.Controllers
 
             return Ok(result);
         }
+        /// <summary>
+        /// Obtiene las configuraciones del modelo AI por ID del proveedor.
+        /// </summary>
+        /// <param name="providerId">ID del proveedor de IA.</param>
+        /// <returns>Lista de configuraciones del modelo AI relacionadas al proveedor.</returns>
+        /// <response code="200">Devuelve la lista de modelos relacionados al proveedor.</response>
+        /// <response code="404">Si no se encuentran modelos para ese proveedor.</response>
+        [HttpGet("by-provider/{providerId}")]
+        public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetByProviderId(int providerId)
+        {
+            var models = await _context
+                .AiModelConfigs
+                .Where(m => m.IaProviderId == providerId)
+                .ToListAsync();
+
+            if (models == null || models.Count == 0)
+                return NotFound(new { message = "No models found for this provider." });
+
+            var result = models.Select(m => new AiModelConfigDto
+            {
+                Id = m.Id,
+                ModelName = m.ModelName,
+                Temperature = m.Temperature,
+                FrequencyPenalty = m.FrequencyPenalty,
+                PresencePenalty = m.PresencePenalty,
+                CreatedAt = m.CreatedAt,
+                IaProviderId = m.IaProviderId
+            });
+
+            return Ok(result);
+        }
 
         /// <summary>
         /// Obtiene la configuración de un modelo AI por su ID.
