@@ -1,14 +1,11 @@
-namespace Voia.Api.Models.DTOs
+public class CreateBotStyleDto
 {
-    public class CreateBotStyleDto
-    {
-        public int BotId { get; set; } // ID del bot al que pertenece el estilo
-        public string Theme { get; set; } // Tema del bot ('light', 'dark', 'custom')
-        public string PrimaryColor { get; set; } // Color primario (hexadecimal)
-        public string SecondaryColor { get; set; } // Color secundario (hexadecimal)
-        public string FontFamily { get; set; } // Familia de la fuente
-        public string AvatarUrl { get; set; } // URL del avatar
-        public string Position { get; set; } // Posición del widget ('bottom-right', etc.)
-        public string CustomCss { get; set; } // CSS personalizado para el widget
-    }
+    public int? StyleTemplateId { get; set; }
+    public string Theme { get; set; } = "light";
+    public string PrimaryColor { get; set; } = "#000000";
+    public string SecondaryColor { get; set; } = "#ffffff";
+    public string FontFamily { get; set; } = "Arial";
+    public string AvatarUrl { get; set; }
+    public string Position { get; set; } = "bottom-right";
+    public string CustomCss { get; set; }
 }

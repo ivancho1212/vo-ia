@@ -198,11 +198,10 @@ namespace Voia.Api.Data
             // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>
             {
-                entity.ToTable("bot_styles"); // Aquí se indica el nombre real de la tabla
+                entity.ToTable("bot_styles");
 
-                // Ahora mapeamos cada propiedad al nombre real de columna en la base de datos
                 entity.Property(e => e.Id).HasColumnName("id");
-                entity.Property(e => e.BotId).HasColumnName("bot_id");
+                entity.Property(e => e.StyleTemplateId).HasColumnName("style_template_id");
                 entity.Property(e => e.Theme).HasColumnName("theme");
                 entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
                 entity.Property(e => e.SecondaryColor).HasColumnName("secondary_color");
@@ -210,12 +209,12 @@ namespace Voia.Api.Data
                 entity.Property(e => e.AvatarUrl).HasColumnName("avatar_url");
                 entity.Property(e => e.Position).HasColumnName("position");
                 entity.Property(e => e.CustomCss).HasColumnName("custom_css");
-                entity
-                    .Property(e => e.UpdatedAt)
+                entity.Property(e => e.UpdatedAt)
                     .HasColumnName("updated_at")
                     .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                    .ValueGeneratedOnAddOrUpdate(); // Esto es para que respete el valor automático
+                    .ValueGeneratedOnAddOrUpdate();
             });
+
         }
     }
 }

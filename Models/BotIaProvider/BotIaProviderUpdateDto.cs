@@ -14,9 +14,9 @@ namespace Voia.Api.Models.DTOs
 
         [MaxLength(255)]
         public string ApiKey { get; set; }
-        
+
         [Required]
         [RegularExpression("^(active|inactive)$", ErrorMessage = "El estado debe ser 'active' o 'inactive'.")]
-        public string Status { get; set; } // ✅ Nuevo campo
+        public required string Status { get; set; }
     }
 }

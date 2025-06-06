@@ -59,53 +59,70 @@ namespace Voia.Api.Controllers
         }
 
         // POST: api/bottemplates
-[HttpPost]
-public async Task<ActionResult<BotTemplateResponseDto>> Create(BotTemplateCreateDto dto)
-{
-    try
-    {
-        var template = new BotTemplate
+        [HttpPost]
+        public async Task<ActionResult<BotTemplateResponseDto>> Create(BotTemplateCreateDto dto)
         {
-            Name = string.IsNullOrWhiteSpace(dto.Name) ? "Plantilla sin nombre" : dto.Name,
-            Description = dto.Description ?? "",
-            IaProviderId = dto.IaProviderId,
-            AiModelConfigId = dto.AiModelConfigId,
-            DefaultStyleId = dto.DefaultStyleId,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-        };
+            try
+            {
+                // Validar IaProviderId
+                var providerExists = await _context.BotIaProviders
+                    .AnyAsync(p => p.Id == dto.IaProviderId);
+                if (!providerExists)
+                    return BadRequest($"IaProviderId {dto.IaProviderId} no es válido.");
 
-        _context.BotTemplates.Add(template);
-        await _context.SaveChangesAsync();
+                // Validar AiModelConfigId
+                var modelConfigExists = await _context.AiModelConfigs
+                    .AnyAsync(m => m.Id == dto.AiModelConfigId);
+                if (!modelConfigExists)
+                    return BadRequest($"AiModelConfigId {dto.AiModelConfigId} no es válido.");
 
-        var responseDto = new BotTemplateResponseDto
-        {
-            Id = template.Id,
-            Name = template.Name,
-            Description = template.Description,
-            IaProviderId = template.IaProviderId,
-            AiModelConfigId = template.AiModelConfigId,
-            DefaultStyleId = template.DefaultStyleId,
-            CreatedAt = template.CreatedAt,
-            UpdatedAt = template.UpdatedAt,
-        };
+                // Validar DefaultStyleId (si viene)
+                if (dto.DefaultStyleId.HasValue)
+                {
+                    var styleExists = await _context.BotStyles
+                        .AnyAsync(s => s.Id == dto.DefaultStyleId.Value);
+                    if (!styleExists)
+                        return BadRequest($"DefaultStyleId {dto.DefaultStyleId} no es válido.");
+                }
 
-        return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);
-    }
-    catch (Exception ex)
-{
-    var errorMessage = ex.Message;
-    if (ex.InnerException != null)
-    {
-        errorMessage += " | Inner Exception: " + ex.InnerException.Message;
-    }
-    return StatusCode(500, new { message = errorMessage, stackTrace = ex.StackTrace });
-}
+                var template = new BotTemplate
+                {
+                    Name = string.IsNullOrWhiteSpace(dto.Name) ? "Plantilla sin nombre" : dto.Name,
+                    Description = dto.Description ?? "",
+                    IaProviderId = dto.IaProviderId,
+                    AiModelConfigId = dto.AiModelConfigId,
+                    DefaultStyleId = dto.DefaultStyleId,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow,
+                };
 
-}
+                _context.BotTemplates.Add(template);
+                await _context.SaveChangesAsync();
 
+                var responseDto = new BotTemplateResponseDto
+                {
+                    Id = template.Id,
+                    Name = template.Name,
+                    Description = template.Description,
+                    IaProviderId = template.IaProviderId,
+                    AiModelConfigId = template.AiModelConfigId,
+                    DefaultStyleId = template.DefaultStyleId,
+                    CreatedAt = template.CreatedAt,
+                    UpdatedAt = template.UpdatedAt,
+                };
 
-
+                return CreatedAtAction(nameof(GetById), new { id = template.Id }, responseDto);
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = ex.Message;
+                if (ex.InnerException != null)
+                {
+                    errorMessage += " | Inner Exception: " + ex.InnerException.Message;
+                }
+                return StatusCode(500, new { message = errorMessage, stackTrace = ex.StackTrace });
+            }
+        }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, BotTemplateUpdateDto dto)
