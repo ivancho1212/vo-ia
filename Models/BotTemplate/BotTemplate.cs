@@ -19,7 +19,7 @@ namespace Voia.Api.Models
         [Column("ia_provider_id")]
         [Required]
         public int IaProviderId { get; set; }
-        
+
         [Column("ai_model_config_id")]
         [Required]
         public int AiModelConfigId { get; set; } // <-- agregado

@@ -194,6 +194,12 @@ namespace Voia.Api.Data
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<BotCustomPrompt>().Property(p => p.Role).HasConversion<string>();
+            modelBuilder.Entity<BotTemplatePrompt>().Property(p => p.Role).HasConversion<string>();
+            modelBuilder.Entity<BotTemplate>()
+                .HasMany(t => t.Prompts)
+                .WithOne()
+                .HasForeignKey(p => p.BotTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>

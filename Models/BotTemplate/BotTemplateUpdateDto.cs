@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using Voia.Api.Models.DTOs; // Add the namespace containing BotTemplatePromptUpdateDto
 
 namespace Voia.Api.Models.DTOs
 {
@@ -14,5 +16,7 @@ namespace Voia.Api.Models.DTOs
         public int? AiModelConfigId { get; set; }
 
         public int? DefaultStyleId { get; set; }
+
+        public List<BotTemplatePromptUpdateDto> Prompts { get; set; } = new();
     }
 }

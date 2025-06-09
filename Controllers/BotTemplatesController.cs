@@ -38,25 +38,50 @@ namespace Voia.Api.Controllers
         }
 
         // GET: api/bottemplates/{id}
+
         [HttpGet("{id}")]
         public async Task<ActionResult<BotTemplateResponseDto>> GetById(int id)
         {
-            var t = await _context.BotTemplates.FindAsync(id);
-
-            if (t == null)
-                return NotFound();
-
-            return new BotTemplateResponseDto
+            try
             {
-                Id = t.Id,
-                Name = t.Name,
-                Description = t.Description,
-                IaProviderId = t.IaProviderId,
-                DefaultStyleId = t.DefaultStyleId,
-                CreatedAt = t.CreatedAt,
-                UpdatedAt = t.UpdatedAt,
-            };
+                var template = await _context.BotTemplates
+                    .Include(t => t.Prompts)
+                    .FirstOrDefaultAsync(t => t.Id == id);
+
+                if (template == null)
+                    return NotFound();
+
+                var dto = new BotTemplateResponseDto
+                {
+                    Id = template.Id,
+                    Name = template.Name,
+                    Description = template.Description,
+                    IaProviderId = template.IaProviderId,
+                    AiModelConfigId = template.AiModelConfigId,
+                    DefaultStyleId = template.DefaultStyleId,
+                    CreatedAt = template.CreatedAt,
+                    UpdatedAt = template.UpdatedAt,
+                    Prompts = template.Prompts.Select(p => new BotTemplatePromptResponseDto
+                    {
+                        Id = p.Id,
+                        BotTemplateId = p.BotTemplateId,
+                        Role = p.Role.ToString(),
+                        Content = p.Content,
+                        // elimina Order si no existe
+                        CreatedAt = p.CreatedAt,
+                        UpdatedAt = p.UpdatedAt
+                    }).ToList()
+                };
+
+                return Ok(dto);
+            }
+            catch (Exception ex)
+            {
+                // Log ex.Message o ex.ToString() aquí
+                return StatusCode(500, $"Error interno: {ex.Message}");
+            }
         }
+
 
         // POST: api/bottemplates
         [HttpPost]
@@ -127,12 +152,14 @@ namespace Voia.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, BotTemplateUpdateDto dto)
         {
-            var template = await _context.BotTemplates.FindAsync(id);
+            var template = await _context.BotTemplates
+                .Include(t => t.Prompts)
+                .FirstOrDefaultAsync(t => t.Id == id);
 
             if (template == null)
                 return NotFound();
 
-            // Validar AiModelConfigId si viene en el DTO
+            // Validar AiModelConfigId
             if (dto.AiModelConfigId.HasValue && dto.AiModelConfigId != template.AiModelConfigId)
             {
                 var modelConfigExists = await _context.AiModelConfigs
@@ -143,7 +170,7 @@ namespace Voia.Api.Controllers
                 template.AiModelConfigId = dto.AiModelConfigId.Value;
             }
 
-            // Validar IaProviderId si viene en el DTO
+            // Validar IaProviderId
             if (dto.IaProviderId.HasValue && dto.IaProviderId != template.IaProviderId)
             {
                 var providerExists = await _context.BotIaProviders
@@ -154,19 +181,40 @@ namespace Voia.Api.Controllers
                 template.IaProviderId = dto.IaProviderId.Value;
             }
 
-            // Actualizar Name si viene
+            // Name y description
             if (!string.IsNullOrWhiteSpace(dto.Name))
                 template.Name = dto.Name;
 
-            // Actualizar Description (puede ser string vacío, pero no null)
             if (dto.Description != null)
                 template.Description = dto.Description;
 
-            // Actualizar DefaultStyleId si viene (nullable)
             if (dto.DefaultStyleId.HasValue)
                 template.DefaultStyleId = dto.DefaultStyleId;
 
             template.UpdatedAt = DateTime.UtcNow;
+
+            // ACTUALIZAR PROMPTS
+            if (dto.Prompts != null)
+            {
+                // Eliminar prompts existentes
+                _context.BotTemplatePrompts.RemoveRange(template.Prompts);
+
+                // Agregar los nuevos
+                foreach (var promptDto in dto.Prompts)
+                {
+                    if (!Enum.TryParse<PromptRole>(promptDto.Role, true, out var role))
+                        return BadRequest("Rol de prompt no válido.");
+
+
+                    template.Prompts.Add(new BotTemplatePrompt
+                    {
+                        Role = role,
+                        Content = promptDto.Content,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+            }
 
             await _context.SaveChangesAsync();
 
