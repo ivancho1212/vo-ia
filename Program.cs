@@ -8,6 +8,8 @@ using Voia.Api.Data;
 using Voia.Api.Hubs;
 using Voia.Api.Services;
 using Voia.Api.Services.Interfaces;
+using System.Net.Http.Headers;
+using Voia.Api.Services.IAProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -119,20 +121,46 @@ builder.Services.AddSwaggerGen(c =>
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
     c.IncludeXmlComments(xmlPath);
 });
+
 builder.Services.AddScoped<IAiProviderService, AiProviderService>();
+
+builder.Services.AddScoped<IAClientFactory>(); // <--- agrega esta línea
+
+// ✅ Registro seguro de HttpClients para cada proveedor
+builder.Services.AddHttpClient<OpenAIClient>(client =>
+{
+    // Configuración base si aplica (por ejemplo, timeout)
+});
+
+builder.Services.AddHttpClient<DeepSeekClient>()
+    .ConfigureHttpClient((sp, client) =>
+    {
+        using var scope = sp.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var config = context.BotIaProviders.FirstOrDefault(p => p.Name == "deepseek");
+        if (config != null)
+        {
+            client.BaseAddress = new Uri(config.ApiEndpoint);
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", config.ApiKey);
+        }
+    });
+
+builder.Services.AddHttpClient<GeminiClient>()
+    .ConfigureHttpClient((sp, client) =>
+    {
+        using var scope = sp.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var config = context.BotIaProviders.FirstOrDefault(p => p.Name == "gemini");
+        if (config != null)
+        {
+            client.BaseAddress = new Uri(config.ApiEndpoint);
+            // Gemini usa la API key en la query, no requiere auth header
+        }
+    });
 
 var app = builder.Build();
 
-// MIDDLEWARE
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Voia API v1");
-        c.RoutePrefix = string.Empty; // Opcional: hace que Swagger se muestre en la raíz
-    });
-}
 
 app.UseStaticFiles();
 app.UseCors("AllowFrontend"); // Asegúrate de que CORS esté antes de la autenticación

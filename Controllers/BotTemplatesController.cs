@@ -36,6 +36,29 @@ namespace Voia.Api.Controllers
 
             return Ok(templates);
         }
+        // GET: /api/bottemplates/available
+        [HttpGet("available")]
+        public async Task<ActionResult<IEnumerable<BotTemplate>>> GetAvailableTemplates()
+        {
+            var templates = await _context.BotTemplates
+                .Include(t => t.Prompts)
+                .Include(t => t.IaProvider)
+                .Include(t => t.AiModelConfig)
+                .Include(t => t.DefaultStyle)
+                .ToListAsync();
+
+            return Ok(templates.Select(t => new
+            {
+                t.Id,
+                t.Name,
+                t.Description,
+                IaProviderName = t.IaProvider.Name,
+                AiModelName = t.AiModelConfig.ModelName,
+                StyleName = t.DefaultStyle != null ? t.DefaultStyle.Theme : null, // ✅ usa Theme o cualquier otro campo válido
+
+                SystemPrompt = t.Prompts.FirstOrDefault(p => p.Role == PromptRole.system)?.Content ?? ""
+            }));
+        }
 
         // GET: api/bottemplates/{id}
 
@@ -65,7 +88,7 @@ namespace Voia.Api.Controllers
                     {
                         Id = p.Id,
                         BotTemplateId = p.BotTemplateId,
-                        Role = p.Role.ToString(),
+                        Role = Enum.IsDefined(typeof(PromptRole), p.Role) ? p.Role.ToString() : "undefined",
                         Content = p.Content,
                         // elimina Order si no existe
                         CreatedAt = p.CreatedAt,

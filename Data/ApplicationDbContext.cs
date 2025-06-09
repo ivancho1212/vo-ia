@@ -197,9 +197,10 @@ namespace Voia.Api.Data
             modelBuilder.Entity<BotTemplatePrompt>().Property(p => p.Role).HasConversion<string>();
             modelBuilder.Entity<BotTemplate>()
                 .HasMany(t => t.Prompts)
-                .WithOne()
+                .WithOne(p => p.BotTemplate) // 👈 esto es clave
                 .HasForeignKey(p => p.BotTemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+
 
             // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>
