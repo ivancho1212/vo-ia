@@ -1,14 +1,15 @@
-// Models/BotCustomPrompt/BotCustomPromptResponseDto.cs
-namespace Voia.Api.Models.DTOs
+using System;
+
+namespace Voia.Api.Models
 {
     public class BotCustomPromptResponseDto
     {
         public int Id { get; set; }
-        public int BotId { get; set; }
+        public int BotTemplateId { get; set; }
         public string Role { get; set; }
         public string Content { get; set; }
-        public int? TrainingSessionId { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime UpdatedAt { get; set; }
+        public int? TemplateTrainingSessionId { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 }

@@ -1,8 +1,6 @@
-// Controllers/BotCustomPromptsController.cs
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Models;
-using Voia.Api.Models.DTOs;
 using Voia.Api.Data;
 
 namespace Voia.Api.Controllers
@@ -25,10 +23,10 @@ namespace Voia.Api.Controllers
                 .Select(p => new BotCustomPromptResponseDto
                 {
                     Id = p.Id,
-                    BotId = p.BotId,
                     Role = p.Role,
                     Content = p.Content,
-                    TrainingSessionId = p.TrainingSessionId,
+                    BotTemplateId = p.BotTemplateId,
+                    TemplateTrainingSessionId = p.TemplateTrainingSessionId,
                     CreatedAt = p.CreatedAt,
                     UpdatedAt = p.UpdatedAt
                 })
@@ -45,27 +43,34 @@ namespace Voia.Api.Controllers
             if (p == null)
                 return NotFound();
 
-            return new BotCustomPromptResponseDto
+            var dto = new BotCustomPromptResponseDto
             {
                 Id = p.Id,
-                BotId = p.BotId,
                 Role = p.Role,
                 Content = p.Content,
-                TrainingSessionId = p.TrainingSessionId,
+                BotTemplateId = p.BotTemplateId,
+                TemplateTrainingSessionId = p.TemplateTrainingSessionId,
                 CreatedAt = p.CreatedAt,
                 UpdatedAt = p.UpdatedAt
             };
+
+            return Ok(dto);
         }
 
         [HttpPost]
         public async Task<ActionResult<BotCustomPromptResponseDto>> Create(BotCustomPromptCreateDto dto)
         {
+            // Validación de existencia del template
+            var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
+            if (!templateExists)
+                return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+
             var prompt = new BotCustomPrompt
             {
-                BotId = dto.BotId,
                 Role = dto.Role,
                 Content = dto.Content,
-                TrainingSessionId = dto.TrainingSessionId,
+                BotTemplateId = dto.BotTemplateId,
+                TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -73,31 +78,35 @@ namespace Voia.Api.Controllers
             _context.BotCustomPrompts.Add(prompt);
             await _context.SaveChangesAsync();
 
-            var responseDto = new BotCustomPromptResponseDto
+            var response = new BotCustomPromptResponseDto
             {
                 Id = prompt.Id,
-                BotId = prompt.BotId,
                 Role = prompt.Role,
                 Content = prompt.Content,
-                TrainingSessionId = prompt.TrainingSessionId,
+                BotTemplateId = prompt.BotTemplateId,
+                TemplateTrainingSessionId = prompt.TemplateTrainingSessionId,
                 CreatedAt = prompt.CreatedAt,
                 UpdatedAt = prompt.UpdatedAt
             };
 
-            return CreatedAtAction(nameof(GetById), new { id = prompt.Id }, responseDto);
+            return CreatedAtAction(nameof(GetById), new { id = prompt.Id }, response);
         }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, BotCustomPromptUpdateDto dto)
         {
             var prompt = await _context.BotCustomPrompts.FindAsync(id);
-
             if (prompt == null)
                 return NotFound();
 
+            var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
+            if (!templateExists)
+                return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+
             prompt.Role = dto.Role;
             prompt.Content = dto.Content;
-            prompt.TrainingSessionId = dto.TrainingSessionId;
+            prompt.BotTemplateId = dto.BotTemplateId;
+            prompt.TemplateTrainingSessionId = dto.TemplateTrainingSessionId;
             prompt.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -109,7 +118,6 @@ namespace Voia.Api.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var prompt = await _context.BotCustomPrompts.FindAsync(id);
-
             if (prompt == null)
                 return NotFound();
 

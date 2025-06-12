@@ -1,17 +1,10 @@
-// Models/BotCustomPrompt/BotCustomPromptUpdateDto.cs
-using System.ComponentModel.DataAnnotations;
-
-namespace Voia.Api.Models.DTOs
+namespace Voia.Api.Models
 {
     public class BotCustomPromptUpdateDto
     {
-        [Required]
-        [RegularExpression("system|user|assistant")]
+        public int BotTemplateId { get; set; }
         public string Role { get; set; }
-
-        [Required]
         public string Content { get; set; }
-
-        public int? TrainingSessionId { get; set; }
+        public int? TemplateTrainingSessionId { get; set; }
     }
 }

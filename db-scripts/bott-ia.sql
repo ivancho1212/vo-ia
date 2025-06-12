@@ -519,3 +519,44 @@ ON DELETE SET NULL;
 ALTER TABLE bots
 ADD COLUMN ia_provider_id INT NOT NULL DEFAULT 1,
 ADD CONSTRAINT fk_bots_ia_provider FOREIGN KEY (ia_provider_id) REFERENCES bot_ia_providers(id);
+
+CREATE TABLE training_urls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    user_id INT NOT NULL,
+    url TEXT NOT NULL,
+    status ENUM('pending', 'processed', 'failed') DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE training_custom_texts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_id INT NOT NULL,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (bot_id) REFERENCES bots(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE template_training_sessions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bot_template_id INT NOT NULL,
+  session_name VARCHAR(255),
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (bot_template_id) REFERENCES bot_templates(id) ON DELETE CASCADE
+);
+ALTER TABLE bot_custom_prompts
+DROP COLUMN bot_id;
+
+ALTER TABLE bot_custom_prompts
+CHANGE COLUMN training_session_id template_training_session_id INT;
+
+ALTER TABLE bot_custom_prompts
+ADD CONSTRAINT fk_template_training_session
+FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id)
+ON DELETE CASCADE;

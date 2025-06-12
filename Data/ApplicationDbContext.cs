@@ -54,6 +54,7 @@ namespace Voia.Api.Data
         public DbSet<BotTrainingSession> BotTrainingSessions { get; set; }
         public DbSet<StyleTemplate> StyleTemplates { get; set; }
         public DbSet<BotConversation> BotConversations { get; set; }
+        public DbSet<TemplateTrainingSession> TemplateTrainingSessions { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -200,6 +201,51 @@ namespace Voia.Api.Data
                 .WithOne(p => p.BotTemplate) // 👈 esto es clave
                 .HasForeignKey(p => p.BotTemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<TemplateTrainingSession>(entity =>
+            {
+                entity.ToTable("template_training_sessions");
+
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.BotTemplateId).HasColumnName("bot_template_id");
+                entity.Property(e => e.SessionName).HasColumnName("session_name");
+                entity.Property(e => e.Description).HasColumnName("description");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+                entity.HasOne(e => e.BotTemplate)
+                    .WithMany()
+                    .HasForeignKey(e => e.BotTemplateId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<BotCustomPrompt>(entity =>
+            {
+                entity.ToTable("bot_custom_prompts");
+
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.Role).HasColumnName("role");
+                entity.Property(e => e.Content).HasColumnName("content");
+                entity.Property(e => e.BotTemplateId).HasColumnName("bot_template_id"); // ✅ NUEVO
+                entity.Property(e => e.TemplateTrainingSessionId).HasColumnName("template_training_session_id");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+                entity.HasOne(e => e.TemplateTrainingSession)
+                    .WithMany(t => t.BotCustomPrompts)
+                    .HasForeignKey(e => e.TemplateTrainingSessionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.BotTemplate) // ✅ NUEVA RELACIÓN
+                    .WithMany(t => t.CustomPrompts) // asegúrate de tener esto en el modelo BotTemplate
+                    .HasForeignKey(e => e.BotTemplateId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
 
 
             // Configuración para BotStyle

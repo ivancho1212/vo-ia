@@ -1,28 +1,39 @@
-// Models/BotCustomPrompt/BotCustomPrompt.cs
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Voia.Api.Models
 {
-    [Table("bot_custom_prompts")]
     public class BotCustomPrompt
     {
+        [Key]
         public int Id { get; set; }
 
         [Required]
-        [Column("bot_id")]
-        public int BotId { get; set; }
+        [Column("bot_template_id")]
+        public int BotTemplateId { get; set; }
+
+        [ForeignKey("BotTemplateId")]
+        public BotTemplate BotTemplate { get; set; }
 
         [Required]
-        public string Role { get; set; } = "system"; // enum: system, user, assistant
+        [Column("role")]
+        public string Role { get; set; }
 
         [Required]
+        [Column("content")]
         public string Content { get; set; }
-        [Column("training_session_id")]
-        public int? TrainingSessionId { get; set; }
+
+        [Column("template_training_session_id")]
+        public int? TemplateTrainingSessionId { get; set; }
+
+        [ForeignKey("TemplateTrainingSessionId")]
+        public TemplateTrainingSession? TemplateTrainingSession { get; set; }
+
         [Column("created_at")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? CreatedAt { get; set; }
+
         [Column("updated_at")]
-        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
     }
 }

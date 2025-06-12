@@ -24,20 +24,20 @@ namespace Voia.Api.Models
         public int IaProviderId { get; set; }
 
         [ForeignKey("IaProviderId")]
-        public BotIaProvider IaProvider { get; set; }  // ✅ Navegación
+        public BotIaProvider IaProvider { get; set; }
 
         [Column("ai_model_config_id")]
         [Required]
         public int AiModelConfigId { get; set; }
 
         [ForeignKey("AiModelConfigId")]
-        public AiModelConfig AiModelConfig { get; set; }  // ✅ Navegación
+        public AiModelConfig AiModelConfig { get; set; }
 
         [Column("default_style_id")]
         public int? DefaultStyleId { get; set; }
 
         [ForeignKey("DefaultStyleId")]
-        public BotStyle? DefaultStyle { get; set; }  // ✅ Navegación
+        public BotStyle? DefaultStyle { get; set; }
 
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }
@@ -46,5 +46,9 @@ namespace Voia.Api.Models
         public DateTime? UpdatedAt { get; set; }
 
         public ICollection<BotTemplatePrompt> Prompts { get; set; } = new List<BotTemplatePrompt>();
+
+        // ✅ Relación con prompts personalizados
+        public ICollection<BotCustomPrompt> CustomPrompts { get; set; } = new List<BotCustomPrompt>();
     }
+
 }
