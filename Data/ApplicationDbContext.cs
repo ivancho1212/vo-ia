@@ -55,7 +55,10 @@ namespace Voia.Api.Data
         public DbSet<StyleTemplate> StyleTemplates { get; set; }
         public DbSet<BotConversation> BotConversations { get; set; }
         public DbSet<TemplateTrainingSession> TemplateTrainingSessions { get; set; }
-
+        public DbSet<VectorEmbedding> VectorEmbeddings { get; set; }
+        public DbSet<TrainingCustomText> TrainingCustomTexts { get; set; }
+        public DbSet<TrainingUrl> TrainingUrls { get; set; }
+        public DbSet<UploadedDocument> UploadedDocuments { get; set; }
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
 

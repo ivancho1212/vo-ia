@@ -163,11 +163,20 @@ var app = builder.Build();
 
 
 app.UseStaticFiles();
-app.UseCors("AllowFrontend"); // Asegúrate de que CORS esté antes de la autenticación
-app.UseAuthentication(); // Ahora la autenticación
-app.UseAuthorization(); // Y autorización
+app.UseCors("AllowFrontend");
+app.UseAuthentication();
+app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
+
+app.Run();
+
 
 app.Run();

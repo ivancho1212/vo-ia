@@ -560,3 +560,87 @@ ALTER TABLE bot_custom_prompts
 ADD CONSTRAINT fk_template_training_session
 FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id)
 ON DELETE CASCADE;
+
+
+
+
+
+
+
+
+
+-- 1. uploaded_documents
+ALTER TABLE uploaded_documents
+  CHANGE COLUMN bot_id bot_template_id INT NOT NULL,
+  ADD COLUMN template_training_session_id INT NULL AFTER bot_template_id;
+
+ALTER TABLE uploaded_documents
+  ADD CONSTRAINT fk_uploaded_documents_template
+    FOREIGN KEY (bot_template_id) REFERENCES bot_templates(id),
+  ADD CONSTRAINT fk_uploaded_documents_session
+    FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id);
+
+-- 2. knowledge_chunks
+-- 1. Eliminar la foreign key que depende de bot_id
+ALTER TABLE knowledge_chunks DROP FOREIGN KEY knowledge_chunks_ibfk_1;
+
+-- 2. Eliminar la columna bot_id
+ALTER TABLE knowledge_chunks DROP COLUMN bot_id;
+
+-- 3. Agregar la nueva columna uploaded_document_id
+ALTER TABLE knowledge_chunks ADD COLUMN uploaded_document_id INT NOT NULL AFTER id;
+
+-- 4. (Opcional) Agregar nueva foreign key si es necesaria
+ALTER TABLE knowledge_chunks
+  ADD CONSTRAINT fk_knowledge_chunks_uploaded_document
+  FOREIGN KEY (uploaded_document_id) REFERENCES uploaded_documents(id);
+
+
+ALTER TABLE knowledge_chunks
+  DROP COLUMN bot_id,
+  ADD COLUMN uploaded_document_id INT NOT NULL AFTER id;
+
+ALTER TABLE knowledge_chunks
+  ADD CONSTRAINT fk_chunks_document
+    FOREIGN KEY (uploaded_document_id) REFERENCES uploaded_documents(id);
+
+-- 3. training_urls
+ALTER TABLE training_urls
+  CHANGE COLUMN bot_id bot_template_id INT NOT NULL,
+  ADD COLUMN template_training_session_id INT NULL AFTER bot_template_id;
+
+ALTER TABLE training_urls
+  ADD CONSTRAINT fk_urls_template
+    FOREIGN KEY (bot_template_id) REFERENCES bot_templates(id),
+  ADD CONSTRAINT fk_urls_session
+    FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id);
+
+-- 4. training_custom_texts
+ALTER TABLE training_custom_texts
+  CHANGE COLUMN bot_id bot_template_id INT NOT NULL,
+  ADD COLUMN template_training_session_id INT NULL AFTER bot_template_id;
+
+ALTER TABLE training_custom_texts
+  ADD CONSTRAINT fk_texts_template
+    FOREIGN KEY (bot_template_id) REFERENCES bot_templates(id),
+  ADD CONSTRAINT fk_texts_session
+    FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id);
+
+-- 5. Crear tabla opcional: vector_embeddings (si decides guardar los vectores localmente)
+CREATE TABLE IF NOT EXISTS vector_embeddings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  knowledge_chunk_id INT NOT NULL,
+  embedding_vector BLOB NOT NULL,
+  provider VARCHAR(50) DEFAULT 'openai',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (knowledge_chunk_id) REFERENCES knowledge_chunks(id)
+);
+DELETE FROM uploaded_documents
+WHERE bot_template_id IS NOT NULL
+  AND bot_template_id NOT IN (SELECT id FROM bot_templates);
+
+ALTER TABLE knowledge_chunks
+ADD COLUMN template_training_session_id INT NULL AFTER uploaded_document_id,
+ADD CONSTRAINT fk_chunks_training_session
+  FOREIGN KEY (template_training_session_id) REFERENCES template_training_sessions(id)
+  ON DELETE SET NULL;
