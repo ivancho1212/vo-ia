@@ -67,16 +67,37 @@ namespace Voia.Api.Controllers
         /// Crea un nuevo documento subido.
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<UploadedDocumentResponseDto>> Create(UploadedDocumentCreateDto dto)
+        public async Task<ActionResult<UploadedDocumentResponseDto>> Create(
+            [FromForm] IFormFile file,
+            [FromForm] int botTemplateId,
+            [FromForm] int? templateTrainingSessionId,
+            [FromForm] int userId // <-- Agregado aquí
+        )
         {
+            if (file == null || file.Length == 0)
+                return BadRequest("No se recibió un archivo válido.");
+
+            var uploadsFolder = Path.Combine("Uploads", "Documents");
+            if (!Directory.Exists(uploadsFolder))
+                Directory.CreateDirectory(uploadsFolder);
+
+            var fileName = Path.GetFileName(file.FileName);
+            var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+            var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+            using (var stream = new FileStream(filePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
             var document = new UploadedDocument
             {
-                BotTemplateId = dto.BotTemplateId,
-                TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
-                UserId = dto.UserId,
-                FileName = dto.FileName,
-                FileType = dto.FileType,
-                FilePath = dto.FilePath,
+                BotTemplateId = botTemplateId,
+                TemplateTrainingSessionId = templateTrainingSessionId,
+                UserId = userId, // <-- Ahora se usa el valor correcto
+                FileName = fileName,
+                FileType = file.ContentType,
+                FilePath = filePath,
                 UploadedAt = DateTime.UtcNow,
                 Indexed = false
             };

@@ -224,6 +224,13 @@ namespace Voia.Api.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
+            modelBuilder.Entity<UploadedDocument>()
+                .HasOne(d => d.BotTemplate)
+                .WithMany() // Si en BotTemplate no tienes una colección de documentos
+                .HasForeignKey(d => d.BotTemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+
             modelBuilder.Entity<BotCustomPrompt>(entity =>
             {
                 entity.ToTable("bot_custom_prompts");

@@ -68,32 +68,40 @@ namespace Voia.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<TrainingUrlResponseDto>> Create(TrainingUrlCreateDto dto)
         {
-            var url = new TrainingUrl
+            try
             {
-                BotTemplateId = dto.BotTemplateId,
-                TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
-                UserId = dto.UserId,
-                Url = dto.Url,
-                Status = "pending",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                var url = new TrainingUrl
+                {
+                    BotTemplateId = dto.BotTemplateId,
+                    TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
+                    UserId = dto.UserId,
+                    Url = dto.Url,
+                    Status = "pending",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-            _context.TrainingUrls.Add(url);
-            await _context.SaveChangesAsync();
+                _context.TrainingUrls.Add(url);
+                await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetAll), new { id = url.Id }, new TrainingUrlResponseDto
+                return CreatedAtAction(nameof(GetAll), new { id = url.Id }, new TrainingUrlResponseDto
+                {
+                    Id = url.Id,
+                    BotTemplateId = url.BotTemplateId,
+                    TemplateTrainingSessionId = url.TemplateTrainingSessionId,
+                    UserId = url.UserId,
+                    Url = url.Url,
+                    Status = url.Status,
+                    CreatedAt = url.CreatedAt,
+                    UpdatedAt = url.UpdatedAt
+                });
+            }
+            catch (Exception ex)
             {
-                Id = url.Id,
-                BotTemplateId = url.BotTemplateId,
-                TemplateTrainingSessionId = url.TemplateTrainingSessionId,
-                UserId = url.UserId,
-                Url = url.Url,
-                Status = url.Status,
-                CreatedAt = url.CreatedAt,
-                UpdatedAt = url.UpdatedAt
-            });
+                return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
+            }
         }
+
 
         /// <summary>
         /// Elimina una URL de entrenamiento.
