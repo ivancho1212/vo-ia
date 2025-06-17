@@ -46,6 +46,22 @@ namespace Voia.Api.Controllers
 
             return Ok(embedding);
         }
+        /// <summary>
+        /// Genera embeddings para una plantilla específica.
+        /// </summary>
+        [HttpPost("generate-for-template")]
+        public async Task<IActionResult> GenerateForTemplate([FromBody] GenerateVectorDto dto)
+        {
+            if (dto.BotTemplateId <= 0)
+                return BadRequest("El ID de plantilla es inválido.");
+
+            // Aquí iría la lógica de generación de embeddings para la plantilla con ID = dto.BotTemplateId
+
+            // Simulación temporal de éxito:
+            await Task.Delay(500); // Simula un procesamiento asincrónico
+
+            return Ok(new { message = $"Embeddings generados para la plantilla {dto.BotTemplateId}" });
+        }
 
         /// <summary>
         /// Crea un nuevo vector embedding.

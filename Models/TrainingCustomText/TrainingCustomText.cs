@@ -27,5 +27,11 @@ namespace Voia.Api.Models
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; }
+        [Column("bot_id")]
+        public int? BotId { get; set; }
+
+        [ForeignKey("BotId")]
+        public Bot? Bot { get; set; }
+
     }
 }

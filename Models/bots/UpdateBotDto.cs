@@ -16,5 +16,8 @@ namespace Voia.Api.Models
         public string ModelUsed { get; set; }
 
         public bool IsActive { get; set; }
+
+        // ⚠️ Opcionalmente podrías permitir actualización de estilo
+        public int? StyleId { get; set; }
     }
 }

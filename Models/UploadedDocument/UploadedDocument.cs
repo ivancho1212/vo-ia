@@ -38,5 +38,11 @@ namespace Voia.Api.Models
 
         [Column("indexed")]
         public bool? Indexed { get; set; } = false;
+        [Column("bot_id")]
+        public int? BotId { get; set; }  // Puede ser null si solo es parte de una plantilla
+
+        [ForeignKey("BotId")]
+        public Bot? Bot { get; set; }
+
     }
 }

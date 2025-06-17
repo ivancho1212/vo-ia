@@ -22,33 +22,31 @@ namespace Voia.Api.Models
         [Column("ia_provider_id")]
         [Required]
         public int IaProviderId { get; set; }
-
         [ForeignKey("IaProviderId")]
         public BotIaProvider IaProvider { get; set; }
 
         [Column("ai_model_config_id")]
         [Required]
         public int AiModelConfigId { get; set; }
-
         [ForeignKey("AiModelConfigId")]
         public AiModelConfig AiModelConfig { get; set; }
 
         [Column("default_style_id")]
-        public int? DefaultStyleId { get; set; }
+        public int? DefaultStyleId { get; set; } // <- nullable
 
         [ForeignKey("DefaultStyleId")]
-        public BotStyle? DefaultStyle { get; set; }
+        public BotStyle? DefaultStyle { get; set; } // <- opcional
 
         [Column("created_at")]
         public DateTime? CreatedAt { get; set; }
 
-        [Column("updated_at")]
+        [Column("(updated_at)")]
         public DateTime? UpdatedAt { get; set; }
 
         public ICollection<BotTemplatePrompt> Prompts { get; set; } = new List<BotTemplatePrompt>();
 
-        // ✅ Relación con prompts personalizados
         public ICollection<BotCustomPrompt> CustomPrompts { get; set; } = new List<BotCustomPrompt>();
+
     }
 
 }

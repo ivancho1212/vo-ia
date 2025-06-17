@@ -21,7 +21,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection"))
     )
+    // Activamos el logging de EF Core hacia la console
+    .EnableSensitiveDataLogging()
+    .LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information)
 );
+
 
 builder
     .Services.AddAuthentication(options =>
