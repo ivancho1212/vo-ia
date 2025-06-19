@@ -97,150 +97,144 @@ namespace Voia.Api.Controllers
         /// <response code="201">Devuelve el bot creado.</response>
         /// <response code="400">Si los datos son inválidos o el bot ya existe.</response>
         // [HasPermission("CanCreateBot")]
-        [HttpPost]
-        public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
+[HttpPost]
+public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
+{
+    Console.WriteLine("[DEBUG] CreateBot iniciado.");
+
+    if (!ModelState.IsValid)
+    {
+        Console.WriteLine("[DEBUG] ModelState inválido.");
+        return BadRequest(ModelState);
+    }
+
+    var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+    int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 45;
+    Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
+
+    var existingBot = await _context.Bots
+        .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
+
+    if (existingBot != null)
+    {
+        Console.WriteLine("[DEBUG] Ya existe un bot con el nombre especificado.");
+        return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
+    }
+
+    // 👉 OBTENER el objeto BotTemplate completo, sin Select manual
+    var template = await _context.BotTemplates
+        .Include(t => t.DefaultStyle)
+        .FirstOrDefaultAsync(t => t.Id == botDto.BotTemplateId);
+
+    if (template == null)
+    {
+        Console.WriteLine("[DEBUG] La plantilla especificada no existe.");
+        return BadRequest(new { Message = "Plantilla no encontrada." });
+    }
+
+    // Validaciones explícitas por si acaso (aunque ya están en el modelo)
+    if (template.IaProviderId == 0)
+    {
+        Console.WriteLine("[DEBUG] La plantilla no tiene un proveedor de IA válido.");
+        return BadRequest(new { Message = "La plantilla no tiene un proveedor de IA válido." });
+    }
+
+    if (template.AiModelConfigId == 0)
+    {
+        Console.WriteLine("[DEBUG] La plantilla no tiene un modelo de IA válido.");
+        return BadRequest(new { Message = "La plantilla no tiene un modelo de IA válido." });
+    }
+
+    int? clonedStyleId = null;
+
+    if (template.DefaultStyleId.HasValue)
+    {
+        var styleTemplate = await _context.StyleTemplates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == template.DefaultStyleId.Value);
+
+        if (styleTemplate == null)
         {
-            Console.WriteLine("[DEBUG] CreateBot iniciado.");
-
-            if (!ModelState.IsValid)
-            {
-                Console.WriteLine("[DEBUG] ModelState inválido.");
-                return BadRequest(ModelState);
-            }
-
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 45;
-            Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
-
-            var existingBot = await _context.Bots
-                .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
-
-            if (existingBot != null)
-            {
-                Console.WriteLine("[DEBUG] Ya existe un bot con el nombre especificado.");
-                return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
-            }
-
-            var template = await _context.BotTemplates
-                .Where(t => t.Id == botDto.BotTemplateId)
-                .Select(t => new
-                {
-                    t.Id,
-                    t.Name,
-                    DefaultStyleId = (int?)t.DefaultStyleId, // ✅ aquí está el fix
-                    IaProviderId = (int?)t.IaProviderId,
-                    AiModelConfigId = (int?)t.AiModelConfigId
-                })
-                .FirstOrDefaultAsync();
-
-            if (template == null)
-            {
-                Console.WriteLine("[DEBUG] La plantilla especificada no existe.");
-                return BadRequest(new { Message = "Plantilla no encontrada." });
-            }
-
-            if (!template.IaProviderId.HasValue || template.IaProviderId.Value == 0)
-            {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un proveedor de IA válido.");
-                return BadRequest(new { Message = "La plantilla no tiene un proveedor de IA válido." });
-            }
-
-            if (!template.AiModelConfigId.HasValue || template.AiModelConfigId.Value == 0)
-            {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un modelo de IA válido.");
-                return BadRequest(new { Message = "La plantilla no tiene un modelo de IA válido." });
-            }
-
-            int? clonedStyleId = null;
-
-            if (template.DefaultStyleId.HasValue)
-            {
-                var styleTemplate = await _context.StyleTemplates
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id == template.DefaultStyleId.Value);
-
-                if (styleTemplate == null)
-                {
-                    Console.WriteLine("[DEBUG] La plantilla de estilo referida no existe.");
-                    return BadRequest(new { Message = "El style_template asociado a la plantilla no existe." });
-                }
-
-                var newBotStyle = new BotStyle
-                {
-                    StyleTemplateId = styleTemplate.Id,
-                    Theme = styleTemplate.Theme ?? "light",
-                    PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
-                    SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
-                    FontFamily = styleTemplate.FontFamily ?? "Arial",
-                    AvatarUrl = styleTemplate.AvatarUrl ?? "",
-                    Position = styleTemplate.Position ?? "bottom-right",
-                    CustomCss = styleTemplate.CustomCss ?? "",
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                _context.BotStyles.Add(newBotStyle);
-                await _context.SaveChangesAsync();
-
-                clonedStyleId = newBotStyle.Id;
-                Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {clonedStyleId}.");
-            }
-
-            var bot = new Bot
-            {
-                Name = botDto.Name,
-                Description = botDto.Description,
-                ApiKey = botDto.ApiKey,
-                ModelUsed = botDto.ModelUsed ?? "gpt-4",
-                IsActive = botDto.IsActive,
-                UserId = userId,
-                BotTemplateId = template.Id,
-                IaProviderId = template.IaProviderId.Value,         // ✅ Conversion explícita
-                AiModelConfigId = template.AiModelConfigId.Value,   // ✅ Conversion explícita
-                StyleId = clonedStyleId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Bots.Add(bot);
-            await _context.SaveChangesAsync();
-
-            Console.WriteLine($"[DEBUG] Bot guardado con Id = {bot.Id}.");
-
-            var trainingSession = new BotTrainingSession
-            {
-                BotId = bot.Id,
-                SessionName = $"Entrenamiento inicial para {botDto.Name}",
-                Description = $"Sesión creada al momento de crear el bot con plantilla '{template.Name}'",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.BotTrainingSessions.Add(trainingSession);
-            await _context.SaveChangesAsync();
-
-            Console.WriteLine($"[DEBUG] BotTrainingSession guardado con Id = {trainingSession.Id}.");
-
-            if (!string.IsNullOrWhiteSpace(botDto.CustomText))
-            {
-                var trainingText = new TrainingCustomText
-                {
-                    BotId = bot.Id,
-                    BotTemplateId = bot.BotTemplateId ?? 0,
-                    TemplateTrainingSessionId = trainingSession.Id,
-                    UserId = userId,
-                    Content = botDto.CustomText,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-
-                _context.TrainingCustomTexts.Add(trainingText);
-                await _context.SaveChangesAsync();
-
-                Console.WriteLine("[DEBUG] TrainingCustomText guardado.");
-            }
-
-            return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
+            Console.WriteLine("[DEBUG] La plantilla de estilo referida no existe.");
+            return BadRequest(new { Message = "El style_template asociado a la plantilla no existe." });
         }
+
+        var newBotStyle = new BotStyle
+        {
+            StyleTemplateId = styleTemplate.Id,
+            Theme = styleTemplate.Theme ?? "light",
+            PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
+            SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
+            FontFamily = styleTemplate.FontFamily ?? "Arial",
+            AvatarUrl = styleTemplate.AvatarUrl ?? "",
+            Position = styleTemplate.Position ?? "bottom-right",
+            CustomCss = styleTemplate.CustomCss ?? "",
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.BotStyles.Add(newBotStyle);
+        await _context.SaveChangesAsync();
+
+        clonedStyleId = newBotStyle.Id;
+        Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {clonedStyleId}.");
+    }
+
+    var bot = new Bot
+    {
+        Name = botDto.Name,
+        Description = botDto.Description,
+        ApiKey = botDto.ApiKey,
+        ModelUsed = botDto.ModelUsed ?? "gpt-4",
+        IsActive = botDto.IsActive,
+        UserId = userId,
+        BotTemplateId = template.Id,
+        IaProviderId = template.IaProviderId,
+        AiModelConfigId = template.AiModelConfigId,
+        StyleId = clonedStyleId,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    _context.Bots.Add(bot);
+    await _context.SaveChangesAsync();
+
+    Console.WriteLine($"[DEBUG] Bot guardado con Id = {bot.Id}.");
+
+    var trainingSession = new BotTrainingSession
+    {
+        BotId = bot.Id,
+        SessionName = $"Entrenamiento inicial para {botDto.Name}",
+        Description = $"Sesión creada al momento de crear el bot con plantilla '{template.Name}'",
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    _context.BotTrainingSessions.Add(trainingSession);
+    await _context.SaveChangesAsync();
+
+    Console.WriteLine($"[DEBUG] BotTrainingSession guardado con Id = {trainingSession.Id}.");
+
+    if (!string.IsNullOrWhiteSpace(botDto.CustomText))
+    {
+        var trainingText = new TrainingCustomText
+        {
+            BotId = bot.Id,
+            BotTemplateId = template.Id,
+            TemplateTrainingSessionId = trainingSession.Id,
+            UserId = userId,
+            Content = botDto.CustomText,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _context.TrainingCustomTexts.Add(trainingText);
+        await _context.SaveChangesAsync();
+
+        Console.WriteLine("[DEBUG] TrainingCustomText guardado.");
+    }
+
+    return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
+}
 
         /// <summary>
         /// Actualiza la información de un bot existente.

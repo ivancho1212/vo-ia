@@ -11,9 +11,8 @@ namespace Voia.Api.Models.StyleTemplate
         [Column("id")]
         public int Id { get; set; }
 
-        [Required]
         [Column("user_id")]
-        public int UserId { get; set; }
+        public int? UserId { get; set; } // ← cambiar de int a int?
 
         [Required]
         [StringLength(100)]
