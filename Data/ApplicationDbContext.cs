@@ -199,11 +199,24 @@ namespace Voia.Api.Data
 
             modelBuilder.Entity<BotCustomPrompt>().Property(p => p.Role).HasConversion<string>();
             modelBuilder.Entity<BotTemplatePrompt>().Property(p => p.Role).HasConversion<string>();
+
             modelBuilder.Entity<BotTemplate>()
                 .HasMany(t => t.Prompts)
                 .WithOne(p => p.BotTemplate) // 👈 esto es clave
                 .HasForeignKey(p => p.BotTemplateId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<BotTemplate>().Property(t => t.IaProviderId)
+                .HasColumnName("ia_provider_id")
+                .IsRequired();
+
+            modelBuilder.Entity<BotTemplate>().Property(t => t.AiModelConfigId)
+                .HasColumnName("ai_model_config_id")
+                .IsRequired();
+
+            modelBuilder.Entity<BotTemplate>().Property(t => t.DefaultStyleId)
+                .HasColumnName("default_style_id");
+
 
             modelBuilder.Entity<TemplateTrainingSession>(entity =>
             {

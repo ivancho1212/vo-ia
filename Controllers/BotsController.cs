@@ -108,13 +108,10 @@ namespace Voia.Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            // Obtener ID del usuario autenticado
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
             int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 45;
-
             Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
 
-            // Validar que no exista un bot con el mismos nombre
             var existingBot = await _context.Bots
                 .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
 
@@ -124,14 +121,13 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
             }
 
-            // Verificar que la plantilla existe
             var template = await _context.BotTemplates
                 .Where(t => t.Id == botDto.BotTemplateId)
                 .Select(t => new
                 {
                     t.Id,
                     t.Name,
-                    t.DefaultStyleId,
+                    DefaultStyleId = (int?)t.DefaultStyleId, // ✅ aquí está el fix
                     IaProviderId = (int?)t.IaProviderId,
                     AiModelConfigId = (int?)t.AiModelConfigId
                 })
@@ -143,16 +139,16 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { Message = "Plantilla no encontrada." });
             }
 
-            if (!template.IaProviderId.HasValue)
+            if (!template.IaProviderId.HasValue || template.IaProviderId.Value == 0)
             {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un IA Provider.");
-                return BadRequest(new { Message = "La plantilla no tiene un proveedor de IA." });
+                Console.WriteLine("[DEBUG] La plantilla no tiene un proveedor de IA válido.");
+                return BadRequest(new { Message = "La plantilla no tiene un proveedor de IA válido." });
             }
 
-            if (!template.AiModelConfigId.HasValue)
+            if (!template.AiModelConfigId.HasValue || template.AiModelConfigId.Value == 0)
             {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un modelo de IA.");
-                return BadRequest(new { Message = "La plantilla no tiene un modelo de IA." });
+                Console.WriteLine("[DEBUG] La plantilla no tiene un modelo de IA válido.");
+                return BadRequest(new { Message = "La plantilla no tiene un modelo de IA válido." });
             }
 
             int? clonedStyleId = null;
@@ -186,7 +182,6 @@ namespace Voia.Api.Controllers
                 await _context.SaveChangesAsync();
 
                 clonedStyleId = newBotStyle.Id;
-
                 Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {clonedStyleId}.");
             }
 
@@ -199,8 +194,8 @@ namespace Voia.Api.Controllers
                 IsActive = botDto.IsActive,
                 UserId = userId,
                 BotTemplateId = template.Id,
-                IaProviderId = template.IaProviderId.Value,
-                AiModelConfigId = template.AiModelConfigId.Value,
+                IaProviderId = template.IaProviderId.Value,         // ✅ Conversion explícita
+                AiModelConfigId = template.AiModelConfigId.Value,   // ✅ Conversion explícita
                 StyleId = clonedStyleId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -219,6 +214,7 @@ namespace Voia.Api.Controllers
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
+
             _context.BotTrainingSessions.Add(trainingSession);
             await _context.SaveChangesAsync();
 
@@ -229,13 +225,14 @@ namespace Voia.Api.Controllers
                 var trainingText = new TrainingCustomText
                 {
                     BotId = bot.Id,
-                    BotTemplateId = bot.BotTemplateId.Value,
+                    BotTemplateId = bot.BotTemplateId ?? 0,
                     TemplateTrainingSessionId = trainingSession.Id,
                     UserId = userId,
                     Content = botDto.CustomText,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
+
                 _context.TrainingCustomTexts.Add(trainingText);
                 await _context.SaveChangesAsync();
 
