@@ -53,33 +53,69 @@ namespace Voia.Api.Controllers
                 SubmittedAt = submission.SubmittedAt
             };
         }
+        // GET: api/botdatasubmissions/by-bot/{botId}
+        [HttpGet("by-bot/{botId}")]
+        public async Task<ActionResult<IEnumerable<object>>> GetSubmissionsGroupedByBot(int botId)
+        {
+            var fields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == botId)
+                .ToListAsync();
+
+            var fieldNames = fields.ToDictionary(f => f.Id, f => f.FieldName);
+
+            var submissions = await _context.BotDataSubmissions
+                .Where(s => s.BotId == botId)
+                .ToListAsync();
+
+            // Agrupar por alguna lógica, por ejemplo, por un usuario que tú determines
+            // Si no tienes "user_id", podrías agrupar por combinación de valores (hash) o por campo extra
+            var grouped = submissions
+                .GroupBy(s => s.CaptureFieldId) // Este es simplificado
+                .Select(group => new
+                {
+                    Field = fieldNames[group.Key],
+                    Values = group.Select(g => g.SubmissionValue).ToList()
+                });
+
+            return Ok(grouped);
+        }
 
         // POST: api/botdatasubmissions
         [HttpPost]
         public async Task<ActionResult<BotDataSubmissionResponseDto>> Create(BotDataSubmissionCreateDto dto)
         {
+            if (dto.UserId == null && string.IsNullOrWhiteSpace(dto.SubmissionSessionId))
+            {
+                return BadRequest(new { Message = "Debe especificar un userId o un submissionSessionId para asociar el origen del dato." });
+            }
+
             var submission = new BotDataSubmission
             {
                 BotId = dto.BotId,
                 CaptureFieldId = dto.CaptureFieldId,
                 SubmissionValue = dto.SubmissionValue,
+                UserId = dto.UserId,
+                SubmissionSessionId = dto.SubmissionSessionId,
                 SubmittedAt = DateTime.UtcNow
             };
 
             _context.BotDataSubmissions.Add(submission);
             await _context.SaveChangesAsync();
 
-            var responseDto = new BotDataSubmissionResponseDto
+            var response = new BotDataSubmissionResponseDto
             {
                 Id = submission.Id,
                 BotId = submission.BotId,
                 CaptureFieldId = submission.CaptureFieldId,
                 SubmissionValue = submission.SubmissionValue,
+                UserId = submission.UserId,
+                SubmissionSessionId = submission.SubmissionSessionId,
                 SubmittedAt = submission.SubmittedAt
             };
 
-            return CreatedAtAction(nameof(GetById), new { id = submission.Id }, responseDto);
+            return CreatedAtAction(nameof(GetById), new { id = submission.Id }, response);
         }
+
 
         // PUT: api/botdatasubmissions/{id}
         [HttpPut("{id}")]

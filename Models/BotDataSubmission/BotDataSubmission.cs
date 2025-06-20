@@ -23,5 +23,12 @@ namespace Voia.Api.Models
 
         [Column("submitted_at")]
         public DateTime? SubmittedAt { get; set; }
+        [Column("user_id")]
+        public int? UserId { get; set; }
+
+        [Column("submission_session_id")]
+        [MaxLength(100)]
+        public string? SubmissionSessionId { get; set; }
+
     }
 }

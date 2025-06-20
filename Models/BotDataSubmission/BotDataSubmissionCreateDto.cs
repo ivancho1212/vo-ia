@@ -11,5 +11,11 @@ namespace Voia.Api.Models.DTOs
         public int CaptureFieldId { get; set; }
 
         public string SubmissionValue { get; set; }
+
+        // ✅ Nuevos campos para rastrear el origen
+        public int? UserId { get; set; }
+
+        [MaxLength(100)]
+        public string? SubmissionSessionId { get; set; }
     }
 }

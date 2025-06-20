@@ -57,6 +57,27 @@ namespace Voia.Api.Controllers
                 UpdatedAt = field.UpdatedAt
             };
         }
+        // GET: api/botdatacapturefields/by-bot/23
+        [HttpGet("by-bot/{botId}")]
+        public async Task<ActionResult<IEnumerable<BotDataCaptureFieldResponseDto>>> GetByBot(int botId)
+        {
+            var fields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == botId)
+                .Select(f => new BotDataCaptureFieldResponseDto
+                {
+                    Id = f.Id,
+                    BotId = f.BotId,
+                    FieldName = f.FieldName,
+                    FieldType = f.FieldType,
+                    IsRequired = f.IsRequired,
+                    CreatedAt = f.CreatedAt,
+                    UpdatedAt = f.UpdatedAt
+                })
+                .ToListAsync();
+
+            return Ok(fields);
+        }
+
 
         // POST: api/botdatacapturefields
         [HttpPost]
