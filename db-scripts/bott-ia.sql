@@ -1,27 +1,23 @@
 -- Script de respaldo de MySQL
 DROP DATABASE IF EXISTS chatbot_platform;
-CREATE DATABASE chatbot_platform;
-USE chatbot_platform;
-
--- MySQL dump 10.13  Distrib 9.3.0, for macos15 (x86_64)
+CREATE DATABASE  IF NOT EXISTS `chatbot_platform` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `chatbot_platform`;
+-- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
 --
--- Host: localhost    Database: chatbot_platform
+-- Host: 127.0.0.1    Database: chatbot_platform
 -- ------------------------------------------------------
--- Server version	9.3.0
+-- Server version	8.0.42
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8mb4 */;
+/*!50503 SET NAMES utf8 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
-
--- Resto del contenido generado por mysqldump...
 
 --
 -- Table structure for table `activity_logs`
@@ -203,7 +199,7 @@ CREATE TABLE `bot_data_capture_fields` (
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   CONSTRAINT `bot_data_capture_fields_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -212,7 +208,7 @@ CREATE TABLE `bot_data_capture_fields` (
 
 LOCK TABLES `bot_data_capture_fields` WRITE;
 /*!40000 ALTER TABLE `bot_data_capture_fields` DISABLE KEYS */;
-INSERT INTO `bot_data_capture_fields` VALUES (1,33,'nombre','text',1,'2025-06-22 00:38:19','2025-06-22 00:38:37'),(2,33,'apellido','text',1,'2025-06-22 00:38:30','2025-06-22 01:32:23'),(3,33,'direccion','text',1,'2025-06-22 01:32:48','2025-06-22 01:32:51'),(4,33,'telefono','text',1,'2025-06-22 03:42:21','2025-06-22 04:06:01'),(5,33,'vehiculo','text',1,'2025-06-22 04:25:01','2025-06-22 04:26:33'),(6,33,'apartamento','text',1,'2025-06-22 04:26:32','2025-06-22 04:26:34'),(7,33,'moto','text',1,'2025-06-22 05:43:08','2025-06-22 05:43:54'),(8,33,'coche','text',1,'2025-06-22 05:43:31','2025-06-22 05:43:52'),(9,33,'ciudad','text',1,'2025-06-22 05:43:39','2025-06-22 05:43:51'),(10,33,'soltero','text',1,'2025-06-22 05:43:44','2025-06-22 05:43:50'),(11,33,'aeropuerto','text',1,'2025-06-22 05:44:07','2025-06-22 05:44:26'),(12,33,'lago','text',1,'2025-06-22 05:44:14','2025-06-22 05:44:26'),(13,33,'local','text',1,'2025-06-22 05:44:19','2025-06-22 05:44:27'),(14,33,'cc','text',1,'2025-06-22 05:44:23','2025-06-22 05:44:28');
+INSERT INTO `bot_data_capture_fields` VALUES (1,33,'nombre','text',1,'2025-06-22 00:38:19','2025-06-22 00:38:37'),(2,33,'apellido','text',1,'2025-06-22 00:38:30','2025-06-22 01:32:23'),(3,33,'direccion','text',1,'2025-06-22 01:32:48','2025-06-22 01:32:51'),(4,33,'telefono','text',1,'2025-06-22 03:42:21','2025-06-22 04:06:01'),(5,33,'vehiculo','text',1,'2025-06-22 04:25:01','2025-06-22 04:26:33'),(6,33,'apartamento','text',1,'2025-06-22 04:26:32','2025-06-22 04:26:34'),(7,33,'moto','text',1,'2025-06-22 05:43:08','2025-06-22 05:43:54'),(8,33,'coche','text',1,'2025-06-22 05:43:31','2025-06-22 05:43:52'),(9,33,'ciudad','text',1,'2025-06-22 05:43:39','2025-06-22 05:43:51'),(10,33,'soltero','text',1,'2025-06-22 05:43:44','2025-06-22 05:43:50'),(11,33,'aeropuerto','text',1,'2025-06-22 05:44:07','2025-06-22 05:44:26'),(12,33,'lago','text',1,'2025-06-22 05:44:14','2025-06-22 05:44:26'),(13,33,'local','text',1,'2025-06-22 05:44:19','2025-06-22 05:44:27'),(14,33,'cc','text',1,'2025-06-22 05:44:23','2025-06-22 05:44:28'),(15,34,'nombre','text',1,'2025-06-24 13:32:48','2025-06-24 13:32:51'),(16,34,'direccion','text',1,'2025-06-24 13:33:02','2025-06-24 13:33:04'),(17,34,'cedula','text',1,'2025-06-24 13:33:44','2025-06-24 13:33:46');
 /*!40000 ALTER TABLE `bot_data_capture_fields` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -230,13 +226,13 @@ CREATE TABLE `bot_data_submissions` (
   `submission_value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `submitted_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `user_id` int DEFAULT NULL,
-  `submission_session_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `submission_session_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   KEY `capture_field_id` (`capture_field_id`),
   CONSTRAINT `bot_data_submissions_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE,
   CONSTRAINT `bot_data_submissions_ibfk_2` FOREIGN KEY (`capture_field_id`) REFERENCES `bot_data_capture_fields` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -245,7 +241,7 @@ CREATE TABLE `bot_data_submissions` (
 
 LOCK TABLES `bot_data_submissions` WRITE;
 /*!40000 ALTER TABLE `bot_data_submissions` DISABLE KEYS */;
-INSERT INTO `bot_data_submissions` VALUES (1,33,1,'Carlos','2025-06-22 01:11:34',NULL,'session-abc-123'),(2,33,2,'Ramírez','2025-06-22 01:11:36',NULL,'session-abc-123');
+INSERT INTO `bot_data_submissions` VALUES (1,33,1,'Carlos','2025-06-22 01:11:34',NULL,'session-abc-123'),(2,33,2,'Ramírez','2025-06-22 01:11:36',NULL,'session-abc-123'),(3,34,15,'Juan','2025-06-24 13:38:14',45,'abc123-session-id'),(4,34,16,'Calle 123','2025-06-24 13:38:14',45,'abc123-session-id'),(5,34,17,'123456789','2025-06-24 13:38:14',45,'abc123-session-id');
 /*!40000 ALTER TABLE `bot_data_submissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -383,13 +379,14 @@ DROP TABLE IF EXISTS `bot_styles`;
 CREATE TABLE `bot_styles` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int DEFAULT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `style_template_id` int DEFAULT NULL,
   `theme` enum('light','dark','custom') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'light',
   `primary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#000000',
   `secondary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#ffffff',
   `font_family` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Arial',
   `avatar_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `position` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `position` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `custom_css` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -397,7 +394,7 @@ CREATE TABLE `bot_styles` (
   KEY `fk_bot_styles_user` (`user_id`),
   CONSTRAINT `fk_bot_styles_style_template` FOREIGN KEY (`style_template_id`) REFERENCES `style_templates` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_bot_styles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=43 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -406,7 +403,7 @@ CREATE TABLE `bot_styles` (
 
 LOCK TABLES `bot_styles` WRITE;
 /*!40000 ALTER TABLE `bot_styles` DISABLE KEYS */;
-INSERT INTO `bot_styles` VALUES (1,NULL,NULL,'light','#3498db','#ffffff','Arial','path/to/avatar1.png','bottom-right','/* custom CSS for Admin Bot */','2025-06-17 15:56:49'),(2,NULL,NULL,'dark','#2c3e50','#ecf0f1','Verdana','path/to/avatar2.png','bottom-left','/* custom CSS for User Bot */','2025-06-17 15:55:14'),(8,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:18:41'),(9,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:23:46'),(10,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:08'),(11,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:27'),(12,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:14'),(13,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:33'),(14,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:33:42'),(15,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:36:17'),(16,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:45:23'),(17,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:35'),(18,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:58'),(19,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 16:45:06'),(20,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 16:46:09'),(21,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 17:10:01'),(22,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:10:44'),(23,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:47:11'),(24,NULL,NULL,'custom','#381f1f','#e50b0b','Georgia','','center-left','','2025-06-22 17:51:25'),(25,NULL,NULL,'custom','#25537e','#eceaea','Arial','','bottom-right','','2025-06-22 19:54:08'),(26,NULL,NULL,'custom','#b43131','#fcf8f8','Arial','','bottom-right','','2025-06-22 20:33:10'),(27,45,NULL,'custom','#31b96c','#f5f0f0','Roboto','','bottom-right','','2025-06-22 20:40:21'),(28,45,NULL,'dark','#000000','#ffffff','Arial','','bottom-right','','2025-06-22 20:49:31'),(29,45,NULL,'custom','#f0f410','#6d6969','Courier New','','top-left','','2025-06-22 20:50:55'),(30,45,NULL,'custom','#f8e71c','#000000','Arial','','bottom-right','','2025-06-23 23:31:53');
+INSERT INTO `bot_styles` VALUES (1,NULL,NULL,NULL,'light','#3498db','#ffffff','Arial','path/to/avatar1.png','bottom-right','/* custom CSS for Admin Bot */','2025-06-17 15:56:49'),(2,NULL,NULL,NULL,'dark','#2c3e50','#ecf0f1','Verdana','path/to/avatar2.png','bottom-left','/* custom CSS for User Bot */','2025-06-17 15:55:14'),(8,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:18:41'),(9,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:23:46'),(10,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:08'),(11,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:27'),(12,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:14'),(13,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:33'),(14,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:33:42'),(15,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:36:17'),(16,NULL,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:45:23'),(17,NULL,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:35'),(18,NULL,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:58'),(19,NULL,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 16:45:06'),(20,NULL,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 16:46:09'),(21,NULL,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 17:10:01'),(22,NULL,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:10:44'),(23,NULL,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:47:11'),(24,NULL,NULL,NULL,'custom','#381f1f','#e50b0b','Georgia','','center-left','','2025-06-22 17:51:25'),(25,NULL,NULL,NULL,'custom','#25537e','#eceaea','Arial','','bottom-right','','2025-06-22 19:54:08'),(26,NULL,NULL,NULL,'custom','#b43131','#fcf8f8','Arial','','bottom-right','','2025-06-22 20:33:10'),(39,45,NULL,NULL,'custom','#d52727','#ffffff','Georgia','','bottom-right','','2025-06-24 19:46:01'),(40,45,NULL,NULL,'custom','#f8e71c','#ffffff','Arial','','bottom-right','','2025-06-24 19:46:22'),(42,45,'moradito',NULL,'custom','#bd10e0','#ffffff','Roboto','/static/media/voai.5b4d45f3cd6b71679729.gif','center-left','','2025-06-24 19:59:33');
 /*!40000 ALTER TABLE `bot_styles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -522,7 +519,7 @@ CREATE TABLE `bot_training_sessions` (
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   CONSTRAINT `bot_training_sessions_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -531,7 +528,7 @@ CREATE TABLE `bot_training_sessions` (
 
 LOCK TABLES `bot_training_sessions` WRITE;
 /*!40000 ALTER TABLE `bot_training_sessions` DISABLE KEYS */;
-INSERT INTO `bot_training_sessions` VALUES (1,26,'Entrenamiento inicial para www','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:23:46','2025-06-21 22:23:46'),(2,28,'Entrenamiento inicial para dddd','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:27:28','2025-06-21 22:27:28'),(3,30,'Entrenamiento inicial para rrrr','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:30:34','2025-06-21 22:30:34'),(4,31,'Entrenamiento inicial para cccc','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:33:43','2025-06-21 22:33:43'),(5,32,'Entrenamiento inicial para ccccw','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:36:18','2025-06-21 22:36:18'),(6,33,'Entrenamiento inicial para ccccwe','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:45:23','2025-06-21 22:45:23');
+INSERT INTO `bot_training_sessions` VALUES (1,26,'Entrenamiento inicial para www','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:23:46','2025-06-21 22:23:46'),(2,28,'Entrenamiento inicial para dddd','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:27:28','2025-06-21 22:27:28'),(3,30,'Entrenamiento inicial para rrrr','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:30:34','2025-06-21 22:30:34'),(4,31,'Entrenamiento inicial para cccc','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:33:43','2025-06-21 22:33:43'),(5,32,'Entrenamiento inicial para ccccw','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:36:18','2025-06-21 22:36:18'),(6,33,'Entrenamiento inicial para ccccwe','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:45:23','2025-06-21 22:45:23'),(7,34,'Entrenamiento inicial para 111111111111','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-24 13:32:30','2025-06-24 13:32:30');
 /*!40000 ALTER TABLE `bot_training_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -567,7 +564,7 @@ CREATE TABLE `bots` (
   CONSTRAINT `fk_bots_model_config` FOREIGN KEY (`ai_model_config_id`) REFERENCES `ai_model_configs` (`id`),
   CONSTRAINT `fk_bots_style` FOREIGN KEY (`style_id`) REFERENCES `bot_styles` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_bots_template` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -576,7 +573,7 @@ CREATE TABLE `bots` (
 
 LOCK TABLES `bots` WRITE;
 /*!40000 ALTER TABLE `bots` DISABLE KEYS */;
-INSERT INTO `bots` VALUES (15,29,NULL,'Admin Bot Actualizado','Bot actualizado para pruebas','admin_api_key_actualizado',0,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(16,30,NULL,'User Bot','A bot for user','user_api_key',1,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(17,29,NULL,'Nuevo Bot','Este es un bot de prueba','clave_api_123',1,'2025-04-25 15:29:24','2025-06-03 20:04:57',4,NULL,NULL),(18,29,NULL,'Bot de prueba','Este bot fue creado para pruebas de integración','api_key_de_prueba_456',1,'2025-04-25 15:31:16','2025-06-03 20:04:57',4,NULL,NULL),(20,29,NULL,'Bot de integración','Bot creado para validar errores por clave duplicada','clave_unica_api_789',1,'2025-04-25 15:32:32','2025-06-03 20:04:57',4,NULL,NULL),(21,29,NULL,'Bot de Asistencia','Un bot que ayuda con tareas diarias.','clave_asistencia',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(22,30,NULL,'Bot de Ventas','Un bot que ayuda a realizar ventas.','clave_ventas',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(26,45,9,'www','www','test-api-keyx12hh45jjhdfv67',1,'2025-06-21 22:23:46','2025-06-21 17:23:46',6,80,6),(28,45,11,'dddd','dddddd','test-api-keysx12hh45jjhdfv67',1,'2025-06-21 22:27:28','2025-06-21 17:27:27',6,80,6),(30,45,13,'rrrr','rrrrr','test-api-keysx12hh45jjhdfdv67',1,'2025-06-21 22:30:34','2025-06-21 17:30:33',6,80,6),(31,45,14,'cccc','cccccc','test-api-keysx12hh45cjjhdfdv67',1,'2025-06-21 22:33:43','2025-06-21 17:33:42',6,80,6),(32,45,15,'ccccw','cccccc','test-api-keysx12hh45cjjhdddfdv67',1,'2025-06-21 22:36:18','2025-06-21 17:36:17',6,80,6),(33,45,29,'ccccwe','cccccc','test-api-keysss',1,'2025-06-21 22:45:23','2025-06-23 23:39:19',6,80,6);
+INSERT INTO `bots` VALUES (15,29,NULL,'Admin Bot Actualizado','Bot actualizado para pruebas','admin_api_key_actualizado',0,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(16,30,NULL,'User Bot','A bot for user','user_api_key',1,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(17,29,NULL,'Nuevo Bot','Este es un bot de prueba','clave_api_123',1,'2025-04-25 15:29:24','2025-06-03 20:04:57',4,NULL,NULL),(18,29,NULL,'Bot de prueba','Este bot fue creado para pruebas de integración','api_key_de_prueba_456',1,'2025-04-25 15:31:16','2025-06-03 20:04:57',4,NULL,NULL),(20,29,NULL,'Bot de integración','Bot creado para validar errores por clave duplicada','clave_unica_api_789',1,'2025-04-25 15:32:32','2025-06-03 20:04:57',4,NULL,NULL),(21,29,NULL,'Bot de Asistencia','Un bot que ayuda con tareas diarias.','clave_asistencia',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(22,30,NULL,'Bot de Ventas','Un bot que ayuda a realizar ventas.','clave_ventas',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(26,45,9,'www','www','test-api-keyx12hh45jjhdfv67',1,'2025-06-21 22:23:46','2025-06-21 17:23:46',6,80,6),(28,45,11,'dddd','dddddd','test-api-keysx12hh45jjhdfv67',1,'2025-06-21 22:27:28','2025-06-21 17:27:27',6,80,6),(30,45,13,'rrrr','rrrrr','test-api-keysx12hh45jjhdfdv67',1,'2025-06-21 22:30:34','2025-06-21 17:30:33',6,80,6),(31,45,14,'cccc','cccccc','test-api-keysx12hh45cjjhdfdv67',1,'2025-06-21 22:33:43','2025-06-21 17:33:42',6,80,6),(32,45,15,'ccccw','cccccc','test-api-keysx12hh45cjjhdddfdv67',1,'2025-06-21 22:36:18','2025-06-21 17:36:17',6,80,6),(33,45,NULL,'ccccwe','cccccc','test-api-keysss',1,'2025-06-21 22:45:23','2025-06-23 23:39:19',6,80,6),(34,45,42,'111111111111','111111','test-api-keysssy',1,'2025-06-24 13:32:30','2025-06-24 19:59:37',6,80,6);
 /*!40000 ALTER TABLE `bots` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1149,7 +1146,7 @@ CREATE TABLE `training_custom_texts` (
   CONSTRAINT `fk_texts_template` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`),
   CONSTRAINT `fk_training_custom_texts_bot` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE SET NULL,
   CONSTRAINT `training_custom_texts_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1158,7 +1155,7 @@ CREATE TABLE `training_custom_texts` (
 
 LOCK TABLES `training_custom_texts` WRITE;
 /*!40000 ALTER TABLE `training_custom_texts` DISABLE KEYS */;
-INSERT INTO `training_custom_texts` VALUES (8,79,NULL,NULL,45,'dfghredgertghtrhg','2025-06-16 14:01:35','2025-06-16 14:01:35'),(9,79,NULL,NULL,45,'dgtbh','2025-06-16 14:01:50','2025-06-16 14:01:50'),(10,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:07:46','2025-06-16 14:07:46'),(11,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:08:05','2025-06-16 14:08:05'),(12,79,NULL,NULL,45,'srrthgtr','2025-06-16 14:26:00','2025-06-16 14:26:00'),(13,79,NULL,NULL,45,'xbgfdb','2025-06-16 15:22:45','2025-06-16 15:22:45'),(14,79,NULL,NULL,45,'srtg','2025-06-16 15:30:39','2025-06-16 15:30:39'),(15,79,NULL,NULL,45,'srtg','2025-06-16 15:36:17','2025-06-16 15:36:17'),(16,79,NULL,NULL,45,'wedewdewd','2025-06-16 15:41:49','2025-06-16 15:41:49'),(17,79,NULL,NULL,45,'wedewdewd','2025-06-16 16:58:34','2025-06-16 16:58:34'),(18,79,NULL,NULL,45,'ytfyt','2025-06-16 16:59:10','2025-06-16 16:59:10'),(19,79,NULL,NULL,45,'sfvgdf','2025-06-16 19:02:52','2025-06-16 19:02:52'),(20,79,NULL,NULL,45,'sdced','2025-06-16 19:10:22','2025-06-16 19:10:22'),(21,79,NULL,NULL,45,'erfgre4','2025-06-16 19:12:00','2025-06-16 19:12:00'),(22,79,NULL,NULL,45,'dhythyt','2025-06-16 19:20:58','2025-06-16 19:20:58'),(23,79,NULL,NULL,45,'wstryhtrh','2025-06-16 19:35:13','2025-06-16 19:35:13'),(24,79,NULL,NULL,45,'etjytj','2025-06-16 19:38:20','2025-06-16 19:38:20'),(25,79,NULL,NULL,45,'etj','2025-06-16 19:38:47','2025-06-16 19:38:47'),(26,79,NULL,NULL,45,'sfrhsgd','2025-06-16 19:41:07','2025-06-16 19:41:07'),(27,79,NULL,NULL,45,'qergfre','2025-06-16 19:43:41','2025-06-16 19:43:41'),(28,79,NULL,NULL,45,'wsrthtr','2025-06-16 19:45:26','2025-06-16 19:45:26'),(29,79,NULL,NULL,45,'eyjyt','2025-06-16 19:47:19','2025-06-16 19:47:19'),(30,79,NULL,NULL,45,'fdgfd','2025-06-16 19:57:12','2025-06-16 19:57:12'),(31,79,NULL,NULL,45,'SGBGF','2025-06-17 11:46:25','2025-06-17 11:46:25'),(32,79,NULL,NULL,45,'dygjruytj','2025-06-17 13:36:14','2025-06-17 13:36:14'),(33,79,NULL,NULL,45,'yhfr','2025-06-17 14:03:13','2025-06-17 14:03:13'),(34,79,NULL,NULL,45,'ghndnjh','2025-06-17 14:44:08','2025-06-17 14:44:08'),(35,79,NULL,NULL,45,'adfvf','2025-06-17 14:46:28','2025-06-17 14:46:28'),(36,79,NULL,NULL,45,'afg6efrv','2025-06-17 14:49:35','2025-06-17 14:49:35'),(37,79,NULL,NULL,45,'dghnhgfn','2025-06-17 15:12:14','2025-06-17 15:12:14'),(38,79,NULL,NULL,45,'sfhgtdfhb','2025-06-17 15:28:49','2025-06-17 15:28:49'),(39,79,NULL,NULL,45,'dtntyrun','2025-06-17 15:42:01','2025-06-17 15:42:01'),(40,79,NULL,NULL,45,'etbt','2025-06-18 19:55:58','2025-06-18 19:55:58'),(41,79,NULL,NULL,45,'etbt','2025-06-18 20:25:49','2025-06-18 20:25:49'),(42,79,NULL,NULL,45,'gygyg','2025-06-18 21:22:06','2025-06-18 21:22:06'),(43,79,NULL,NULL,45,'gygyg','2025-06-18 21:26:19','2025-06-18 21:26:19'),(44,80,NULL,NULL,45,'prueba','2025-06-19 02:43:45','2025-06-19 02:43:45'),(45,80,NULL,NULL,45,'iuhiug','2025-06-19 03:13:42','2025-06-19 03:13:42'),(46,80,NULL,NULL,45,'sf','2025-06-19 03:26:50','2025-06-19 03:26:50'),(47,80,NULL,NULL,45,'ihiu','2025-06-21 22:01:31','2025-06-21 22:01:31'),(48,80,NULL,NULL,45,'ihiu','2025-06-21 22:14:22','2025-06-21 22:14:22'),(49,80,NULL,NULL,45,'wdd','2025-06-21 22:15:05','2025-06-21 22:15:05'),(50,80,NULL,NULL,45,'wd','2025-06-21 22:27:01','2025-06-21 22:27:01'),(51,80,NULL,NULL,45,'wd','2025-06-21 22:27:24','2025-06-21 22:27:24'),(52,80,NULL,NULL,45,'fssd','2025-06-21 22:30:07','2025-06-21 22:30:07'),(53,80,NULL,NULL,45,'fssd','2025-06-21 22:30:31','2025-06-21 22:30:31'),(54,80,NULL,NULL,45,'wdc','2025-06-21 22:33:20','2025-06-21 22:33:20'),(55,80,NULL,NULL,45,'wdc','2025-06-21 22:33:35','2025-06-21 22:33:35'),(56,80,NULL,NULL,45,'wdc','2025-06-21 22:36:13','2025-06-21 22:36:13'),(57,80,NULL,NULL,45,'wdc','2025-06-21 22:45:18','2025-06-21 22:45:18');
+INSERT INTO `training_custom_texts` VALUES (8,79,NULL,NULL,45,'dfghredgertghtrhg','2025-06-16 14:01:35','2025-06-16 14:01:35'),(9,79,NULL,NULL,45,'dgtbh','2025-06-16 14:01:50','2025-06-16 14:01:50'),(10,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:07:46','2025-06-16 14:07:46'),(11,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:08:05','2025-06-16 14:08:05'),(12,79,NULL,NULL,45,'srrthgtr','2025-06-16 14:26:00','2025-06-16 14:26:00'),(13,79,NULL,NULL,45,'xbgfdb','2025-06-16 15:22:45','2025-06-16 15:22:45'),(14,79,NULL,NULL,45,'srtg','2025-06-16 15:30:39','2025-06-16 15:30:39'),(15,79,NULL,NULL,45,'srtg','2025-06-16 15:36:17','2025-06-16 15:36:17'),(16,79,NULL,NULL,45,'wedewdewd','2025-06-16 15:41:49','2025-06-16 15:41:49'),(17,79,NULL,NULL,45,'wedewdewd','2025-06-16 16:58:34','2025-06-16 16:58:34'),(18,79,NULL,NULL,45,'ytfyt','2025-06-16 16:59:10','2025-06-16 16:59:10'),(19,79,NULL,NULL,45,'sfvgdf','2025-06-16 19:02:52','2025-06-16 19:02:52'),(20,79,NULL,NULL,45,'sdced','2025-06-16 19:10:22','2025-06-16 19:10:22'),(21,79,NULL,NULL,45,'erfgre4','2025-06-16 19:12:00','2025-06-16 19:12:00'),(22,79,NULL,NULL,45,'dhythyt','2025-06-16 19:20:58','2025-06-16 19:20:58'),(23,79,NULL,NULL,45,'wstryhtrh','2025-06-16 19:35:13','2025-06-16 19:35:13'),(24,79,NULL,NULL,45,'etjytj','2025-06-16 19:38:20','2025-06-16 19:38:20'),(25,79,NULL,NULL,45,'etj','2025-06-16 19:38:47','2025-06-16 19:38:47'),(26,79,NULL,NULL,45,'sfrhsgd','2025-06-16 19:41:07','2025-06-16 19:41:07'),(27,79,NULL,NULL,45,'qergfre','2025-06-16 19:43:41','2025-06-16 19:43:41'),(28,79,NULL,NULL,45,'wsrthtr','2025-06-16 19:45:26','2025-06-16 19:45:26'),(29,79,NULL,NULL,45,'eyjyt','2025-06-16 19:47:19','2025-06-16 19:47:19'),(30,79,NULL,NULL,45,'fdgfd','2025-06-16 19:57:12','2025-06-16 19:57:12'),(31,79,NULL,NULL,45,'SGBGF','2025-06-17 11:46:25','2025-06-17 11:46:25'),(32,79,NULL,NULL,45,'dygjruytj','2025-06-17 13:36:14','2025-06-17 13:36:14'),(33,79,NULL,NULL,45,'yhfr','2025-06-17 14:03:13','2025-06-17 14:03:13'),(34,79,NULL,NULL,45,'ghndnjh','2025-06-17 14:44:08','2025-06-17 14:44:08'),(35,79,NULL,NULL,45,'adfvf','2025-06-17 14:46:28','2025-06-17 14:46:28'),(36,79,NULL,NULL,45,'afg6efrv','2025-06-17 14:49:35','2025-06-17 14:49:35'),(37,79,NULL,NULL,45,'dghnhgfn','2025-06-17 15:12:14','2025-06-17 15:12:14'),(38,79,NULL,NULL,45,'sfhgtdfhb','2025-06-17 15:28:49','2025-06-17 15:28:49'),(39,79,NULL,NULL,45,'dtntyrun','2025-06-17 15:42:01','2025-06-17 15:42:01'),(40,79,NULL,NULL,45,'etbt','2025-06-18 19:55:58','2025-06-18 19:55:58'),(41,79,NULL,NULL,45,'etbt','2025-06-18 20:25:49','2025-06-18 20:25:49'),(42,79,NULL,NULL,45,'gygyg','2025-06-18 21:22:06','2025-06-18 21:22:06'),(43,79,NULL,NULL,45,'gygyg','2025-06-18 21:26:19','2025-06-18 21:26:19'),(44,80,NULL,NULL,45,'prueba','2025-06-19 02:43:45','2025-06-19 02:43:45'),(45,80,NULL,NULL,45,'iuhiug','2025-06-19 03:13:42','2025-06-19 03:13:42'),(46,80,NULL,NULL,45,'sf','2025-06-19 03:26:50','2025-06-19 03:26:50'),(47,80,NULL,NULL,45,'ihiu','2025-06-21 22:01:31','2025-06-21 22:01:31'),(48,80,NULL,NULL,45,'ihiu','2025-06-21 22:14:22','2025-06-21 22:14:22'),(49,80,NULL,NULL,45,'wdd','2025-06-21 22:15:05','2025-06-21 22:15:05'),(50,80,NULL,NULL,45,'wd','2025-06-21 22:27:01','2025-06-21 22:27:01'),(51,80,NULL,NULL,45,'wd','2025-06-21 22:27:24','2025-06-21 22:27:24'),(52,80,NULL,NULL,45,'fssd','2025-06-21 22:30:07','2025-06-21 22:30:07'),(53,80,NULL,NULL,45,'fssd','2025-06-21 22:30:31','2025-06-21 22:30:31'),(54,80,NULL,NULL,45,'wdc','2025-06-21 22:33:20','2025-06-21 22:33:20'),(55,80,NULL,NULL,45,'wdc','2025-06-21 22:33:35','2025-06-21 22:33:35'),(56,80,NULL,NULL,45,'wdc','2025-06-21 22:36:13','2025-06-21 22:36:13'),(57,80,NULL,NULL,45,'wdc','2025-06-21 22:45:18','2025-06-21 22:45:18'),(58,80,NULL,NULL,45,'ghdfn','2025-06-24 13:32:21','2025-06-24 13:32:21');
 /*!40000 ALTER TABLE `training_custom_texts` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1444,4 +1441,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-23 23:46:28
+-- Dump completed on 2025-06-24 21:47:12
