@@ -1,6 +1,7 @@
 public class CreateBotStyleDto
 {
     public int? UserId { get; set; }
+    public string? Name { get; set; } // ← Nuevo
     public int? StyleTemplateId { get; set; }
     public string Theme { get; set; } = "light";
     public string PrimaryColor { get; set; } = "#000000";

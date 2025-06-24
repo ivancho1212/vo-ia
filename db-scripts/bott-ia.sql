@@ -1,3 +1,8 @@
+-- Script de respaldo de MySQL
+DROP DATABASE IF EXISTS chatbot_platform;
+CREATE DATABASE chatbot_platform;
+USE chatbot_platform;
+
 -- MySQL dump 10.13  Distrib 9.3.0, for macos15 (x86_64)
 --
 -- Host: localhost    Database: chatbot_platform
@@ -14,10 +19,7 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
--- Script de respaldo de MySQL
-DROP DATABASE IF EXISTS chatbot_platform;
-CREATE DATABASE chatbot_platform;
-USE chatbot_platform;
+
 
 -- Resto del contenido generado por mysqldump...
 

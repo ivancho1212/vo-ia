@@ -90,6 +90,7 @@ namespace Voia.Api.Controllers
             }
 
             style.UserId = dto.UserId;
+            style.Name = dto.Name; // ← AQUI
             style.StyleTemplateId = dto.StyleTemplateId;
             style.Theme = dto.Theme;
             style.PrimaryColor = dto.PrimaryColor;
@@ -105,6 +106,7 @@ namespace Voia.Api.Controllers
             return Ok(style);
         }
 
+
         /// <summary>
         /// Crea un nuevo estilo para un bot.
         /// </summary>
@@ -114,6 +116,7 @@ namespace Voia.Api.Controllers
             var style = new BotStyle
             {
                 UserId = dto.UserId,
+                Name = dto.Name, // ← AQUI
                 StyleTemplateId = dto.StyleTemplateId,
                 Theme = dto.Theme,
                 PrimaryColor = dto.PrimaryColor,
@@ -130,6 +133,7 @@ namespace Voia.Api.Controllers
 
             return Ok(style);
         }
+
 
         /// <summary>
         /// Elimina un estilo de bot.

@@ -88,6 +88,35 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { Message = "An error occurred", Details = ex.Message });
             }
         }
+        /// <summary>
+        /// Obtiene todos los bots de un usuario específico por su ID.
+        /// </summary>
+        /// <param name="userId">ID del usuario.</param>
+        /// <returns>Lista de bots.</returns>
+        /// <response code="200">Devuelve los bots encontrados.</response>
+        /// <response code="404">Si no se encuentran bots.</response>
+        [HttpGet("byUser/{userId}")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetBotsByUserId(int userId)
+        {
+            try
+            {
+                var bots = await _context.Bots
+                    .Include(b => b.User)
+                    .Where(b => b.UserId == userId && b.IsActive)
+                    .ToListAsync();
+
+                if (bots == null || bots.Count == 0)
+                {
+                    return NotFound(new { Message = "No se encontraron bots para el usuario." });
+                }
+
+                return Ok(bots);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "Ocurrió un error interno", Details = ex.Message });
+            }
+        }
 
         /// <summary>
         /// Crea un nuevo bot.

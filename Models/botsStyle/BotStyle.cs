@@ -10,6 +10,7 @@ namespace Voia.Api.Models
         public int Id { get; set; }
 
         public int? UserId { get; set; } // ← Nuevo campo agregado
+        public string? Name { get; set; } // ← Nuevo campo agregado
 
         public int? StyleTemplateId { get; set; }
 
