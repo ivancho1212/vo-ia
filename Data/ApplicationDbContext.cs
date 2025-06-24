@@ -44,7 +44,7 @@ namespace Voia.Api.Data
         public DbSet<BotTrainingConfig> BotTrainingConfigs { get; set; }
         public DbSet<KnowledgeChunk> KnowledgeChunks { get; set; }
         public DbSet<BotTemplate> BotTemplates { get; set; }
-        public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
+        // Removed duplicate definition of BotDataCaptureFields
         public DbSet<BotDataSubmission> BotDataSubmissions { get; set; }
         public DbSet<BotInstallationSetting> BotInstallationSettings { get; set; }
         public DbSet<BotIaProvider> BotIaProviders { get; set; }
@@ -59,6 +59,8 @@ namespace Voia.Api.Data
         public DbSet<TrainingCustomText> TrainingCustomTexts { get; set; }
         public DbSet<TrainingUrl> TrainingUrls { get; set; }
         public DbSet<UploadedDocument> UploadedDocuments { get; set; }
+        public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
+
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
 
@@ -157,12 +159,6 @@ namespace Voia.Api.Data
             modelBuilder.Entity<Bot>().Property(b => b.Description).HasColumnName("description");
 
             modelBuilder.Entity<Bot>().Property(b => b.ApiKey).HasColumnName("api_key");
-
-            modelBuilder
-                .Entity<Bot>()
-                .Property(b => b.ModelUsed)
-                .HasColumnName("model_used")
-                .HasMaxLength(255);
 
             modelBuilder
                 .Entity<Bot>()
@@ -277,6 +273,7 @@ namespace Voia.Api.Data
                 entity.ToTable("bot_styles");
 
                 entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.UserId).HasColumnName("user_id"); // ← Nuevo mapeo agregado
                 entity.Property(e => e.StyleTemplateId).HasColumnName("style_template_id");
                 entity.Property(e => e.Theme).HasColumnName("theme");
                 entity.Property(e => e.PrimaryColor).HasColumnName("primary_color");
@@ -290,6 +287,7 @@ namespace Voia.Api.Data
                     .HasDefaultValueSql("CURRENT_TIMESTAMP")
                     .ValueGeneratedOnAddOrUpdate();
             });
+
 
         }
     }

@@ -28,10 +28,6 @@ namespace Voia.Api.Models
         [Column("api_key")]
         public string ApiKey { get; set; }
 
-        [MaxLength(50)]
-        [Column("model_used")]
-        public string ModelUsed { get; set; } = "gpt-4";
-
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
 

@@ -9,11 +9,11 @@ namespace Voia.Api.Models
         [Key]
         public int Id { get; set; }
 
-        // Nuevo campo
+        public int? UserId { get; set; } // ← Nuevo campo agregado
+
         public int? StyleTemplateId { get; set; }
 
-        // Para theme y position, se puede usar enum o string. Aquí uso string para simplicidad.
-        public string Theme { get; set; } = "light"; // default
+        public string Theme { get; set; } = "light";
 
         [MaxLength(20)]
         public string PrimaryColor { get; set; } = "#000000";
@@ -33,4 +33,5 @@ namespace Voia.Api.Models
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         public DateTime UpdatedAt { get; set; }
     }
+
 }

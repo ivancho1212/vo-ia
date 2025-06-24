@@ -12,9 +12,6 @@ namespace Voia.Api.Models
         [Required]
         public string ApiKey { get; set; }
 
-        [Required]
-        public string ModelUsed { get; set; }
-
         public bool IsActive { get; set; }
 
         // ⚠️ Opcionalmente podrías permitir actualización de estilo

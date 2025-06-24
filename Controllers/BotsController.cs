@@ -121,7 +121,6 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
             }
 
-            // 👉 OBTENER el objeto BotTemplate completo, sin Select manual
             var template = await _context.BotTemplates
                 .Include(t => t.DefaultStyle)
                 .FirstOrDefaultAsync(t => t.Id == botDto.BotTemplateId);
@@ -132,20 +131,13 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { Message = "Plantilla no encontrada." });
             }
 
-            // Validaciones explícitas por si acaso (aunque ya están en el modelo)
-            if (template.IaProviderId == 0)
+            if (template.IaProviderId == 0 || template.AiModelConfigId == 0)
             {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un proveedor de IA válido.");
-                return BadRequest(new { Message = "La plantilla no tiene un proveedor de IA válido." });
+                Console.WriteLine("[DEBUG] La plantilla no tiene proveedor/modelo de IA válido.");
+                return BadRequest(new { Message = "La plantilla no tiene configuración válida." });
             }
 
-            if (template.AiModelConfigId == 0)
-            {
-                Console.WriteLine("[DEBUG] La plantilla no tiene un modelo de IA válido.");
-                return BadRequest(new { Message = "La plantilla no tiene un modelo de IA válido." });
-            }
-
-            int? clonedStyleId = null;
+            int? reusedOrClonedStyleId = null;
 
             if (template.DefaultStyleId.HasValue)
             {
@@ -155,37 +147,55 @@ namespace Voia.Api.Controllers
 
                 if (styleTemplate == null)
                 {
-                    Console.WriteLine("[DEBUG] La plantilla de estilo referida no existe.");
-                    return BadRequest(new { Message = "El style_template asociado a la plantilla no existe." });
+                    Console.WriteLine("[DEBUG] StyleTemplate no encontrado.");
+                    return BadRequest(new { Message = "StyleTemplate no encontrado." });
                 }
 
-                // 👉 Sanitizar el valor Position para evitar caracteres invisibles o inválidos
                 string sanitizedPosition = (styleTemplate.Position ?? "bottom-right")
                     .Trim()
-                    .Where(c => c >= 32 && c <= 126) // solo caracteres visibles ASCII
-                    .Aggregate("", (acc, c) => acc + c); // reconstruye el string limpio
+                    .Where(c => c >= 32 && c <= 126)
+                    .Aggregate("", (acc, c) => acc + c);
 
-                Console.WriteLine($"[DEBUG] Position original: [{styleTemplate.Position}] → Sanitized: [{sanitizedPosition}]");
+                // 👉 Verificar si ya existe un estilo igual
+                var existingStyle = await _context.BotStyles
+                    .Where(s =>
+                        s.StyleTemplateId == styleTemplate.Id &&
+                        s.Theme == (styleTemplate.Theme ?? "light") &&
+                        s.PrimaryColor == (styleTemplate.PrimaryColor ?? "#000000") &&
+                        s.SecondaryColor == (styleTemplate.SecondaryColor ?? "#ffffff") &&
+                        s.FontFamily == (styleTemplate.FontFamily ?? "Arial") &&
+                        s.AvatarUrl == (styleTemplate.AvatarUrl ?? "") &&
+                        s.Position == sanitizedPosition &&
+                        s.CustomCss == (styleTemplate.CustomCss ?? "")
+                    )
+                    .FirstOrDefaultAsync();
 
-                var newBotStyle = new BotStyle
+                if (existingStyle != null)
                 {
-                    StyleTemplateId = styleTemplate.Id,
-                    Theme = styleTemplate.Theme ?? "light",
-                    PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
-                    SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
-                    FontFamily = styleTemplate.FontFamily ?? "Arial",
-                    AvatarUrl = styleTemplate.AvatarUrl ?? "",
-                    Position = sanitizedPosition,
-                    CustomCss = styleTemplate.CustomCss ?? "",
-                    UpdatedAt = DateTime.UtcNow
-                };
+                    reusedOrClonedStyleId = existingStyle.Id;
+                    Console.WriteLine($"[DEBUG] Reutilizando BotStyle existente con Id = {reusedOrClonedStyleId}.");
+                }
+                else
+                {
+                    var newBotStyle = new BotStyle
+                    {
+                        StyleTemplateId = styleTemplate.Id,
+                        Theme = styleTemplate.Theme ?? "light",
+                        PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
+                        SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
+                        FontFamily = styleTemplate.FontFamily ?? "Arial",
+                        AvatarUrl = styleTemplate.AvatarUrl ?? "",
+                        Position = sanitizedPosition,
+                        CustomCss = styleTemplate.CustomCss ?? "",
+                        UpdatedAt = DateTime.UtcNow
+                    };
 
+                    _context.BotStyles.Add(newBotStyle);
+                    await _context.SaveChangesAsync();
 
-                _context.BotStyles.Add(newBotStyle);
-                await _context.SaveChangesAsync();
-
-                clonedStyleId = newBotStyle.Id;
-                Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {clonedStyleId}.");
+                    reusedOrClonedStyleId = newBotStyle.Id;
+                    Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {reusedOrClonedStyleId}.");
+                }
             }
 
             var bot = new Bot
@@ -193,13 +203,12 @@ namespace Voia.Api.Controllers
                 Name = botDto.Name,
                 Description = botDto.Description,
                 ApiKey = botDto.ApiKey,
-                ModelUsed = botDto.ModelUsed ?? "gpt-4",
                 IsActive = botDto.IsActive,
                 UserId = userId,
                 BotTemplateId = template.Id,
                 IaProviderId = template.IaProviderId,
                 AiModelConfigId = template.AiModelConfigId,
-                StyleId = clonedStyleId,
+                StyleId = reusedOrClonedStyleId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -221,9 +230,6 @@ namespace Voia.Api.Controllers
             _context.BotTrainingSessions.Add(trainingSession);
             await _context.SaveChangesAsync();
 
-            Console.WriteLine($"[DEBUG] BotTrainingSession guardado con Id = {trainingSession.Id}.");
-            // 👉 Asociar documentos existentes de la plantilla al nuevo bot y su sesión
-            // 👉 Asociar documentos existentes de la plantilla al nuevo bot y su sesión
             var documentosDePlantilla = await _context.UploadedDocuments
                 .Where(d => d.BotTemplateId == template.Id && d.BotId == null)
                 .ToListAsync();
@@ -236,8 +242,6 @@ namespace Voia.Api.Controllers
             }
 
             await _context.SaveChangesAsync();
-
-            Console.WriteLine($"[DEBUG] {documentosDePlantilla.Count} documentos de la plantilla {template.Id} asociados al Bot {bot.Id} y sesión {trainingSession.Id}.");
 
             if (!string.IsNullOrWhiteSpace(botDto.CustomText))
             {
@@ -254,8 +258,6 @@ namespace Voia.Api.Controllers
 
                 _context.TrainingCustomTexts.Add(trainingText);
                 await _context.SaveChangesAsync();
-
-                Console.WriteLine("[DEBUG] TrainingCustomText guardado.");
             }
 
             return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
@@ -283,8 +285,8 @@ namespace Voia.Api.Controllers
             bot.Name = botDto.Name;
             bot.Description = botDto.Description;
             bot.ApiKey = botDto.ApiKey;
-            bot.ModelUsed = botDto.ModelUsed;
             bot.IsActive = botDto.IsActive;
+            bot.StyleId = botDto.StyleId;
             bot.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

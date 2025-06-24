@@ -30,24 +30,38 @@ public class BotConversationsController : ControllerBase
     /// Envía una pregunta al bot y devuelve la respuesta.
     /// </summary>
     [HttpPost("ask")]
-    public async Task<ActionResult<BotResponseDto>> AskQuestion([FromBody] AskBotRequestDto dto)
+    public async Task<IActionResult> AskQuestion([FromBody] AskBotRequestDto dto)
     {
         if (dto.UserId <= 0)
-            return BadRequest("UserId inválido");
+        {
+            return BadRequest(new
+            {
+                success = false,
+                error = "UserId inválido"
+            });
+        }
 
         var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId);
         if (bot == null)
-            return NotFound("Bot no encontrado");
+        {
+            return NotFound(new
+            {
+                success = false,
+                error = "Bot no encontrado"
+            });
+        }
 
         var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
         if (!userExists)
-            return BadRequest("Usuario no encontrado");
+        {
+            return BadRequest(new
+            {
+                success = false,
+                error = "Usuario no encontrado"
+            });
+        }
 
-        var response = await _aiProviderService.GetBotResponseAsync(
-            bot.Id,
-            dto.UserId,
-            dto.Question
-        );
+        var response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
 
         if (string.IsNullOrWhiteSpace(response))
             response = "Lo siento, no pude generar una respuesta en este momento.";
@@ -60,14 +74,17 @@ public class BotConversationsController : ControllerBase
             UserMessage = dto.Question,
             BotResponse = response,
             CreatedAt = DateTime.UtcNow,
-            User = null, // por si acaso
+            User = null,
         };
 
         _context.Conversations.Add(conversation);
         await _context.SaveChangesAsync();
 
-        // resto de envío a socket bridge...
-
-        return Ok(new BotResponseDto { Question = dto.Question, Answer = response });
+        return Ok(new
+        {
+            success = true,
+            question = dto.Question,
+            answer = response
+        });
     }
 }

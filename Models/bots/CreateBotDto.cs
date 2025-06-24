@@ -12,8 +12,6 @@ namespace Voia.Api.Models.Bots
         [Required]
         public string ApiKey { get; set; }
 
-        public string ModelUsed { get; set; } = "gpt-4";
-
         public bool IsActive { get; set; } = true;
 
         [Required]

@@ -26,9 +26,6 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todos los estilos de los bots.
         /// </summary>
-        /// <returns>Lista de estilos de bots.</returns>
-        /// <response code="200">Devuelve la lista de estilos de bots.</response>
-        /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
         public async Task<ActionResult<IEnumerable<BotStyle>>> GetAllStyles()
         {
@@ -43,14 +40,9 @@ namespace Voia.Api.Controllers
             }
         }
 
-
         /// <summary>
         /// Obtiene el estilo de un bot por su ID.
         /// </summary>
-        /// <param name="botId">ID del bot para obtener su estilo.</param>
-        /// <returns>El estilo del bot.</returns>
-        /// <response code="200">Devuelve el estilo del bot.</response>
-        /// <response code="404">Si no se encuentra el estilo para el bot.</response>
         [HttpGet("{id}")]
         public async Task<ActionResult<BotStyle>> GetStyleById(int id)
         {
@@ -63,16 +55,30 @@ namespace Voia.Api.Controllers
 
             return Ok(style);
         }
+        /// <summary>
+        /// Obtiene todos los estilos de un usuario específico.
+        /// </summary>
+        [HttpGet("byUser/{userId}")]
+        public async Task<ActionResult<IEnumerable<BotStyle>>> GetStylesByUser(int userId)
+        {
+            try
+            {
+                var styles = await _context.BotStyles
+                    .Where(s => s.UserId == userId)
+                    .ToListAsync();
+
+                return Ok(styles);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+            }
+        }
 
 
         /// <summary>
         /// Actualiza el estilo de un bot existente.
         /// </summary>
-        /// <param name="botId">ID del bot cuyo estilo se desea actualizar.</param>
-        /// <param name="dto">Datos para actualizar el estilo del bot.</param>
-        /// <returns>El estilo actualizado del bot.</returns>
-        /// <response code="200">Devuelve el estilo actualizado.</response>
-        /// <response code="404">Si no se encuentra el estilo del bot.</response>
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateStyle(int id, [FromBody] UpdateBotStyleDto dto)
         {
@@ -83,6 +89,7 @@ namespace Voia.Api.Controllers
                 return NotFound(new { message = "Style not found" });
             }
 
+            style.UserId = dto.UserId;
             style.StyleTemplateId = dto.StyleTemplateId;
             style.Theme = dto.Theme;
             style.PrimaryColor = dto.PrimaryColor;
@@ -98,20 +105,15 @@ namespace Voia.Api.Controllers
             return Ok(style);
         }
 
-
-
         /// <summary>
         /// Crea un nuevo estilo para un bot.
         /// </summary>
-        /// <param name="dto">Datos para crear el estilo del bot.</param>
-        /// <returns>El estilo creado.</returns>
-        /// <response code="200">Devuelve el estilo creado.</response>
-        /// <response code="400">Si el BotId no existe en la base de datos.</response>
         [HttpPost]
         public async Task<IActionResult> CreateStyle([FromBody] CreateBotStyleDto dto)
         {
             var style = new BotStyle
             {
+                UserId = dto.UserId,
                 StyleTemplateId = dto.StyleTemplateId,
                 Theme = dto.Theme,
                 PrimaryColor = dto.PrimaryColor,
@@ -129,15 +131,9 @@ namespace Voia.Api.Controllers
             return Ok(style);
         }
 
-
-
         /// <summary>
         /// Elimina un estilo de bot.
         /// </summary>
-        /// <param name="botId">ID del bot cuyo estilo se desea eliminar.</param>
-        /// <returns>Mensaje de confirmación.</returns>
-        /// <response code="200">El estilo fue eliminado correctamente.</response>
-        /// <response code="404">Si no se encuentra el estilo del bot.</response>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteStyle(int id)
         {
@@ -153,7 +149,5 @@ namespace Voia.Api.Controllers
 
             return Ok(new { message = "Style deleted successfully" });
         }
-
     }
 }
-
