@@ -1,21 +1,25 @@
-CREATE DATABASE  IF NOT EXISTS `chatbot_platform` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-USE `chatbot_platform`;
--- MySQL dump 10.13  Distrib 8.0.42, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 9.3.0, for macos15 (x86_64)
 --
--- Host: 127.0.0.1    Database: chatbot_platform
+-- Host: localhost    Database: chatbot_platform
 -- ------------------------------------------------------
--- Server version	8.0.42
+-- Server version	9.3.0
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
-/*!50503 SET NAMES utf8 */;
+/*!50503 SET NAMES utf8mb4 */;
 /*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
 /*!40103 SET TIME_ZONE='+00:00' */;
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+-- Script de respaldo de MySQL
+DROP DATABASE IF EXISTS chatbot_platform;
+CREATE DATABASE chatbot_platform;
+USE chatbot_platform;
+
+-- Resto del contenido generado por mysqldump...
 
 --
 -- Table structure for table `activity_logs`
@@ -27,8 +31,8 @@ DROP TABLE IF EXISTS `activity_logs`;
 CREATE TABLE `activity_logs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int DEFAULT NULL,
-  `action` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `action` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
@@ -56,7 +60,7 @@ DROP TABLE IF EXISTS `ai_model_configs`;
 CREATE TABLE `ai_model_configs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `ia_provider_id` int NOT NULL,
-  `model_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `temperature` decimal(3,2) DEFAULT '0.70',
   `frequency_penalty` decimal(3,2) DEFAULT '0.00',
   `presence_penalty` decimal(3,2) DEFAULT '0.00',
@@ -73,7 +77,7 @@ CREATE TABLE `ai_model_configs` (
 
 LOCK TABLES `ai_model_configs` WRITE;
 /*!40000 ALTER TABLE `ai_model_configs` DISABLE KEYS */;
-INSERT INTO `ai_model_configs` VALUES (6,6,'genimi 2.3',0.50,0.00,0.00,'2025-06-03 19:29:53'),(7,1,'siniestrauto',0.70,0.00,0.00,'2025-06-05 15:26:05'),(8,7,'gpt 8',0.70,0.00,0.00,'2025-06-06 18:49:56');
+INSERT INTO `ai_model_configs` VALUES (4,3,'dagdfg',0.70,0.00,0.00,'2025-06-03 18:02:43'),(5,3,'sfagafg',0.70,0.00,0.00,'2025-06-03 18:03:04'),(6,6,'genimi 2.3',0.50,0.00,0.00,'2025-06-03 19:29:53'),(7,1,'siniestrauto',0.70,0.00,0.00,'2025-06-05 15:26:05'),(8,7,'gpt 8',0.70,0.00,0.00,'2025-06-06 18:49:56');
 /*!40000 ALTER TABLE `ai_model_configs` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -122,9 +126,9 @@ DROP TABLE IF EXISTS `bot_actions`;
 CREATE TABLE `bot_actions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `trigger_phrase` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `action_type` enum('reply','redirect','show_html','custom') COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` text COLLATE utf8mb4_unicode_ci,
+  `trigger_phrase` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `action_type` enum('reply','redirect','show_html','custom') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
@@ -153,8 +157,8 @@ CREATE TABLE `bot_custom_prompts` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_template_id` int DEFAULT NULL,
   `bot_id` int DEFAULT NULL,
-  `role` enum('system','user','assistant') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system',
-  `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` enum('system','user','assistant') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system',
+  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `template_training_session_id` int DEFAULT NULL,
@@ -166,7 +170,7 @@ CREATE TABLE `bot_custom_prompts` (
   CONSTRAINT `fk_bot_template_id` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_template_training_session` FOREIGN KEY (`template_training_session_id`) REFERENCES `template_training_sessions` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_template_training_session_id` FOREIGN KEY (`template_training_session_id`) REFERENCES `template_training_sessions` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -175,7 +179,7 @@ CREATE TABLE `bot_custom_prompts` (
 
 LOCK TABLES `bot_custom_prompts` WRITE;
 /*!40000 ALTER TABLE `bot_custom_prompts` DISABLE KEYS */;
-INSERT INTO `bot_custom_prompts` VALUES (3,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-12 17:46:07','2025-06-12 17:46:07',5),(4,79,NULL,'assistant','gjhughjghj','2025-06-12 17:46:07','2025-06-12 17:46:07',5),(5,79,NULL,'user','¿Qué incluye el servicio de tasación?','2025-06-13 15:04:36','2025-06-13 15:04:36',6),(6,79,NULL,'assistant','arfrafrefer','2025-06-13 15:04:36','2025-06-13 15:04:36',6),(7,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-13 15:41:43','2025-06-13 15:41:43',7),(8,79,NULL,'assistant','gfhgfh','2025-06-13 15:41:43','2025-06-13 15:41:43',7),(9,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(10,79,NULL,'assistant','ytusderth','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(11,79,NULL,'user','srthrstht','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(12,79,NULL,'assistant','rsthtrhtrh','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(13,80,NULL,'user','¿Qué es una tasación vehicular?','2025-06-19 19:14:08','2025-06-19 19:14:08',9),(14,80,NULL,'assistant','que le importa','2025-06-19 19:14:08','2025-06-19 19:14:08',9),(15,80,NULL,'user','cuando jorge se queda quieto?','2025-06-19 19:14:08','2025-06-19 19:14:08',9),(16,80,NULL,'assistant','nunca','2025-06-19 19:14:08','2025-06-19 19:14:08',9);
+INSERT INTO `bot_custom_prompts` VALUES (3,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-12 17:46:07','2025-06-12 17:46:07',5),(4,79,NULL,'assistant','gjhughjghj','2025-06-12 17:46:07','2025-06-12 17:46:07',5),(5,79,NULL,'user','¿Qué incluye el servicio de tasación?','2025-06-13 15:04:36','2025-06-13 15:04:36',6),(6,79,NULL,'assistant','arfrafrefer','2025-06-13 15:04:36','2025-06-13 15:04:36',6),(7,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-13 15:41:43','2025-06-13 15:41:43',7),(8,79,NULL,'assistant','gfhgfh','2025-06-13 15:41:43','2025-06-13 15:41:43',7),(9,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(10,79,NULL,'assistant','ytusderth','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(11,79,NULL,'user','srthrstht','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(12,79,NULL,'assistant','rsthtrhtrh','2025-06-16 13:39:20','2025-06-16 13:39:20',8),(13,79,NULL,'user','¿Qué es una tasación vehicular?','2025-06-18 19:55:51','2025-06-18 19:55:51',9),(14,79,NULL,'assistant','hntyb','2025-06-18 19:55:51','2025-06-18 19:55:51',9);
 /*!40000 ALTER TABLE `bot_custom_prompts` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -189,15 +193,15 @@ DROP TABLE IF EXISTS `bot_data_capture_fields`;
 CREATE TABLE `bot_data_capture_fields` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `field_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `field_type` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `field_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `field_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `is_required` tinyint(1) DEFAULT '0',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   CONSTRAINT `bot_data_capture_fields_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -206,6 +210,7 @@ CREATE TABLE `bot_data_capture_fields` (
 
 LOCK TABLES `bot_data_capture_fields` WRITE;
 /*!40000 ALTER TABLE `bot_data_capture_fields` DISABLE KEYS */;
+INSERT INTO `bot_data_capture_fields` VALUES (1,33,'nombre','text',1,'2025-06-22 00:38:19','2025-06-22 00:38:37'),(2,33,'apellido','text',1,'2025-06-22 00:38:30','2025-06-22 01:32:23'),(3,33,'direccion','text',1,'2025-06-22 01:32:48','2025-06-22 01:32:51'),(4,33,'telefono','text',1,'2025-06-22 03:42:21','2025-06-22 04:06:01'),(5,33,'vehiculo','text',1,'2025-06-22 04:25:01','2025-06-22 04:26:33'),(6,33,'apartamento','text',1,'2025-06-22 04:26:32','2025-06-22 04:26:34'),(7,33,'moto','text',1,'2025-06-22 05:43:08','2025-06-22 05:43:54'),(8,33,'coche','text',1,'2025-06-22 05:43:31','2025-06-22 05:43:52'),(9,33,'ciudad','text',1,'2025-06-22 05:43:39','2025-06-22 05:43:51'),(10,33,'soltero','text',1,'2025-06-22 05:43:44','2025-06-22 05:43:50'),(11,33,'aeropuerto','text',1,'2025-06-22 05:44:07','2025-06-22 05:44:26'),(12,33,'lago','text',1,'2025-06-22 05:44:14','2025-06-22 05:44:26'),(13,33,'local','text',1,'2025-06-22 05:44:19','2025-06-22 05:44:27'),(14,33,'cc','text',1,'2025-06-22 05:44:23','2025-06-22 05:44:28');
 /*!40000 ALTER TABLE `bot_data_capture_fields` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -220,14 +225,16 @@ CREATE TABLE `bot_data_submissions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
   `capture_field_id` int NOT NULL,
-  `submission_value` text COLLATE utf8mb4_unicode_ci,
+  `submission_value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `submitted_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `user_id` int DEFAULT NULL,
+  `submission_session_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   KEY `capture_field_id` (`capture_field_id`),
   CONSTRAINT `bot_data_submissions_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE,
   CONSTRAINT `bot_data_submissions_ibfk_2` FOREIGN KEY (`capture_field_id`) REFERENCES `bot_data_capture_fields` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -236,6 +243,7 @@ CREATE TABLE `bot_data_submissions` (
 
 LOCK TABLES `bot_data_submissions` WRITE;
 /*!40000 ALTER TABLE `bot_data_submissions` DISABLE KEYS */;
+INSERT INTO `bot_data_submissions` VALUES (1,33,1,'Carlos','2025-06-22 01:11:34',NULL,'session-abc-123'),(2,33,2,'Ramírez','2025-06-22 01:11:36',NULL,'session-abc-123');
 /*!40000 ALTER TABLE `bot_data_submissions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -248,12 +256,12 @@ DROP TABLE IF EXISTS `bot_ia_providers`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bot_ia_providers` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_endpoint` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_key` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_endpoint` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `status` enum('active','inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `status` enum('active','inactive') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'active',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -265,7 +273,7 @@ CREATE TABLE `bot_ia_providers` (
 
 LOCK TABLES `bot_ia_providers` WRITE;
 /*!40000 ALTER TABLE `bot_ia_providers` DISABLE KEYS */;
-INSERT INTO `bot_ia_providers` VALUES (1,'Default Provider','',NULL,'2025-06-03 20:04:37','2025-06-03 20:04:37','active'),(4,'awrf111111','fjh,fi1111111111','uryyyn0000000','2025-06-03 17:18:39','2025-06-03 17:18:39','inactive'),(6,'google','sdfhuijkol','111111111111111111111111111','2025-06-03 19:28:53','2025-06-03 19:29:21','active'),(7,'Open IA','dfghjklñertgrtgtrgtr','dfghjk','2025-06-06 18:49:06','2025-06-06 18:49:41','active');
+INSERT INTO `bot_ia_providers` VALUES (1,'Default Provider','',NULL,'2025-06-03 20:04:37','2025-06-03 20:04:37','active'),(3,'awrfr111111111','f1111111111111111','u000000000','2025-06-03 17:16:11','2025-06-03 17:16:11','inactive'),(4,'awrf111111','fjh,fi1111111111','uryyyn0000000','2025-06-03 17:18:39','2025-06-03 17:18:39','inactive'),(5,'wwwwwwwwwww','wwwwwwwwwwwwwww','wwwwwwwwwwww','2025-06-03 17:23:08','2025-06-03 17:23:20','inactive'),(6,'google','sdfhuijkol','111111111111111111111111111','2025-06-03 19:28:53','2025-06-03 19:29:21','active'),(7,'Open IA','dfghjklñertgrtgtrgtr','dfghjk','2025-06-06 18:49:06','2025-06-06 18:49:41','active');
 /*!40000 ALTER TABLE `bot_ia_providers` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -279,8 +287,8 @@ DROP TABLE IF EXISTS `bot_installation_settings`;
 CREATE TABLE `bot_installation_settings` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `installation_method` enum('script','sdk','endpoint') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'script',
-  `installation_instructions` text COLLATE utf8mb4_unicode_ci,
+  `installation_method` enum('script','sdk','endpoint') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'script',
+  `installation_instructions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -308,9 +316,9 @@ DROP TABLE IF EXISTS `bot_integrations`;
 CREATE TABLE `bot_integrations` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `integration_type` enum('widget','api') COLLATE utf8mb4_unicode_ci DEFAULT 'widget',
-  `allowed_domain` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `api_token` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `integration_type` enum('widget','api') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'widget',
+  `allowed_domain` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `api_token` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
@@ -338,13 +346,13 @@ DROP TABLE IF EXISTS `bot_profiles`;
 CREATE TABLE `bot_profiles` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `avatar_url` text COLLATE utf8mb4_unicode_ci,
-  `bio` text COLLATE utf8mb4_unicode_ci,
-  `personality_traits` text COLLATE utf8mb4_unicode_ci,
-  `language` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'es',
-  `tone` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `restrictions` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `avatar_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `bio` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `personality_traits` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `language` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'es',
+  `tone` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `restrictions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -372,19 +380,22 @@ DROP TABLE IF EXISTS `bot_styles`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bot_styles` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
   `style_template_id` int DEFAULT NULL,
-  `theme` enum('light','dark','custom') COLLATE utf8mb4_unicode_ci DEFAULT 'light',
-  `primary_color` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '#000000',
-  `secondary_color` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '#ffffff',
-  `font_family` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT 'Arial',
-  `avatar_url` text COLLATE utf8mb4_unicode_ci,
-  `position` enum('bottom-right','bottom-left','top-right','top-left') COLLATE utf8mb4_unicode_ci DEFAULT 'bottom-right',
-  `custom_css` text COLLATE utf8mb4_unicode_ci,
+  `theme` enum('light','dark','custom') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'light',
+  `primary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#000000',
+  `secondary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#ffffff',
+  `font_family` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Arial',
+  `avatar_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `position` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `custom_css` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `fk_bot_styles_style_template` (`style_template_id`),
-  CONSTRAINT `fk_bot_styles_style_template` FOREIGN KEY (`style_template_id`) REFERENCES `style_templates` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `fk_bot_styles_user` (`user_id`),
+  CONSTRAINT `fk_bot_styles_style_template` FOREIGN KEY (`style_template_id`) REFERENCES `style_templates` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_bot_styles_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -393,7 +404,7 @@ CREATE TABLE `bot_styles` (
 
 LOCK TABLES `bot_styles` WRITE;
 /*!40000 ALTER TABLE `bot_styles` DISABLE KEYS */;
-INSERT INTO `bot_styles` VALUES (1,NULL,'light','#3498db','#ffffff','Arial','path/to/avatar1.png','bottom-right','/* custom CSS for Admin Bot */','2025-06-17 15:56:49'),(2,NULL,'dark','#2c3e50','#ecf0f1','Verdana','path/to/avatar2.png','bottom-left','/* custom CSS for User Bot */','2025-06-17 15:55:14'),(8,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 20:48:48'),(9,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 20:53:25'),(10,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 20:55:48'),(11,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 20:59:30'),(12,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 21:01:26'),(13,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 21:02:13'),(14,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','','/* estilo base para tema claro */','2025-06-19 21:05:46'),(15,2,'dark','#ffffff','#000000','Arial','path/to/avatar2.png','','/* estilo base para tema oscuro */','2025-06-19 21:15:31'),(16,2,'dark','#ffffff','#000000','Arial','path/to/avatar2.png','','/* estilo base para tema oscuro */','2025-06-19 21:15:52');
+INSERT INTO `bot_styles` VALUES (1,NULL,NULL,'light','#3498db','#ffffff','Arial','path/to/avatar1.png','bottom-right','/* custom CSS for Admin Bot */','2025-06-17 15:56:49'),(2,NULL,NULL,'dark','#2c3e50','#ecf0f1','Verdana','path/to/avatar2.png','bottom-left','/* custom CSS for User Bot */','2025-06-17 15:55:14'),(8,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:18:41'),(9,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:23:46'),(10,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:08'),(11,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:27:27'),(12,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:14'),(13,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:30:33'),(14,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:33:42'),(15,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:36:17'),(16,NULL,1,'light','#000000','#ffffff','Arial','path/to/avatar1.png','center-right','/* estilo base para tema claro */','2025-06-21 17:45:23'),(17,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:35'),(18,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 15:59:58'),(19,NULL,NULL,'custom','#4f4040','#ddbbbb','Arial','','center-left','','2025-06-22 16:45:06'),(20,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 16:46:09'),(21,NULL,NULL,'custom','#511515','#e1b2b2','Arial','','bottom-right','','2025-06-22 17:10:01'),(22,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:10:44'),(23,NULL,NULL,'custom','#ffffff','#e09f9f','Arial','','bottom-right','','2025-06-22 17:47:11'),(24,NULL,NULL,'custom','#381f1f','#e50b0b','Georgia','','center-left','','2025-06-22 17:51:25'),(25,NULL,NULL,'custom','#25537e','#eceaea','Arial','','bottom-right','','2025-06-22 19:54:08'),(26,NULL,NULL,'custom','#b43131','#fcf8f8','Arial','','bottom-right','','2025-06-22 20:33:10'),(27,45,NULL,'custom','#31b96c','#f5f0f0','Roboto','','bottom-right','','2025-06-22 20:40:21'),(28,45,NULL,'dark','#000000','#ffffff','Arial','','bottom-right','','2025-06-22 20:49:31'),(29,45,NULL,'custom','#f0f410','#6d6969','Courier New','','top-left','','2025-06-22 20:50:55'),(30,45,NULL,'custom','#f8e71c','#000000','Arial','','bottom-right','','2025-06-23 23:31:53');
 /*!40000 ALTER TABLE `bot_styles` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -407,8 +418,8 @@ DROP TABLE IF EXISTS `bot_template_prompts`;
 CREATE TABLE `bot_template_prompts` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_template_id` int NOT NULL,
-  `role` enum('system','user','assistant') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system',
-  `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` enum('system','user','assistant') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'system',
+  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -423,7 +434,7 @@ CREATE TABLE `bot_template_prompts` (
 
 LOCK TABLES `bot_template_prompts` WRITE;
 /*!40000 ALTER TABLE `bot_template_prompts` DISABLE KEYS */;
-INSERT INTO `bot_template_prompts` VALUES (4,79,'system','ouhaouhuohuoibnhiubniubuibuibuibhuihb ddddddd','2025-06-09 13:23:47','2025-06-09 13:23:47'),(5,80,'system','\'system\',\n    \'Eres un asistente virtual de atención al cliente, diseñado específicamente para operar en entornos de call center, brindando soporte profesional, empático y eficiente a los usuarios. Estás al servicio de una empresa que podrá entrenarte posteriormente según sus necesidades.\n\n? Propósito principal:\nTu función es asistir a los usuarios proporcionando información clara, precisa y oportuna sobre los servicios, productos o procesos definidos por la empresa que te configure. Tu comportamiento debe reflejar siempre profesionalismo, cordialidad, respeto y empatía.\n\n? Normas de comportamiento:\n- Inicia toda conversación con un saludo formal y amable.\n- Mantén un tono neutral, profesional y comprensivo en todo momento.\n- No inventes información ni supongas hechos si no tienes conocimiento claro; ofrece redirigir la consulta a un agente humano si es necesario.\n- No compartas información técnica, legal, médica o financiera a menos que haya sido específicamente entrenada y validada por la empresa.\n- Evita opiniones personales, juicios, consejos emocionales o afirmaciones no verificadas.\n- Mantente enfocado exclusivamente en los productos, servicios, políticas y procesos definidos por la empresa. Cualquier pregunta fuera de este ámbito debe ser canalizada a un agente humano.\n\n? Entrenamiento y personalización:\nEste bot está diseñado para recibir entrenamiento adicional mediante el sistema de entrenamiento proporcionado por la empresa. Debes adaptar tu comportamiento, conocimiento y tono en función del contenido proporcionado en futuras sesiones de entrenamiento, manuales, bases de conocimiento o ejemplos de conversación.\n\n?️ Privacidad y seguridad:\nNo almacenes, recopiles ni compartas información personal, sensible o confidencial de los usuarios sin la debida autorización y configuración explícita por parte de la empresa. Cumple con las políticas de privacidad establecidas por la empresa y las leyes aplicables.\n\n? Idioma y comunicación:\nResponde en el mismo idioma en que el usuario inicia la conversación. Si no se especifica, utiliza español neutro por defecto. Adapta el nivel de formalidad según el tono del usuario, manteniendo siempre respeto y cortesía.\n\n? Objetivo final:\nTu misión es facilitar el acceso a la información, guiar al cliente en sus necesidades, resolver dudas y ofrecer una experiencia satisfactoria, alineada con los estándares de calidad del servicio de la empresa.\n\nPermanece siempre atento a las instrucciones de configuración y entrenamiento que serán proporcionadas por la empresa para ajustar tu funcionamiento según sus necesidades.\'','2025-06-19 19:13:11','2025-06-19 19:13:11');
+INSERT INTO `bot_template_prompts` VALUES (4,79,'system','ouhaouhuohuoibnhiubniubuibuibuibhuihb ddddddd','2025-06-09 13:23:47','2025-06-09 13:23:47'),(5,80,'system','prueba','2025-06-19 02:43:27','2025-06-19 02:43:27');
 /*!40000 ALTER TABLE `bot_template_prompts` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -436,10 +447,10 @@ DROP TABLE IF EXISTS `bot_templates`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `bot_templates` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
-  `ia_provider_id` int NOT NULL,
-  `ai_model_config_id` int NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `ia_provider_id` int NOT NULL DEFAULT '0',
+  `ai_model_config_id` int NOT NULL DEFAULT '0',
   `default_style_id` int DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -460,7 +471,7 @@ CREATE TABLE `bot_templates` (
 
 LOCK TABLES `bot_templates` WRITE;
 /*!40000 ALTER TABLE `bot_templates` DISABLE KEYS */;
-INSERT INTO `bot_templates` VALUES (79,'Ventas Online dddd','Este modelo esta entrenado para captar y hacer ventas en linea dddd',7,8,1,'2025-06-06 19:47:39','2025-06-17 15:59:23'),(80,'pluma chiquita','mas sapo que jorge',1,7,2,'2025-06-19 19:12:25','2025-06-19 19:12:25');
+INSERT INTO `bot_templates` VALUES (79,'Ventas Online dddd','Este modelo esta entrenado para captar y hacer ventas en linea dddd',7,8,1,'2025-06-06 19:47:39','2025-06-17 15:59:23'),(80,'prueba','prueba',6,6,1,'2025-06-19 02:43:20','2025-06-19 02:43:20');
 /*!40000 ALTER TABLE `bot_templates` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -474,8 +485,8 @@ DROP TABLE IF EXISTS `bot_training_configs`;
 CREATE TABLE `bot_training_configs` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `training_type` enum('url','form_data','manual_prompt','document') COLLATE utf8mb4_unicode_ci NOT NULL,
-  `data` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `training_type` enum('url','form_data','manual_prompt','document') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `data` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
@@ -502,14 +513,14 @@ DROP TABLE IF EXISTS `bot_training_sessions`;
 CREATE TABLE `bot_training_sessions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
-  `session_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `session_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   CONSTRAINT `bot_training_sessions_ibfk_1` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -518,7 +529,7 @@ CREATE TABLE `bot_training_sessions` (
 
 LOCK TABLES `bot_training_sessions` WRITE;
 /*!40000 ALTER TABLE `bot_training_sessions` DISABLE KEYS */;
-INSERT INTO `bot_training_sessions` VALUES (1,29,'Entrenamiento inicial para fylyuisfgbrhtrttrtrt','Sesión creada al momento de crear el bot con plantilla \'Ventas Online dddd\'','2025-06-19 19:01:26','2025-06-19 19:01:26'),(2,30,'Entrenamiento inicial para fylyuisfgbrhtrttrtrtewew','Sesión creada al momento de crear el bot con plantilla \'Ventas Online dddd\'','2025-06-19 19:02:14','2025-06-19 19:02:14'),(3,31,'Entrenamiento inicial para fylyuisfgbrhtrttrtrtewew1','Sesión creada al momento de crear el bot con plantilla \'Ventas Online dddd\'','2025-06-19 19:05:47','2025-06-19 19:05:47'),(4,33,'Entrenamiento inicial para jorge el bot gay','Sesión creada al momento de crear el bot con plantilla \'pluma chiquita\'','2025-06-19 19:15:52','2025-06-19 19:15:52');
+INSERT INTO `bot_training_sessions` VALUES (1,26,'Entrenamiento inicial para www','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:23:46','2025-06-21 22:23:46'),(2,28,'Entrenamiento inicial para dddd','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:27:28','2025-06-21 22:27:28'),(3,30,'Entrenamiento inicial para rrrr','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:30:34','2025-06-21 22:30:34'),(4,31,'Entrenamiento inicial para cccc','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:33:43','2025-06-21 22:33:43'),(5,32,'Entrenamiento inicial para ccccw','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:36:18','2025-06-21 22:36:18'),(6,33,'Entrenamiento inicial para ccccwe','Sesión creada al momento de crear el bot con plantilla \'prueba\'','2025-06-21 22:45:23','2025-06-21 22:45:23');
 /*!40000 ALTER TABLE `bot_training_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -533,10 +544,9 @@ CREATE TABLE `bots` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `style_id` int DEFAULT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
-  `api_key` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `model_used` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'gpt-4',
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `api_key` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -546,10 +556,10 @@ CREATE TABLE `bots` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `api_key` (`api_key`),
   KEY `user_id` (`user_id`),
+  KEY `fk_bots_style_template` (`style_id`),
   KEY `fk_bots_ia_provider` (`ia_provider_id`),
   KEY `fk_bots_template` (`bot_template_id`),
   KEY `fk_bots_model_config` (`ai_model_config_id`),
-  KEY `fk_bots_style` (`style_id`),
   CONSTRAINT `bots_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_bots_ia_provider` FOREIGN KEY (`ia_provider_id`) REFERENCES `bot_ia_providers` (`id`),
   CONSTRAINT `fk_bots_model_config` FOREIGN KEY (`ai_model_config_id`) REFERENCES `ai_model_configs` (`id`),
@@ -564,7 +574,7 @@ CREATE TABLE `bots` (
 
 LOCK TABLES `bots` WRITE;
 /*!40000 ALTER TABLE `bots` DISABLE KEYS */;
-INSERT INTO `bots` VALUES (15,29,NULL,'Admin Bot Actualizado','Bot actualizado para pruebas','admin_api_key_actualizado','gpt-4',0,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(16,30,NULL,'User Bot','A bot for user','user_api_key','gpt-4',1,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(17,29,NULL,'Nuevo Bot','Este es un bot de prueba','clave_api_123','gpt-3.5',1,'2025-04-25 15:29:24','2025-06-03 20:04:57',4,NULL,NULL),(18,29,NULL,'Bot de prueba','Este bot fue creado para pruebas de integración','api_key_de_prueba_456','gpt-3.5',1,'2025-04-25 15:31:16','2025-06-03 20:04:57',4,NULL,NULL),(20,29,NULL,'Bot de integración','Bot creado para validar errores por clave duplicada','clave_unica_api_789','gpt-3.5',1,'2025-04-25 15:32:32','2025-06-03 20:04:57',4,NULL,NULL),(21,29,NULL,'Bot de Asistencia','Un bot que ayuda con tareas diarias.','clave_asistencia','gpt-4',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(22,30,NULL,'Bot de Ventas','Un bot que ayuda a realizar ventas.','clave_ventas','gpt-4',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(27,45,10,'fylyui','gutilui','test-api-key','gpt-4',1,'2025-06-19 18:55:49','2025-06-19 20:55:48',7,79,8),(29,45,12,'fylyuisfgbrhtrttrtrt','gutiluitrewgh5rt','test-api-key1','gpt-4',1,'2025-06-19 19:01:26','2025-06-19 21:01:26',7,79,8),(30,45,13,'fylyuisfgbrhtrttrtrtewew','gutiluitrewgh5rtewwe','test-api-key12','gpt-4',1,'2025-06-19 19:02:14','2025-06-19 21:02:13',7,79,8),(31,45,14,'fylyuisfgbrhtrttrtrtewew1','gutiluitrewgh5rtewwe','test-api-key124','gpt-4',1,'2025-06-19 19:05:47','2025-06-19 21:05:46',7,79,8),(33,45,16,'jorge el bot gay','sirve pa joder nada mas y hacer las vistas','test-api-key1245','gpt-4',1,'2025-06-19 19:15:52','2025-06-19 21:15:52',1,80,7);
+INSERT INTO `bots` VALUES (15,29,NULL,'Admin Bot Actualizado','Bot actualizado para pruebas','admin_api_key_actualizado',0,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(16,30,NULL,'User Bot','A bot for user','user_api_key',1,'2025-04-21 17:16:12','2025-06-03 20:04:57',4,NULL,NULL),(17,29,NULL,'Nuevo Bot','Este es un bot de prueba','clave_api_123',1,'2025-04-25 15:29:24','2025-06-03 20:04:57',4,NULL,NULL),(18,29,NULL,'Bot de prueba','Este bot fue creado para pruebas de integración','api_key_de_prueba_456',1,'2025-04-25 15:31:16','2025-06-03 20:04:57',4,NULL,NULL),(20,29,NULL,'Bot de integración','Bot creado para validar errores por clave duplicada','clave_unica_api_789',1,'2025-04-25 15:32:32','2025-06-03 20:04:57',4,NULL,NULL),(21,29,NULL,'Bot de Asistencia','Un bot que ayuda con tareas diarias.','clave_asistencia',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(22,30,NULL,'Bot de Ventas','Un bot que ayuda a realizar ventas.','clave_ventas',1,'2025-04-29 20:05:03','2025-06-03 20:04:57',4,NULL,NULL),(26,45,9,'www','www','test-api-keyx12hh45jjhdfv67',1,'2025-06-21 22:23:46','2025-06-21 17:23:46',6,80,6),(28,45,11,'dddd','dddddd','test-api-keysx12hh45jjhdfv67',1,'2025-06-21 22:27:28','2025-06-21 17:27:27',6,80,6),(30,45,13,'rrrr','rrrrr','test-api-keysx12hh45jjhdfdv67',1,'2025-06-21 22:30:34','2025-06-21 17:30:33',6,80,6),(31,45,14,'cccc','cccccc','test-api-keysx12hh45cjjhdfdv67',1,'2025-06-21 22:33:43','2025-06-21 17:33:42',6,80,6),(32,45,15,'ccccw','cccccc','test-api-keysx12hh45cjjhdddfdv67',1,'2025-06-21 22:36:18','2025-06-21 17:36:17',6,80,6),(33,45,29,'ccccwe','cccccc','test-api-keysss',1,'2025-06-21 22:45:23','2025-06-23 23:39:19',6,80,6);
 /*!40000 ALTER TABLE `bots` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -579,10 +589,10 @@ CREATE TABLE `conversations` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_id` int NOT NULL,
   `user_id` int DEFAULT NULL,
-  `title` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `user_message` text COLLATE utf8mb4_unicode_ci,
-  `bot_response` text COLLATE utf8mb4_unicode_ci,
+  `user_message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `bot_response` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   KEY `user_id` (`user_id`),
@@ -610,9 +620,9 @@ DROP TABLE IF EXISTS `document_types`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `document_types` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `abbreviation` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `abbreviation` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -639,8 +649,8 @@ CREATE TABLE `generated_images` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `bot_id` int DEFAULT NULL,
-  `prompt` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `image_url` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `prompt` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `image_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
@@ -669,7 +679,7 @@ DROP TABLE IF EXISTS `interests`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `interests` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -696,7 +706,7 @@ CREATE TABLE `knowledge_chunks` (
   `id` int NOT NULL AUTO_INCREMENT,
   `uploaded_document_id` int NOT NULL,
   `template_training_session_id` int DEFAULT NULL,
-  `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `metadata` json DEFAULT NULL,
   `embedding_vector` blob,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -726,7 +736,7 @@ DROP TABLE IF EXISTS `openai_usage_summary`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `openai_usage_summary` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `month` varchar(7) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `month` varchar(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `total_tokens` int NOT NULL,
   `total_amount` decimal(10,2) NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -753,8 +763,8 @@ DROP TABLE IF EXISTS `permissions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `permissions` (
   `Id` int NOT NULL AUTO_INCREMENT,
-  `Name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `Description` text COLLATE utf8mb4_unicode_ci,
+  `Name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `Description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`Id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=75 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -780,9 +790,9 @@ CREATE TABLE `plan_changes` (
   `id` int NOT NULL AUTO_INCREMENT,
   `plan_id` int NOT NULL,
   `changed_by` int NOT NULL,
-  `field_changed` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `old_value` text COLLATE utf8mb4_unicode_ci,
-  `new_value` text COLLATE utf8mb4_unicode_ci,
+  `field_changed` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `old_value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `new_value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `changed_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `plan_id` (`plan_id`),
@@ -811,8 +821,8 @@ DROP TABLE IF EXISTS `plans`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `plans` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `price` decimal(10,2) NOT NULL,
   `max_tokens` int NOT NULL,
   `bots_limit` int DEFAULT '1',
@@ -844,11 +854,11 @@ CREATE TABLE `prompts` (
   `bot_id` int NOT NULL,
   `user_id` int NOT NULL,
   `conversation_id` int DEFAULT NULL,
-  `prompt_text` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `response_text` longtext COLLATE utf8mb4_unicode_ci,
+  `prompt_text` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `response_text` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `tokens_used` int DEFAULT '0',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `source` enum('widget','api','mobile','admin') COLLATE utf8mb4_unicode_ci DEFAULT 'widget',
+  `source` enum('widget','api','mobile','admin') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'widget',
   PRIMARY KEY (`id`),
   KEY `bot_id` (`bot_id`),
   KEY `user_id` (`user_id`),
@@ -905,8 +915,8 @@ DROP TABLE IF EXISTS `roles`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `roles` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -932,14 +942,14 @@ DROP TABLE IF EXISTS `style_templates`;
 CREATE TABLE `style_templates` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int DEFAULT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `theme` enum('light','dark','custom') COLLATE utf8mb4_unicode_ci DEFAULT 'light',
-  `primary_color` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '#000000',
-  `secondary_color` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT '#ffffff',
-  `font_family` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT 'Arial',
-  `avatar_url` text COLLATE utf8mb4_unicode_ci,
-  `position` enum('bottom-right','bottom-left','top-right','top-left','center-right','center-left','top-center','bottom-center') COLLATE utf8mb4_unicode_ci DEFAULT 'bottom-right',
-  `custom_css` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `theme` enum('light','dark','custom') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'light',
+  `primary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#000000',
+  `secondary_color` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '#ffffff',
+  `font_family` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Arial',
+  `avatar_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `position` enum('bottom-right','bottom-left','top-right','top-left','center-right','center-left','top-center','bottom-center') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'bottom-right',
+  `custom_css` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -971,7 +981,7 @@ CREATE TABLE `subscriptions` (
   `plan_id` int NOT NULL,
   `started_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `expires_at` datetime DEFAULT NULL,
-  `status` enum('active','expired','canceled') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
+  `status` enum('active','expired','canceled') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'active',
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `plan_id` (`plan_id`),
@@ -1001,7 +1011,7 @@ CREATE TABLE `support_responses` (
   `id` int NOT NULL AUTO_INCREMENT,
   `ticket_id` int NOT NULL,
   `responder_id` int DEFAULT NULL,
-  `message` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `ticket_id` (`ticket_id`),
@@ -1031,9 +1041,9 @@ DROP TABLE IF EXISTS `support_tickets`;
 CREATE TABLE `support_tickets` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `subject` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `message` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` enum('open','in_progress','closed') COLLATE utf8mb4_unicode_ci DEFAULT 'open',
+  `subject` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `message` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('open','in_progress','closed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'open',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1062,8 +1072,8 @@ DROP TABLE IF EXISTS `template_training_sessions`;
 CREATE TABLE `template_training_sessions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bot_template_id` int NOT NULL,
-  `session_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `description` text COLLATE utf8mb4_unicode_ci,
+  `session_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1078,7 +1088,7 @@ CREATE TABLE `template_training_sessions` (
 
 LOCK TABLES `template_training_sessions` WRITE;
 /*!40000 ALTER TABLE `template_training_sessions` DISABLE KEYS */;
-INSERT INTO `template_training_sessions` VALUES (1,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:32:14','2025-06-12 17:32:14'),(2,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:34:33','2025-06-12 17:34:33'),(3,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:43:40','2025-06-12 17:43:40'),(4,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:44:05','2025-06-12 17:44:05'),(5,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:46:07','2025-06-12 17:46:07'),(6,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-13 15:04:36','2025-06-13 15:04:36'),(7,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-13 15:41:43','2025-06-13 15:41:43'),(8,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-16 13:39:20','2025-06-16 13:39:20'),(9,80,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-19 19:14:08','2025-06-19 19:14:08');
+INSERT INTO `template_training_sessions` VALUES (1,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:32:14','2025-06-12 17:32:14'),(2,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:34:33','2025-06-12 17:34:33'),(3,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:43:40','2025-06-12 17:43:40'),(4,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:44:05','2025-06-12 17:44:05'),(5,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-12 17:46:07','2025-06-12 17:46:07'),(6,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-13 15:04:36','2025-06-13 15:04:36'),(7,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-13 15:41:43','2025-06-13 15:41:43'),(8,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-16 13:39:20','2025-06-16 13:39:20'),(9,79,'Entrenamiento manual','Entrenamiento creado desde el panel','2025-06-18 19:55:51','2025-06-18 19:55:51');
 /*!40000 ALTER TABLE `template_training_sessions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1125,7 +1135,7 @@ CREATE TABLE `training_custom_texts` (
   `bot_id` int DEFAULT NULL,
   `template_training_session_id` int DEFAULT NULL,
   `user_id` int NOT NULL,
-  `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1137,7 +1147,7 @@ CREATE TABLE `training_custom_texts` (
   CONSTRAINT `fk_texts_template` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`),
   CONSTRAINT `fk_training_custom_texts_bot` FOREIGN KEY (`bot_id`) REFERENCES `bots` (`id`) ON DELETE SET NULL,
   CONSTRAINT `training_custom_texts_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=46 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1146,7 +1156,7 @@ CREATE TABLE `training_custom_texts` (
 
 LOCK TABLES `training_custom_texts` WRITE;
 /*!40000 ALTER TABLE `training_custom_texts` DISABLE KEYS */;
-INSERT INTO `training_custom_texts` VALUES (8,79,NULL,NULL,45,'dfghredgertghtrhg','2025-06-16 14:01:35','2025-06-16 14:01:35'),(9,79,NULL,NULL,45,'dgtbh','2025-06-16 14:01:50','2025-06-16 14:01:50'),(10,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:07:46','2025-06-16 14:07:46'),(11,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:08:05','2025-06-16 14:08:05'),(12,79,NULL,NULL,45,'srrthgtr','2025-06-16 14:26:00','2025-06-16 14:26:00'),(13,79,NULL,NULL,45,'xbgfdb','2025-06-16 15:22:45','2025-06-16 15:22:45'),(14,79,NULL,NULL,45,'srtg','2025-06-16 15:30:39','2025-06-16 15:30:39'),(15,79,NULL,NULL,45,'srtg','2025-06-16 15:36:17','2025-06-16 15:36:17'),(16,79,NULL,NULL,45,'wedewdewd','2025-06-16 15:41:49','2025-06-16 15:41:49'),(17,79,NULL,NULL,45,'wedewdewd','2025-06-16 16:58:34','2025-06-16 16:58:34'),(18,79,NULL,NULL,45,'ytfyt','2025-06-16 16:59:10','2025-06-16 16:59:10'),(19,79,NULL,NULL,45,'sfvgdf','2025-06-16 19:02:52','2025-06-16 19:02:52'),(20,79,NULL,NULL,45,'sdced','2025-06-16 19:10:22','2025-06-16 19:10:22'),(21,79,NULL,NULL,45,'erfgre4','2025-06-16 19:12:00','2025-06-16 19:12:00'),(22,79,NULL,NULL,45,'dhythyt','2025-06-16 19:20:58','2025-06-16 19:20:58'),(23,79,NULL,NULL,45,'wstryhtrh','2025-06-16 19:35:13','2025-06-16 19:35:13'),(24,79,NULL,NULL,45,'etjytj','2025-06-16 19:38:20','2025-06-16 19:38:20'),(25,79,NULL,NULL,45,'etj','2025-06-16 19:38:47','2025-06-16 19:38:47'),(26,79,NULL,NULL,45,'sfrhsgd','2025-06-16 19:41:07','2025-06-16 19:41:07'),(27,79,NULL,NULL,45,'qergfre','2025-06-16 19:43:41','2025-06-16 19:43:41'),(28,79,NULL,NULL,45,'wsrthtr','2025-06-16 19:45:26','2025-06-16 19:45:26'),(29,79,NULL,NULL,45,'eyjyt','2025-06-16 19:47:19','2025-06-16 19:47:19'),(30,79,NULL,NULL,45,'fdgfd','2025-06-16 19:57:12','2025-06-16 19:57:12'),(31,79,NULL,NULL,45,'SGBGF','2025-06-17 11:46:25','2025-06-17 11:46:25'),(32,79,NULL,NULL,45,'dygjruytj','2025-06-17 13:36:14','2025-06-17 13:36:14'),(33,79,NULL,NULL,45,'yhfr','2025-06-17 14:03:13','2025-06-17 14:03:13'),(34,79,NULL,NULL,45,'ghndnjh','2025-06-17 14:44:08','2025-06-17 14:44:08'),(35,79,NULL,NULL,45,'adfvf','2025-06-17 14:46:28','2025-06-17 14:46:28'),(36,79,NULL,NULL,45,'afg6efrv','2025-06-17 14:49:35','2025-06-17 14:49:35'),(37,79,NULL,NULL,45,'dghnhgfn','2025-06-17 15:12:14','2025-06-17 15:12:14'),(38,79,NULL,NULL,45,'sfhgtdfhb','2025-06-17 15:28:49','2025-06-17 15:28:49'),(39,79,NULL,NULL,45,'dtntyrun','2025-06-17 15:42:01','2025-06-17 15:42:01'),(40,79,NULL,NULL,45,'gfhhg','2025-06-19 17:32:56','2025-06-19 17:32:56'),(41,79,NULL,NULL,45,'gfhhg','2025-06-19 18:04:50','2025-06-19 18:04:50'),(42,79,NULL,NULL,45,'gfhhg','2025-06-19 18:55:46','2025-06-19 18:55:46'),(43,79,NULL,NULL,45,'gfhhg','2025-06-19 18:59:26','2025-06-19 18:59:26'),(44,79,NULL,NULL,45,'gfhhgsfgbvfgsd','2025-06-19 19:02:08','2025-06-19 19:02:08'),(45,80,NULL,NULL,45,'rror al eliminar proveedor: Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.\n\n ---> MySqlConnector.MySqlException (0x80004005): Cannot delete or update a parent row: a foreign key constraint fails (`chatbot_platform`.`bots`, CONSTRAINT `fk_bots_ia_provider` FOREIGN KEY (`ia_provider_id`) REFERENCES `bot_ia_providers` (`id`))\n\n   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894\n\n   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37\n\n   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130\n\n   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483\n\n   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56\n\n   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357\n\n   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350\n\n   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)\n\n   --- End of inner exception stack trace ---\n\n   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)\n\n   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)\n\n   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)\n\n   at Voia.Api.Controllers.BotIaProvidersController.Delete(Int32 id) in C:\\Users\\Puesto7\\Documents\\voia-docker\\Voia.Api\\Controllers\\BotIaProvidersController.cs:line 120\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ActionMethodExecutor.TaskOfIActionResultExecutor.Execute(ActionContext actionContext, IActionResultTypeMapper mapper, ObjectMethodExecutor executor, Object controller, Object[] arguments)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeActionMethodAsync>g__Awaited|12_0(ControllerActionInvoker invoker, ValueTask`1 actionResultValueTask)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeNextActionFilterAsync>g__Awaited|10_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Rethrow(ActionExecutedContextSealed context)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.Next(State& next, Scope& scope, Object& state, Boolean& isCompleted)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ControllerActionInvoker.<InvokeInnerFilterAsync>g__Awaited|13_0(ControllerActionInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeFilterPipelineAsync>g__Awaited|20_0(ResourceInvoker invoker, Task lastTask, State next, Scope scope, Object state, Boolean isCompleted)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)\n\n   at Microsoft.AspNetCore.Mvc.Infrastructure.ResourceInvoker.<InvokeAsync>g__Awaited|17_0(ResourceInvoker invoker, Task task, IDisposable scope)\n\n   at Swashbuckle.AspNetCore.SwaggerUI.SwaggerUIMiddleware.Invoke(HttpContext httpContext)\n\n   at Swashbuckle.AspNetCore.Swagger.SwaggerMiddleware.Invoke(HttpContext httpContext, ISwaggerProvider swaggerProvider)\n\n   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)\n\n   at Microsoft.AspNetCore.Authentication.AuthenticationMiddleware.Invoke(HttpContext context)\n\n   at Microsoft.AspNetCore.Diagnostics.DeveloperExceptionPageMiddlewareImpl.Invoke(HttpContext context)\n\n\n\nHEADERS\n\n=======\n\nAccept: application/json, text/plain, */*\n\nConnection: keep-alive\n\nHost: localhost:5006\n\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0\n\nAccept-Encoding: gzip, deflate, br, zstd\n\nAccept-Language: es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3\n\nOrigin: http://localhost:3000\n\nReferer: http://localhost:3000/\n\nSec-Fetch-Dest: empty\n\nSec-Fetch-Mode: cors\n\nSec-Fetch-Site: same-site\n\nPriority: u=0','2025-06-19 19:14:55','2025-06-19 19:14:55');
+INSERT INTO `training_custom_texts` VALUES (8,79,NULL,NULL,45,'dfghredgertghtrhg','2025-06-16 14:01:35','2025-06-16 14:01:35'),(9,79,NULL,NULL,45,'dgtbh','2025-06-16 14:01:50','2025-06-16 14:01:50'),(10,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:07:46','2025-06-16 14:07:46'),(11,79,NULL,NULL,45,'yrju6yhjyuhn','2025-06-16 14:08:05','2025-06-16 14:08:05'),(12,79,NULL,NULL,45,'srrthgtr','2025-06-16 14:26:00','2025-06-16 14:26:00'),(13,79,NULL,NULL,45,'xbgfdb','2025-06-16 15:22:45','2025-06-16 15:22:45'),(14,79,NULL,NULL,45,'srtg','2025-06-16 15:30:39','2025-06-16 15:30:39'),(15,79,NULL,NULL,45,'srtg','2025-06-16 15:36:17','2025-06-16 15:36:17'),(16,79,NULL,NULL,45,'wedewdewd','2025-06-16 15:41:49','2025-06-16 15:41:49'),(17,79,NULL,NULL,45,'wedewdewd','2025-06-16 16:58:34','2025-06-16 16:58:34'),(18,79,NULL,NULL,45,'ytfyt','2025-06-16 16:59:10','2025-06-16 16:59:10'),(19,79,NULL,NULL,45,'sfvgdf','2025-06-16 19:02:52','2025-06-16 19:02:52'),(20,79,NULL,NULL,45,'sdced','2025-06-16 19:10:22','2025-06-16 19:10:22'),(21,79,NULL,NULL,45,'erfgre4','2025-06-16 19:12:00','2025-06-16 19:12:00'),(22,79,NULL,NULL,45,'dhythyt','2025-06-16 19:20:58','2025-06-16 19:20:58'),(23,79,NULL,NULL,45,'wstryhtrh','2025-06-16 19:35:13','2025-06-16 19:35:13'),(24,79,NULL,NULL,45,'etjytj','2025-06-16 19:38:20','2025-06-16 19:38:20'),(25,79,NULL,NULL,45,'etj','2025-06-16 19:38:47','2025-06-16 19:38:47'),(26,79,NULL,NULL,45,'sfrhsgd','2025-06-16 19:41:07','2025-06-16 19:41:07'),(27,79,NULL,NULL,45,'qergfre','2025-06-16 19:43:41','2025-06-16 19:43:41'),(28,79,NULL,NULL,45,'wsrthtr','2025-06-16 19:45:26','2025-06-16 19:45:26'),(29,79,NULL,NULL,45,'eyjyt','2025-06-16 19:47:19','2025-06-16 19:47:19'),(30,79,NULL,NULL,45,'fdgfd','2025-06-16 19:57:12','2025-06-16 19:57:12'),(31,79,NULL,NULL,45,'SGBGF','2025-06-17 11:46:25','2025-06-17 11:46:25'),(32,79,NULL,NULL,45,'dygjruytj','2025-06-17 13:36:14','2025-06-17 13:36:14'),(33,79,NULL,NULL,45,'yhfr','2025-06-17 14:03:13','2025-06-17 14:03:13'),(34,79,NULL,NULL,45,'ghndnjh','2025-06-17 14:44:08','2025-06-17 14:44:08'),(35,79,NULL,NULL,45,'adfvf','2025-06-17 14:46:28','2025-06-17 14:46:28'),(36,79,NULL,NULL,45,'afg6efrv','2025-06-17 14:49:35','2025-06-17 14:49:35'),(37,79,NULL,NULL,45,'dghnhgfn','2025-06-17 15:12:14','2025-06-17 15:12:14'),(38,79,NULL,NULL,45,'sfhgtdfhb','2025-06-17 15:28:49','2025-06-17 15:28:49'),(39,79,NULL,NULL,45,'dtntyrun','2025-06-17 15:42:01','2025-06-17 15:42:01'),(40,79,NULL,NULL,45,'etbt','2025-06-18 19:55:58','2025-06-18 19:55:58'),(41,79,NULL,NULL,45,'etbt','2025-06-18 20:25:49','2025-06-18 20:25:49'),(42,79,NULL,NULL,45,'gygyg','2025-06-18 21:22:06','2025-06-18 21:22:06'),(43,79,NULL,NULL,45,'gygyg','2025-06-18 21:26:19','2025-06-18 21:26:19'),(44,80,NULL,NULL,45,'prueba','2025-06-19 02:43:45','2025-06-19 02:43:45'),(45,80,NULL,NULL,45,'iuhiug','2025-06-19 03:13:42','2025-06-19 03:13:42'),(46,80,NULL,NULL,45,'sf','2025-06-19 03:26:50','2025-06-19 03:26:50'),(47,80,NULL,NULL,45,'ihiu','2025-06-21 22:01:31','2025-06-21 22:01:31'),(48,80,NULL,NULL,45,'ihiu','2025-06-21 22:14:22','2025-06-21 22:14:22'),(49,80,NULL,NULL,45,'wdd','2025-06-21 22:15:05','2025-06-21 22:15:05'),(50,80,NULL,NULL,45,'wd','2025-06-21 22:27:01','2025-06-21 22:27:01'),(51,80,NULL,NULL,45,'wd','2025-06-21 22:27:24','2025-06-21 22:27:24'),(52,80,NULL,NULL,45,'fssd','2025-06-21 22:30:07','2025-06-21 22:30:07'),(53,80,NULL,NULL,45,'fssd','2025-06-21 22:30:31','2025-06-21 22:30:31'),(54,80,NULL,NULL,45,'wdc','2025-06-21 22:33:20','2025-06-21 22:33:20'),(55,80,NULL,NULL,45,'wdc','2025-06-21 22:33:35','2025-06-21 22:33:35'),(56,80,NULL,NULL,45,'wdc','2025-06-21 22:36:13','2025-06-21 22:36:13'),(57,80,NULL,NULL,45,'wdc','2025-06-21 22:45:18','2025-06-21 22:45:18');
 /*!40000 ALTER TABLE `training_custom_texts` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1161,9 +1171,9 @@ CREATE TABLE `training_data_sessions` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `bot_id` int DEFAULT NULL,
-  `data_summary` text COLLATE utf8mb4_unicode_ci,
-  `data_type` enum('text','document','audio','image') COLLATE utf8mb4_unicode_ci DEFAULT 'text',
-  `status` enum('pending','processing','completed','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `data_summary` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `data_type` enum('text','document','audio','image') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'text',
+  `status` enum('pending','processing','completed','failed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
@@ -1196,8 +1206,8 @@ CREATE TABLE `training_urls` (
   `bot_id` int DEFAULT NULL,
   `template_training_session_id` int DEFAULT NULL,
   `user_id` int NOT NULL,
-  `url` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` enum('pending','processed','failed') COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('pending','processed','failed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -1209,7 +1219,7 @@ CREATE TABLE `training_urls` (
   CONSTRAINT `fk_urls_session` FOREIGN KEY (`template_training_session_id`) REFERENCES `template_training_sessions` (`id`),
   CONSTRAINT `fk_urls_template` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`),
   CONSTRAINT `training_urls_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1218,7 +1228,7 @@ CREATE TABLE `training_urls` (
 
 LOCK TABLES `training_urls` WRITE;
 /*!40000 ALTER TABLE `training_urls` DISABLE KEYS */;
-INSERT INTO `training_urls` VALUES (7,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:22:37','2025-06-13 19:22:37'),(8,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:23:06','2025-06-13 19:23:06'),(9,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:25:55','2025-06-13 19:25:55'),(10,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:26:46','2025-06-13 19:26:46'),(11,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:38:50','2025-06-13 19:38:50'),(12,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:40:05','2025-06-13 19:40:05'),(13,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 13:39:45','2025-06-16 13:39:45'),(14,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 14:01:35','2025-06-16 14:01:35'),(15,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 14:08:05','2025-06-16 14:08:05'),(16,80,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-19 19:14:55','2025-06-19 19:14:55');
+INSERT INTO `training_urls` VALUES (7,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:22:37','2025-06-13 19:22:37'),(8,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:23:06','2025-06-13 19:23:06'),(9,79,NULL,NULL,45,'http://localhost:8000/admin4E6izXCO57Jq/errores.pdf','pending','2025-06-13 19:25:55','2025-06-13 19:25:55'),(10,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:26:46','2025-06-13 19:26:46'),(11,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:38:50','2025-06-13 19:38:50'),(12,79,NULL,NULL,45,'https://fgfghgfdsxb.pdf','pending','2025-06-13 19:40:05','2025-06-13 19:40:05'),(13,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 13:39:45','2025-06-16 13:39:45'),(14,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 14:01:35','2025-06-16 14:01:35'),(15,79,NULL,NULL,45,'https://tuweb.com/archivo.pdf','pending','2025-06-16 14:08:05','2025-06-16 14:08:05');
 /*!40000 ALTER TABLE `training_urls` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1235,9 +1245,9 @@ CREATE TABLE `uploaded_documents` (
   `bot_id` int DEFAULT NULL,
   `template_training_session_id` int DEFAULT NULL,
   `user_id` int NOT NULL,
-  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `file_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `file_path` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `file_path` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `uploaded_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `indexed` tinyint(1) DEFAULT '0',
   PRIMARY KEY (`id`),
@@ -1250,7 +1260,7 @@ CREATE TABLE `uploaded_documents` (
   CONSTRAINT `fk_uploaded_documents_session` FOREIGN KEY (`template_training_session_id`) REFERENCES `template_training_sessions` (`id`),
   CONSTRAINT `fk_uploaded_documents_template` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`id`),
   CONSTRAINT `uploaded_documents_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1259,7 +1269,7 @@ CREATE TABLE `uploaded_documents` (
 
 LOCK TABLES `uploaded_documents` WRITE;
 /*!40000 ALTER TABLE `uploaded_documents` DISABLE KEYS */;
-INSERT INTO `uploaded_documents` VALUES (12,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\934be289-a034-43c9-9e69-f4b0ec58160c_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 17:46:18',0),(13,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\3e6971eb-71c2-44b9-8fcb-c5771d8707c7_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 17:46:35',0),(14,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\bdf0d8b8-1ed8-4ee8-9649-d4c31145fecd_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:13:19',0),(15,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\6e51c7f1-887c-4ecb-b6f4-368d6f043ea6_Ordenes médicas.Pdf','2025-06-13 18:14:16',0),(16,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\e8b5b7bf-1887-4c49-97ff-3c42d8956ead_Ordenes médicas.Pdf','2025-06-13 18:41:11',0),(17,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\1509f9cc-fc69-43b1-87f9-47c55703516b_Ordenes médicas.Pdf','2025-06-13 18:43:17',0),(18,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\78cfcecf-1d13-4f0f-968b-ac1ade0badc9_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:44:21',0),(19,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\20613a70-1246-4016-b91b-3e694c74007f_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:49:48',0),(20,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\734c7a39-05ba-4e40-ab2b-9be0550a93b4_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 18:50:19',0),(21,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\f4b02c2a-d468-417e-a616-c52646d0ee8d_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:14:17',0),(22,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\b34fc282-fb9a-4ea2-9634-d96fded31838_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:22:36',0),(23,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\940b1ca7-b291-4ebf-ab0e-c944be038031_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:25:55',0),(24,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\b51e6d57-3a69-4da5-aa6f-7c1ef0bce3df_Ordenes médicas.Pdf','2025-06-13 19:26:46',0),(25,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\b61127e1-731f-423c-bc67-6048c30cb62e_Ordenes médicas.Pdf','2025-06-13 19:38:50',0),(26,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\c3244b50-2799-4674-9f2c-b169d35f8223_Ordenes médicas.Pdf','2025-06-13 19:40:04',0),(27,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\81030102-1045-4d25-a078-03d844116424_Ordenes médicas-1.Pdf','2025-06-16 13:39:45',0),(28,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\444ced55-5248-40f1-8ee8-99c8b3ebac3c_Ordenes médicas-1.Pdf','2025-06-16 14:01:35',0),(29,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\1bab7d00-04a7-4ed5-a6be-b0bfe4179926_Ordenes médicas-1.Pdf','2025-06-16 14:08:05',0),(30,80,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\3834d1f2-8740-42ab-85c0-8b7273dac163_Ordenes médicas-1.Pdf','2025-06-19 19:14:55',0);
+INSERT INTO `uploaded_documents` VALUES (12,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\934be289-a034-43c9-9e69-f4b0ec58160c_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 17:46:18',0),(13,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\3e6971eb-71c2-44b9-8fcb-c5771d8707c7_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 17:46:35',0),(14,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\bdf0d8b8-1ed8-4ee8-9649-d4c31145fecd_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:13:19',0),(15,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\6e51c7f1-887c-4ecb-b6f4-368d6f043ea6_Ordenes médicas.Pdf','2025-06-13 18:14:16',0),(16,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\e8b5b7bf-1887-4c49-97ff-3c42d8956ead_Ordenes médicas.Pdf','2025-06-13 18:41:11',0),(17,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\1509f9cc-fc69-43b1-87f9-47c55703516b_Ordenes médicas.Pdf','2025-06-13 18:43:17',0),(18,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\78cfcecf-1d13-4f0f-968b-ac1ade0badc9_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:44:21',0),(19,79,NULL,NULL,45,'#111880 - Etiqueta 20250612-162215.pdf','application/pdf','Uploads\\Documents\\20613a70-1246-4016-b91b-3e694c74007f_#111880 - Etiqueta 20250612-162215.pdf','2025-06-13 18:49:48',0),(20,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\734c7a39-05ba-4e40-ab2b-9be0550a93b4_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 18:50:19',0),(21,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\f4b02c2a-d468-417e-a616-c52646d0ee8d_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:14:17',0),(22,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\b34fc282-fb9a-4ea2-9634-d96fded31838_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:22:36',0),(23,79,NULL,NULL,45,'#111875 - Etiqueta 20250606-163854.pdf','application/pdf','Uploads\\Documents\\940b1ca7-b291-4ebf-ab0e-c944be038031_#111875 - Etiqueta 20250606-163854.pdf','2025-06-13 19:25:55',0),(24,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\b51e6d57-3a69-4da5-aa6f-7c1ef0bce3df_Ordenes médicas.Pdf','2025-06-13 19:26:46',0),(25,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\b61127e1-731f-423c-bc67-6048c30cb62e_Ordenes médicas.Pdf','2025-06-13 19:38:50',0),(26,79,NULL,NULL,45,'Ordenes médicas.Pdf','application/pdf','Uploads\\Documents\\c3244b50-2799-4674-9f2c-b169d35f8223_Ordenes médicas.Pdf','2025-06-13 19:40:04',0),(27,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\81030102-1045-4d25-a078-03d844116424_Ordenes médicas-1.Pdf','2025-06-16 13:39:45',0),(28,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\444ced55-5248-40f1-8ee8-99c8b3ebac3c_Ordenes médicas-1.Pdf','2025-06-16 14:01:35',0),(29,79,NULL,NULL,45,'Ordenes médicas-1.Pdf','application/pdf','Uploads\\Documents\\1bab7d00-04a7-4ed5-a6be-b0bfe4179926_Ordenes médicas-1.Pdf','2025-06-16 14:08:05',0);
 /*!40000 ALTER TABLE `uploaded_documents` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1274,7 +1284,7 @@ CREATE TABLE `user_bot_relations` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
   `bot_id` int NOT NULL,
-  `relationship_type` enum('amistad','romántico','coach','asistente','otro') COLLATE utf8mb4_unicode_ci DEFAULT 'otro',
+  `relationship_type` enum('amistad','romántico','coach','asistente','otro') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'otro',
   `interaction_score` int DEFAULT '0',
   `last_interaction` datetime DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -1306,7 +1316,7 @@ DROP TABLE IF EXISTS `user_consents`;
 CREATE TABLE `user_consents` (
   `id` int NOT NULL AUTO_INCREMENT,
   `user_id` int NOT NULL,
-  `consent_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `consent_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `granted` tinyint(1) DEFAULT '0',
   `granted_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -1365,14 +1375,14 @@ CREATE TABLE `users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `role_id` int NOT NULL,
   `document_type_id` int DEFAULT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `email` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `phone` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `address` text COLLATE utf8mb4_unicode_ci,
-  `document_number` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `document_photo_url` text COLLATE utf8mb4_unicode_ci,
-  `avatar_url` text COLLATE utf8mb4_unicode_ci,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `document_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `document_photo_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `avatar_url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `is_verified` tinyint(1) DEFAULT '0',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1406,7 +1416,7 @@ CREATE TABLE `vector_embeddings` (
   `id` int NOT NULL AUTO_INCREMENT,
   `knowledge_chunk_id` int NOT NULL,
   `embedding_vector` blob NOT NULL,
-  `provider` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT 'openai',
+  `provider` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'openai',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `knowledge_chunk_id` (`knowledge_chunk_id`),
@@ -1432,4 +1442,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-19 21:34:47
+-- Dump completed on 2025-06-23 23:46:28
