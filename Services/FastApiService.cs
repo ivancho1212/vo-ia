@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -6,32 +8,59 @@ namespace Voia.Api.Services
     public class FastApiService
     {
         private readonly HttpClient _httpClient;
+        private readonly string _baseUrl;
 
-        public FastApiService(HttpClient httpClient)
+        public FastApiService(HttpClient httpClient, IConfiguration configuration)
         {
             _httpClient = httpClient;
+            _baseUrl = configuration["FastApi:BaseUrl"] ?? throw new ArgumentNullException("FastApi:BaseUrl");
         }
 
+        // 🚀 Procesa documentos PDF pendientes
         public async Task TriggerDocumentProcessingAsync()
+        {
+            await PostAsync("/process-documents/");
+        }
+
+        // 🚀 Procesa URLs pendientes
+        public async Task TriggerUrlProcessingAsync()
+        {
+            await PostAsync("/process-urls/");
+        }
+
+        // 🚀 Procesa textos planos pendientes
+        public async Task TriggerCustomTextProcessingAsync()
+        {
+            await PostAsync("/process-custom-texts/");
+        }
+
+        // 🔗 Método genérico para llamadas POST
+        private async Task PostAsync(string endpoint)
         {
             try
             {
-                var response = await _httpClient.PostAsync("http://localhost:8000/process-documents/", null);
+                var fullUrl = new Uri(new Uri(_baseUrl), endpoint);
+
+                Console.WriteLine($"[FASTAPI] ⏩ Llamando a {fullUrl}");
+
+                var response = await _httpClient.PostAsync(fullUrl, null);
 
                 if (response.IsSuccessStatusCode)
                 {
                     var content = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine("[FASTAPI] Procesamiento exitoso: " + content);
+                    Console.WriteLine("[FASTAPI] ✔️ Procesamiento exitoso: " + content);
                 }
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine("[FASTAPI] Error en procesamiento: " + error);
+                    Console.WriteLine("[FASTAPI] ❌ Error en procesamiento: " + error);
+                    throw new Exception($"Error en FastAPI: {error}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("[FASTAPI ERROR] No se pudo contactar con el servicio de procesamiento: " + ex.Message);
+                Console.WriteLine("[FASTAPI] 🔥 Error crítico: " + ex.Message);
+                throw;
             }
         }
     }

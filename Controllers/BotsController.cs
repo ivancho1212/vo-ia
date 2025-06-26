@@ -138,7 +138,6 @@ namespace Voia.Api.Controllers
 
             if (!ModelState.IsValid)
             {
-                Console.WriteLine("[DEBUG] ModelState inválido.");
                 return BadRequest(ModelState);
             }
 
@@ -146,31 +145,31 @@ namespace Voia.Api.Controllers
             int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 45;
             Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
 
+            // Validar si ya existe un bot con ese nombre
             var existingBot = await _context.Bots
                 .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
 
             if (existingBot != null)
             {
-                Console.WriteLine("[DEBUG] Ya existe un bot con el nombre especificado.");
                 return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
             }
 
+            // Validar plantilla
             var template = await _context.BotTemplates
                 .Include(t => t.DefaultStyle)
                 .FirstOrDefaultAsync(t => t.Id == botDto.BotTemplateId);
 
             if (template == null)
             {
-                Console.WriteLine("[DEBUG] La plantilla especificada no existe.");
                 return BadRequest(new { Message = "Plantilla no encontrada." });
             }
 
             if (template.IaProviderId == 0 || template.AiModelConfigId == 0)
             {
-                Console.WriteLine("[DEBUG] La plantilla no tiene proveedor/modelo de IA válido.");
-                return BadRequest(new { Message = "La plantilla no tiene configuración válida." });
+                return BadRequest(new { Message = "La plantilla no tiene configuración de IA válida." });
             }
 
+            // Crear o reutilizar estilo
             int? reusedOrClonedStyleId = null;
 
             if (template.DefaultStyleId.HasValue)
@@ -179,58 +178,52 @@ namespace Voia.Api.Controllers
                     .AsNoTracking()
                     .FirstOrDefaultAsync(s => s.Id == template.DefaultStyleId.Value);
 
-                if (styleTemplate == null)
+                if (styleTemplate != null)
                 {
-                    Console.WriteLine("[DEBUG] StyleTemplate no encontrado.");
-                    return BadRequest(new { Message = "StyleTemplate no encontrado." });
-                }
+                    string sanitizedPosition = (styleTemplate.Position ?? "bottom-right")
+                        .Trim()
+                        .Where(c => c >= 32 && c <= 126)
+                        .Aggregate("", (acc, c) => acc + c);
 
-                string sanitizedPosition = (styleTemplate.Position ?? "bottom-right")
-                    .Trim()
-                    .Where(c => c >= 32 && c <= 126)
-                    .Aggregate("", (acc, c) => acc + c);
+                    var existingStyle = await _context.BotStyles
+                        .FirstOrDefaultAsync(s =>
+                            s.StyleTemplateId == styleTemplate.Id &&
+                            s.Theme == (styleTemplate.Theme ?? "light") &&
+                            s.PrimaryColor == (styleTemplate.PrimaryColor ?? "#000000") &&
+                            s.SecondaryColor == (styleTemplate.SecondaryColor ?? "#ffffff") &&
+                            s.FontFamily == (styleTemplate.FontFamily ?? "Arial") &&
+                            s.AvatarUrl == (styleTemplate.AvatarUrl ?? "") &&
+                            s.Position == sanitizedPosition &&
+                            s.CustomCss == (styleTemplate.CustomCss ?? "")
+                        );
 
-                var existingStyle = await _context.BotStyles
-                    .Where(s =>
-                        s.StyleTemplateId == styleTemplate.Id &&
-                        s.Theme == (styleTemplate.Theme ?? "light") &&
-                        s.PrimaryColor == (styleTemplate.PrimaryColor ?? "#000000") &&
-                        s.SecondaryColor == (styleTemplate.SecondaryColor ?? "#ffffff") &&
-                        s.FontFamily == (styleTemplate.FontFamily ?? "Arial") &&
-                        s.AvatarUrl == (styleTemplate.AvatarUrl ?? "") &&
-                        s.Position == sanitizedPosition &&
-                        s.CustomCss == (styleTemplate.CustomCss ?? "")
-                    )
-                    .FirstOrDefaultAsync();
-
-                if (existingStyle != null)
-                {
-                    reusedOrClonedStyleId = existingStyle.Id;
-                    Console.WriteLine($"[DEBUG] Reutilizando BotStyle existente con Id = {reusedOrClonedStyleId}.");
-                }
-                else
-                {
-                    var newBotStyle = new BotStyle
+                    if (existingStyle != null)
                     {
-                        StyleTemplateId = styleTemplate.Id,
-                        Theme = styleTemplate.Theme ?? "light",
-                        PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
-                        SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
-                        FontFamily = styleTemplate.FontFamily ?? "Arial",
-                        AvatarUrl = styleTemplate.AvatarUrl ?? "",
-                        Position = sanitizedPosition,
-                        CustomCss = styleTemplate.CustomCss ?? "",
-                        UpdatedAt = DateTime.UtcNow
-                    };
+                        reusedOrClonedStyleId = existingStyle.Id;
+                    }
+                    else
+                    {
+                        var newStyle = new BotStyle
+                        {
+                            StyleTemplateId = styleTemplate.Id,
+                            Theme = styleTemplate.Theme ?? "light",
+                            PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
+                            SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
+                            FontFamily = styleTemplate.FontFamily ?? "Arial",
+                            AvatarUrl = styleTemplate.AvatarUrl ?? "",
+                            Position = sanitizedPosition,
+                            CustomCss = styleTemplate.CustomCss ?? "",
+                            UpdatedAt = DateTime.UtcNow
+                        };
 
-                    _context.BotStyles.Add(newBotStyle);
-                    await _context.SaveChangesAsync();
-
-                    reusedOrClonedStyleId = newBotStyle.Id;
-                    Console.WriteLine($"[DEBUG] Clonado nuevo BotStyle con Id = {reusedOrClonedStyleId}.");
+                        _context.BotStyles.Add(newStyle);
+                        await _context.SaveChangesAsync();
+                        reusedOrClonedStyleId = newStyle.Id;
+                    }
                 }
             }
 
+            // Crear bot
             var bot = new Bot
             {
                 Name = botDto.Name,
@@ -248,14 +241,14 @@ namespace Voia.Api.Controllers
 
             _context.Bots.Add(bot);
             await _context.SaveChangesAsync();
+            Console.WriteLine($"[DEBUG] Bot creado con Id: {bot.Id}");
 
-            Console.WriteLine($"[DEBUG] Bot guardado con Id = {bot.Id}.");
-
+            // Crear sesión de entrenamiento
             var trainingSession = new BotTrainingSession
             {
                 BotId = bot.Id,
                 SessionName = $"Entrenamiento inicial para {botDto.Name}",
-                Description = $"Sesión creada al momento de crear el bot con plantilla '{template.Name}'",
+                Description = $"Sesión creada automáticamente al crear el bot desde la plantilla '{template.Name}'",
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -263,22 +256,45 @@ namespace Voia.Api.Controllers
             _context.BotTrainingSessions.Add(trainingSession);
             await _context.SaveChangesAsync();
 
-            var documentosDePlantilla = await _context.UploadedDocuments
+            // ✅ Heredar documentos
+            var documentos = await _context.UploadedDocuments
                 .Where(d => d.BotTemplateId == template.Id && d.BotId == null)
                 .ToListAsync();
 
-            foreach (var doc in documentosDePlantilla)
+            foreach (var doc in documentos)
             {
                 doc.BotId = bot.Id;
                 doc.TemplateTrainingSessionId = null;
-                Console.WriteLine($"[DEBUG] Documento ID {doc.Id} → BotId: {doc.BotId}, SessionId: {doc.TemplateTrainingSessionId}");
+            }
+
+            // ✅ Heredar URLs
+            var urls = await _context.TrainingUrls
+                .Where(u => u.BotTemplateId == template.Id && u.BotId == null)
+                .ToListAsync();
+
+            foreach (var url in urls)
+            {
+                url.BotId = bot.Id;
+                url.TemplateTrainingSessionId = null;
+            }
+
+            // ✅ Heredar textos planos
+            var textos = await _context.TrainingCustomTexts
+                .Where(t => t.BotTemplateId == template.Id && t.BotId == null)
+                .ToListAsync();
+
+            foreach (var texto in textos)
+            {
+                texto.BotId = bot.Id;
+                texto.TemplateTrainingSessionId = null;
             }
 
             await _context.SaveChangesAsync();
 
+            // ✅ Agregar texto plano adicional si se envió desde el DTO
             if (!string.IsNullOrWhiteSpace(botDto.CustomText))
             {
-                var trainingText = new TrainingCustomText
+                var customText = new TrainingCustomText
                 {
                     BotId = bot.Id,
                     BotTemplateId = template.Id,
@@ -289,12 +305,31 @@ namespace Voia.Api.Controllers
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                _context.TrainingCustomTexts.Add(trainingText);
+                _context.TrainingCustomTexts.Add(customText);
                 await _context.SaveChangesAsync();
             }
 
-            // ✅ Llamar al servicio de FastAPI para procesar documentos
-            await _fastApiService.TriggerDocumentProcessingAsync();
+            // ✅ Trigger a la API de vectorización (FastAPI)
+            var hayDocumentos = documentos.Any() || await _context.UploadedDocuments.AnyAsync(d => d.BotId == bot.Id);
+            var hayUrls = urls.Any() || await _context.TrainingUrls.AnyAsync(u => u.BotId == bot.Id);
+            var hayTextos = textos.Any() || await _context.TrainingCustomTexts.AnyAsync(t => t.BotId == bot.Id);
+
+            if (hayDocumentos)
+            {
+                await _fastApiService.TriggerDocumentProcessingAsync();
+            }
+
+            if (hayUrls)
+            {
+                await _fastApiService.TriggerUrlProcessingAsync();
+            }
+
+            if (hayTextos)
+            {
+                await _fastApiService.TriggerCustomTextProcessingAsync();
+            }
+
+            Console.WriteLine("[DEBUG] Bot creado exitosamente con todos los datos heredados.");
 
             return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
         }
