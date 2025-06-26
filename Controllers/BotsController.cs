@@ -10,19 +10,24 @@ using System.Linq;
 using System.Security.Claims;
 using Voia.Api.Models.Bots;
 using Voia.Api.Models.BotTrainingSession;
+using Voia.Api.Services;
 
 namespace Voia.Api.Controllers
 {
+
     // [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class BotsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly FastApiService _fastApiService;
 
-        public BotsController(ApplicationDbContext context)
+        public BotsController(ApplicationDbContext context, FastApiService fastApiService)
         {
             _context = context;
+            _fastApiService = fastApiService;
+
         }
 
         /// <summary>
@@ -185,7 +190,6 @@ namespace Voia.Api.Controllers
                     .Where(c => c >= 32 && c <= 126)
                     .Aggregate("", (acc, c) => acc + c);
 
-                // 👉 Verificar si ya existe un estilo igual
                 var existingStyle = await _context.BotStyles
                     .Where(s =>
                         s.StyleTemplateId == styleTemplate.Id &&
@@ -266,7 +270,7 @@ namespace Voia.Api.Controllers
             foreach (var doc in documentosDePlantilla)
             {
                 doc.BotId = bot.Id;
-                doc.TemplateTrainingSessionId = trainingSession.Id;
+                doc.TemplateTrainingSessionId = null;
                 Console.WriteLine($"[DEBUG] Documento ID {doc.Id} → BotId: {doc.BotId}, SessionId: {doc.TemplateTrainingSessionId}");
             }
 
@@ -288,6 +292,9 @@ namespace Voia.Api.Controllers
                 _context.TrainingCustomTexts.Add(trainingText);
                 await _context.SaveChangesAsync();
             }
+
+            // ✅ Llamar al servicio de FastAPI para procesar documentos
+            await _fastApiService.TriggerDocumentProcessingAsync();
 
             return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
         }

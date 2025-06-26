@@ -125,6 +125,7 @@ builder.Services.AddSwaggerGen(c =>
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
     c.IncludeXmlComments(xmlPath);
 });
+builder.Services.AddHttpClient<FastApiService>();
 
 builder.Services.AddScoped<IAiProviderService, AiProviderService>();
 
