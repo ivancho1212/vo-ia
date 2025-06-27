@@ -14,10 +14,13 @@ namespace Voia.Api.Models
         public int BotTemplateId { get; set; }
 
         [ForeignKey("BotTemplateId")]
-        public BotTemplate BotTemplate { get; set; } // ✅ Esto le dice a EF que apunte a la tabla bot_templates
+        public BotTemplate BotTemplate { get; set; }
 
         [Column("template_training_session_id")]
         public int? TemplateTrainingSessionId { get; set; }
+
+        [ForeignKey("TemplateTrainingSessionId")]
+        public TemplateTrainingSession? TemplateTrainingSession { get; set; } // ✅ ← ESTO FALTABA
 
         [Column("user_id")]
         public int UserId { get; set; }
@@ -38,11 +41,20 @@ namespace Voia.Api.Models
 
         [Column("indexed")]
         public bool? Indexed { get; set; } = false;
+
         [Column("bot_id")]
-        public int? BotId { get; set; }  // Puede ser null si solo es parte de una plantilla
+        public int? BotId { get; set; }
 
         [ForeignKey("BotId")]
         public Bot? Bot { get; set; }
 
+        [Column("content_hash")]
+        public string? ContentHash { get; set; }
+
+        [Column("qdrant_id")]
+        public string? QdrantId { get; set; }
+
+        [Column("extracted_text")]
+        public string? ExtractedText { get; set; }
     }
 }

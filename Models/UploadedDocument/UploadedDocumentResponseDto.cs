@@ -13,5 +13,9 @@ namespace Voia.Api.Models.Dtos
         public string FilePath { get; set; }
         public DateTime UploadedAt { get; set; }
         public bool? Indexed { get; set; }
+        public string? ContentHash { get; set; }
+        public string? QdrantId { get; set; }
+        public string? ExtractedText { get; set; }
+
     }
 }

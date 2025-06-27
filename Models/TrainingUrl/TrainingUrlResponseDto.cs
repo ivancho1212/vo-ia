@@ -12,5 +12,10 @@ namespace Voia.Api.Models.Dtos
         public string Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public string? ContentHash { get; set; }
+        public string? QdrantId { get; set; }
+        public string? ExtractedText { get; set; }
+        public bool Indexed { get; set; }
+
     }
 }

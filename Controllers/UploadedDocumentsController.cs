@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.Dtos;
+using Voia.Api.Helpers;
 
 namespace Voia.Api.Controllers
 {
@@ -63,14 +64,45 @@ namespace Voia.Api.Controllers
             });
         }
 
+        // UploadedDocumentsController.cs
+        [HttpGet("by-template/{templateId}")]
+        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
+        {
+            var docs = await _context.UploadedDocuments
+                        .Where(x => x.BotTemplateId == templateId)
+                        .ToListAsync();
+
+            return Ok(docs);
+        }
+
         /// <summary>
         /// Crea un nuevo documento subido.
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<UploadedDocumentResponseDto>> Create([FromForm] UploadedDocumentCreateDto dto)
         {
+            Console.WriteLine("🟢🟢🟢🟢🟢🟢 [UPLOAD DOCUMENT] Datos recibidos en API:");
+            Console.WriteLine($"- BotTemplateId: {dto.BotTemplateId}");
+            Console.WriteLine($"- TemplateTrainingSessionId: {dto.TemplateTrainingSessionId}");
+            Console.WriteLine($"- UserId: {dto.UserId}");
+            Console.WriteLine($"- FileName: {dto.File?.FileName}");
+
             if (dto.File == null || dto.File.Length == 0)
-                return BadRequest("No se recibió un archivo válido.");
+                return BadRequest("No se recibió un archivo válido.🟢🟢🟢🟢🟢🟢");
+
+            var contentHash = HashHelper.ComputeFileHash(dto.File);
+
+            var existing = await _context.UploadedDocuments
+                .FirstOrDefaultAsync(d => d.ContentHash == contentHash && d.BotTemplateId == dto.BotTemplateId);
+
+            if (existing != null)
+            {
+                return Conflict(new
+                {
+                    message = "⚠️ Este documento ya fue subido anteriormente.🟢🟢🟢🟢🟢",
+                    existingId = existing.Id
+                });
+            }
 
             var uploadsFolder = Path.Combine("Uploads", "Documents");
             if (!Directory.Exists(uploadsFolder))
@@ -94,11 +126,27 @@ namespace Voia.Api.Controllers
                 FileType = dto.File.ContentType,
                 FilePath = filePath,
                 UploadedAt = DateTime.UtcNow,
-                Indexed = false
+                Indexed = false,
+                ContentHash = contentHash
             };
 
+            // 🔥 LOG DE VERIFICACIÓN COMPLETO 🔥
+            Console.WriteLine("🚀 [DOCUMENT DATA TO DB]");
+            Console.WriteLine($"- BotTemplateId: {document.BotTemplateId}");
+            Console.WriteLine($"- TemplateTrainingSessionId: {document.TemplateTrainingSessionId}");
+            Console.WriteLine($"- UserId: {document.UserId}");
+            Console.WriteLine($"- FileName: {document.FileName}");
+            Console.WriteLine($"- FileType: {document.FileType}");
+            Console.WriteLine($"- FilePath: {document.FilePath}");
+            Console.WriteLine($"- UploadedAt: {document.UploadedAt}");
+            Console.WriteLine($"- Indexed: {document.Indexed}");
+            Console.WriteLine($"- ContentHash: {document.ContentHash}");
+
             _context.UploadedDocuments.Add(document);
+
+            Console.WriteLine("💾 [SAVE TO DATABASE] Ejecutando SaveChangesAsync...");
             await _context.SaveChangesAsync();
+            Console.WriteLine("✅✅✅ Documento guardado correctamente con ID: " + document.Id);
 
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, new UploadedDocumentResponseDto
             {

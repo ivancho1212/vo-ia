@@ -35,6 +35,18 @@ namespace Voia.Api.Models
 
         [ForeignKey("BotId")]
         public Bot? Bot { get; set; }
+        [Column("content_hash")]
+        public string? ContentHash { get; set; }
+
+        [Column("qdrant_id")]
+        public string? QdrantId { get; set; }
+
+        [Column("extracted_text")]
+        public string? ExtractedText { get; set; }
+
+        [Column("indexed")]
+        public bool Indexed { get; set; } = false;
+
 
     }
 }

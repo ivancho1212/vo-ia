@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.Dtos;
+using Voia.Api.Helpers;
+
 
 namespace Voia.Api.Controllers
 {
@@ -59,6 +61,31 @@ namespace Voia.Api.Controllers
 
             return Ok(texts);
         }
+
+        [HttpGet("by-template/{templateId}")]
+        public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetByTemplate(int templateId)
+        {
+            var texts = await _context.TrainingCustomTexts
+                        .Where(x => x.BotTemplateId == templateId)
+                        .Select(x => new TrainingCustomTextResponseDto
+                        {
+                            Id = x.Id,
+                            BotTemplateId = x.BotTemplateId,
+                            TemplateTrainingSessionId = x.TemplateTrainingSessionId,
+                            UserId = x.UserId,
+                            Content = x.Content,
+                            Status = x.Status,
+                            CreatedAt = x.CreatedAt,
+                            UpdatedAt = x.UpdatedAt,
+                            QdrantId = x.QdrantId,
+                            ContentHash = x.ContentHash,
+                            Indexed = x.Indexed
+                        })
+                        .ToListAsync();
+
+            return Ok(texts);
+        }
+
 
         /// <summary>
         /// Crea un nuevo texto personalizado de entrenamiento.

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.Dtos;
+using Voia.Api.Helpers;
 
 namespace Voia.Api.Controllers
 {
@@ -62,6 +63,32 @@ namespace Voia.Api.Controllers
             return Ok(urls);
         }
 
+        [HttpGet("by-template/{templateId}")]
+        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByTemplate(int templateId)
+        {
+            var urls = await _context.TrainingUrls
+                        .Where(x => x.BotTemplateId == templateId)
+                        .Select(x => new TrainingUrlResponseDto
+                        {
+                            Id = x.Id,
+                            BotTemplateId = x.BotTemplateId,
+                            TemplateTrainingSessionId = x.TemplateTrainingSessionId,
+                            UserId = x.UserId,
+                            Url = x.Url,
+                            Status = x.Status,
+                            CreatedAt = x.CreatedAt,
+                            UpdatedAt = x.UpdatedAt,
+                            QdrantId = x.QdrantId,
+                            ContentHash = x.ContentHash,
+                            Indexed = x.Indexed,
+                            ExtractedText = x.ExtractedText
+                        })
+                        .ToListAsync();
+
+            return Ok(urls);
+        }
+
+
         /// <summary>
         /// Crea una nueva URL de entrenamiento.
         /// </summary>
@@ -70,12 +97,27 @@ namespace Voia.Api.Controllers
         {
             try
             {
+                var contentHash = HashHelper.ComputeStringHash(dto.Url);
+
+                var existing = await _context.TrainingUrls
+                    .FirstOrDefaultAsync(u => u.ContentHash == contentHash && u.BotTemplateId == dto.BotTemplateId);
+
+                if (existing != null)
+                {
+                    return Conflict(new
+                    {
+                        message = "⚠️ Esta URL ya fue registrada anteriormente.",
+                        existingId = existing.Id
+                    });
+                }
+
                 var url = new TrainingUrl
                 {
                     BotTemplateId = dto.BotTemplateId,
                     TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
                     UserId = dto.UserId,
                     Url = dto.Url,
+                    ContentHash = contentHash,
                     Status = "pending",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -101,6 +143,7 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
+
 
 
         /// <summary>

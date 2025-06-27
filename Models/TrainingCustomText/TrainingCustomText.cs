@@ -32,6 +32,18 @@ namespace Voia.Api.Models
 
         [ForeignKey("BotId")]
         public Bot? Bot { get; set; }
+        [Column("content_hash")]
+        public string? ContentHash { get; set; }
+
+        [Column("qdrant_id")]
+        public string? QdrantId { get; set; }
+
+        [Column("indexed")]
+        public bool Indexed { get; set; } = false;
+        [Column("status")]
+        public string Status { get; set; } = "pending";
+
+
 
     }
 }

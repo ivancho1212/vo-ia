@@ -264,7 +264,7 @@ namespace Voia.Api.Controllers
             foreach (var doc in documentos)
             {
                 doc.BotId = bot.Id;
-                doc.TemplateTrainingSessionId = null;
+               // doc.TemplateTrainingSessionId = null;
             }
 
             // ✅ Heredar URLs
@@ -275,7 +275,7 @@ namespace Voia.Api.Controllers
             foreach (var url in urls)
             {
                 url.BotId = bot.Id;
-                url.TemplateTrainingSessionId = null;
+               // url.TemplateTrainingSessionId = null;
             }
 
             // ✅ Heredar textos planos
@@ -286,7 +286,7 @@ namespace Voia.Api.Controllers
             foreach (var texto in textos)
             {
                 texto.BotId = bot.Id;
-                texto.TemplateTrainingSessionId = null;
+                //texto.TemplateTrainingSessionId = null;
             }
 
             await _context.SaveChangesAsync();
