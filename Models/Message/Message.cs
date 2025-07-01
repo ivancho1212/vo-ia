@@ -3,9 +3,9 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Voia.Api.Models.Conversations;
 
-namespace Voia.Api.Models.Prompts
+namespace Voia.Api.Models.Messages
 {
-    public class Prompt
+    public class Message
     {
         [Key]
         public int Id { get; set; }
@@ -18,24 +18,26 @@ namespace Voia.Api.Models.Prompts
         [Column("user_id")]
         public int UserId { get; set; }
 
+        [Required]
         [Column("conversation_id")]
-        public int? ConversationId { get; set; }
+        public int ConversationId { get; set; }
 
         [Required]
-        [Column("prompt_text")]
-        public string PromptText { get; set; }
+        [Column("sender")]
+        public string Sender { get; set; } = "user"; // user | bot | admin
 
-        [Column("response_text")]
-        public string ResponseText { get; set; }
+        [Required]
+        [Column("message_text")]
+        public string MessageText { get; set; }
 
         [Column("tokens_used")]
         public int? TokensUsed { get; set; } = 0;
 
+        [Column("source")]
+        public string Source { get; set; } = "widget"; // widget | admin-panel
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-        [Column("source")]
-        public string Source { get; set; } = "widget";
 
         // Relaciones
         public virtual Bot Bot { get; set; }

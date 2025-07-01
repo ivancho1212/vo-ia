@@ -8,7 +8,7 @@ using Voia.Api.Models.BotTrainingSession;
 using Voia.Api.Models.Conversations;
 using Voia.Api.Models.GeneratedImages;
 using Voia.Api.Models.Plans;
-using Voia.Api.Models.Prompts;
+using Voia.Api.Models.Messages;
 using Voia.Api.Models.StyleTemplate;
 using Voia.Api.Models.Subscriptions;
 using Voia.Api.Models.SupportTicket;
@@ -25,7 +25,7 @@ namespace Voia.Api.Data
         public DbSet<User> Users { get; set; }
         public DbSet<Bot> Bots { get; set; }
         public DbSet<BotStyle> BotStyles { get; set; }
-        public DbSet<Prompt> Prompts { get; set; }
+        public DbSet<Message> Messages { get; set; }
         public DbSet<Plan> Plans { get; set; }
         public DbSet<Subscription> Subscriptions { get; set; }
         public DbSet<SupportTicket> SupportTickets { get; set; }
@@ -53,7 +53,6 @@ namespace Voia.Api.Data
         public DbSet<BotCustomPrompt> BotCustomPrompts { get; set; }
         public DbSet<BotTrainingSession> BotTrainingSessions { get; set; }
         public DbSet<StyleTemplate> StyleTemplates { get; set; }
-        public DbSet<BotConversation> BotConversations { get; set; }
         public DbSet<TemplateTrainingSession> TemplateTrainingSessions { get; set; }
         public DbSet<VectorEmbedding> VectorEmbeddings { get; set; }
         public DbSet<TrainingCustomText> TrainingCustomTexts { get; set; }

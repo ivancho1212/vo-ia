@@ -4,6 +4,7 @@ using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.Dtos;
 using Voia.Api.Helpers;
+using Voia.Api.Services;
 
 namespace Voia.Api.Controllers
 {
@@ -64,7 +65,9 @@ namespace Voia.Api.Controllers
             });
         }
 
-        // UploadedDocumentsController.cs
+        /// <summary>
+        /// Obtiene documentos por ID de plantilla.
+        /// </summary>
         [HttpGet("by-template/{templateId}")]
         public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
         {
@@ -76,19 +79,17 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
-        /// Crea un nuevo documento subido.
+        /// Crea un nuevo documento subido, extrae el texto, y lo divide en chunks.
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult<UploadedDocumentResponseDto>> Create([FromForm] UploadedDocumentCreateDto dto)
+        public async Task<ActionResult<UploadedDocumentResponseDto>> Create(
+    [FromForm] UploadedDocumentCreateDto dto,
+    [FromServices] TextChunkingService chunkingService,
+    [FromServices] TextExtractionService textExtractionService
+)
         {
-            Console.WriteLine("🟢🟢🟢🟢🟢🟢 [UPLOAD DOCUMENT] Datos recibidos en API:");
-            Console.WriteLine($"- BotTemplateId: {dto.BotTemplateId}");
-            Console.WriteLine($"- TemplateTrainingSessionId: {dto.TemplateTrainingSessionId}");
-            Console.WriteLine($"- UserId: {dto.UserId}");
-            Console.WriteLine($"- FileName: {dto.File?.FileName}");
-
             if (dto.File == null || dto.File.Length == 0)
-                return BadRequest("No se recibió un archivo válido.🟢🟢🟢🟢🟢🟢");
+                return BadRequest(new { message = "No se recibió un archivo válido." });
 
             var contentHash = HashHelper.ComputeFileHash(dto.File);
 
@@ -99,7 +100,7 @@ namespace Voia.Api.Controllers
             {
                 return Conflict(new
                 {
-                    message = "⚠️ Este documento ya fue subido anteriormente.🟢🟢🟢🟢🟢",
+                    message = "⚠️ Este documento ya fue subido anteriormente.",
                     existingId = existing.Id
                 });
             }
@@ -117,6 +118,41 @@ namespace Voia.Api.Controllers
                 await dto.File.CopyToAsync(stream);
             }
 
+            // 🧠 Paso 1: Extraer texto
+            string extractedText;
+            try
+            {
+                extractedText = textExtractionService.ExtractText(filePath, dto.File.ContentType);
+            }
+            catch (Exception ex)
+            {
+                // 🧹 Eliminar archivo si está corrupto o no legible
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                }
+
+                return UnprocessableEntity(new
+                {
+                    message = "❌ El archivo no se puede procesar. Verifica que no esté cifrado o dañado.",
+                    error = ex.Message
+                });
+            }
+
+            // Validar si no se extrajo nada
+            if (string.IsNullOrWhiteSpace(extractedText))
+            {
+                if (System.IO.File.Exists(filePath))
+                {
+                    System.IO.File.Delete(filePath);
+                }
+
+                return UnprocessableEntity(new
+                {
+                    message = "❌ El archivo no contiene texto legible. Verifica que no esté vacío, cifrado o dañado."
+                });
+            }
+
             var document = new UploadedDocument
             {
                 BotTemplateId = dto.BotTemplateId,
@@ -127,26 +163,24 @@ namespace Voia.Api.Controllers
                 FilePath = filePath,
                 UploadedAt = DateTime.UtcNow,
                 Indexed = false,
-                ContentHash = contentHash
+                ContentHash = contentHash,
+                ExtractedText = extractedText // 👈 opcional
             };
 
-            // 🔥 LOG DE VERIFICACIÓN COMPLETO 🔥
-            Console.WriteLine("🚀 [DOCUMENT DATA TO DB]");
-            Console.WriteLine($"- BotTemplateId: {document.BotTemplateId}");
-            Console.WriteLine($"- TemplateTrainingSessionId: {document.TemplateTrainingSessionId}");
-            Console.WriteLine($"- UserId: {document.UserId}");
-            Console.WriteLine($"- FileName: {document.FileName}");
-            Console.WriteLine($"- FileType: {document.FileType}");
-            Console.WriteLine($"- FilePath: {document.FilePath}");
-            Console.WriteLine($"- UploadedAt: {document.UploadedAt}");
-            Console.WriteLine($"- Indexed: {document.Indexed}");
-            Console.WriteLine($"- ContentHash: {document.ContentHash}");
-
             _context.UploadedDocuments.Add(document);
-
-            Console.WriteLine("💾 [SAVE TO DATABASE] Ejecutando SaveChangesAsync...");
             await _context.SaveChangesAsync();
-            Console.WriteLine("✅✅✅ Documento guardado correctamente con ID: " + document.Id);
+
+            // 🧠 Paso 2: Dividir en chunks y guardar
+            var chunks = chunkingService.SplitTextIntoChunks(
+                extractedText,
+                "uploaded_document",
+                document.Id,
+                document.TemplateTrainingSessionId,
+                document.Id
+            );
+
+            _context.KnowledgeChunks.AddRange(chunks);
+            await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, new UploadedDocumentResponseDto
             {

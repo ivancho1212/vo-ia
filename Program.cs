@@ -164,6 +164,10 @@ builder.Services.AddHttpClient<GeminiClient>()
         }
     });
 
+builder.Services.AddScoped<TextExtractionService>();
+builder.Services.AddScoped<TextChunkingService>();
+
+
 var app = builder.Build();
 
 

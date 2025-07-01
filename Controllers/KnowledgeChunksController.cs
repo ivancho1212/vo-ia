@@ -18,12 +18,19 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
-        /// Obtiene todos los knowledge chunks.
+        /// Obtiene todos los knowledge chunks con paginación.
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetAll()
+        public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetAll(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
         {
+            var skip = (page - 1) * pageSize;
+
             var chunks = await _context.KnowledgeChunks
+                .OrderByDescending(k => k.CreatedAt)
+                .Skip(skip)
+                .Take(pageSize)
                 .Select(k => new KnowledgeChunkResponseDto
                 {
                     Id = k.Id,
@@ -59,25 +66,48 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
+        /// Obtiene los knowledge chunks por ID de sesión de entrenamiento.
+        /// </summary>
+        [HttpGet("session/{sessionId}")]
+        public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetBySession(int sessionId)
+        {
+            var chunks = await _context.KnowledgeChunks
+                .Where(k => k.TemplateTrainingSessionId == sessionId)
+                .Select(k => new KnowledgeChunkResponseDto
+                {
+                    Id = k.Id,
+                    UploadedDocumentId = k.UploadedDocumentId,
+                    Content = k.Content,
+                    Metadata = k.Metadata,
+                    CreatedAt = k.CreatedAt,
+                    TemplateTrainingSessionId = k.TemplateTrainingSessionId
+                }).ToListAsync();
+
+            return Ok(chunks);
+        }
+
+        /// <summary>
         /// Obtiene un knowledge chunk por ID.
         /// </summary>
         [HttpGet("{id}")]
         public async Task<ActionResult<KnowledgeChunkResponseDto>> GetById(int id)
         {
-            var chunk = await _context.KnowledgeChunks.FindAsync(id);
+            var chunk = await _context.KnowledgeChunks
+                .Where(k => k.Id == id)
+                .Select(k => new KnowledgeChunkResponseDto
+                {
+                    Id = k.Id,
+                    UploadedDocumentId = k.UploadedDocumentId,
+                    Content = k.Content,
+                    Metadata = k.Metadata,
+                    CreatedAt = k.CreatedAt,
+                    TemplateTrainingSessionId = k.TemplateTrainingSessionId
+                }).FirstOrDefaultAsync();
 
             if (chunk == null)
                 return NotFound();
 
-            return new KnowledgeChunkResponseDto
-            {
-                Id = chunk.Id,
-                UploadedDocumentId = chunk.UploadedDocumentId,
-                Content = chunk.Content,
-                Metadata = chunk.Metadata,
-                CreatedAt = chunk.CreatedAt,
-                TemplateTrainingSessionId = chunk.TemplateTrainingSessionId
-            };
+            return Ok(chunk);
         }
 
         /// <summary>
@@ -86,6 +116,9 @@ namespace Voia.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<KnowledgeChunkResponseDto>> Create(KnowledgeChunkCreateDto dto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             var chunk = new KnowledgeChunk
             {
                 UploadedDocumentId = dto.UploadedDocumentId,

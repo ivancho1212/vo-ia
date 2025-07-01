@@ -1,13 +1,11 @@
 using System;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json;
 using Voia.Api.Data;
 using Voia.Api.Models.BotConversation;
 using Voia.Api.Models.Conversations;
+using Voia.Api.Models.Messages;
 using Voia.Api.Services.Interfaces;
 
 [ApiController]
@@ -27,62 +25,101 @@ public class BotConversationsController : ControllerBase
     }
 
     /// <summary>
-    /// Envía una pregunta al bot y devuelve la respuesta.
+    /// Envía una pregunta al bot, guarda la conversación/mensajes y devuelve la respuesta.
     /// </summary>
     [HttpPost("ask")]
     public async Task<IActionResult> AskQuestion([FromBody] AskBotRequestDto dto)
     {
         if (dto.UserId <= 0)
         {
-            return BadRequest(new
-            {
-                success = false,
-                error = "UserId inválido"
-            });
+            return BadRequest(new { success = false, error = "UserId inválido" });
         }
 
         var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId);
         if (bot == null)
         {
-            return NotFound(new
-            {
-                success = false,
-                error = "Bot no encontrado"
-            });
+            return NotFound(new { success = false, error = "Bot no encontrado" });
         }
 
         var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
         if (!userExists)
         {
-            return BadRequest(new
-            {
-                success = false,
-                error = "Usuario no encontrado"
-            });
+            return BadRequest(new { success = false, error = "Usuario no encontrado" });
         }
 
+        // Obtener respuesta del proveedor de IA
         var response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
-
         if (string.IsNullOrWhiteSpace(response))
             response = "Lo siento, no pude generar una respuesta en este momento.";
 
-        var conversation = new Conversation
+        int conversationId;
+
+        if (dto.ConversationId.HasValue)
+        {
+            // Continuar conversación existente
+            var existingConv = await _context.Conversations.FindAsync(dto.ConversationId.Value);
+            if (existingConv == null)
+            {
+                return NotFound(new { success = false, error = "Conversación no encontrada." });
+            }
+
+            existingConv.UpdatedAt = DateTime.UtcNow;
+            existingConv.LastMessage = response;
+            conversationId = existingConv.Id;
+        }
+        else
+        {
+            // Crear nueva conversación
+            var newConv = new Conversation
+            {
+                BotId = bot.Id,
+                UserId = dto.UserId,
+                Title = dto.Question.Length > 30 ? dto.Question.Substring(0, 30) : dto.Question,
+                UserMessage = dto.Question,
+                BotResponse = response,
+                Status = "activa",
+                Blocked = false,
+                LastMessage = response,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            _context.Conversations.Add(newConv);
+            await _context.SaveChangesAsync(); // Importante para obtener el ID
+
+            conversationId = newConv.Id;
+        }
+
+        // Guardar mensaje del usuario
+        _context.Messages.Add(new Message
         {
             BotId = bot.Id,
             UserId = dto.UserId,
-            Title = dto.Question,
-            UserMessage = dto.Question,
-            BotResponse = response,
+            ConversationId = conversationId,
+            Sender = "user",
+            MessageText = dto.Question,
             CreatedAt = DateTime.UtcNow,
-            User = null,
-        };
+            Source = "widget"
+        });
 
-        _context.Conversations.Add(conversation);
+        // Guardar mensaje del bot
+        _context.Messages.Add(new Message
+        {
+            BotId = bot.Id,
+            UserId = dto.UserId,
+            ConversationId = conversationId,
+            Sender = "bot",
+            MessageText = response,
+            CreatedAt = DateTime.UtcNow,
+            Source = "widget"
+        });
+
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
             success = true,
+            conversationId = conversationId,
             question = dto.Question,
             answer = response
         });

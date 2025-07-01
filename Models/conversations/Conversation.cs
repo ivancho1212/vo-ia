@@ -25,10 +25,22 @@ namespace Voia.Api.Models.Conversations
         [Column("bot_response")]
         public string BotResponse { get; set; }
 
+        [Column("status")]
+        public string Status { get; set; } = "activa";
+
+        [Column("blocked")]
+        public bool Blocked { get; set; } = false;
+
+        [Column("last_message")]
+        public string LastMessage { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Relaciones
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        // Relaciones (ajústalas si necesitas cargar los objetos completos con Include)
         public virtual User User { get; set; }
         public virtual Bot Bot { get; set; }
     }
