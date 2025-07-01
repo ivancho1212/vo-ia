@@ -54,10 +54,12 @@ namespace Voia.Api.Controllers
                 Theme = dto.Theme,
                 PrimaryColor = dto.PrimaryColor,
                 SecondaryColor = dto.SecondaryColor,
+                HeaderBackgroundColor = dto.HeaderBackgroundColor,
                 FontFamily = dto.FontFamily,
                 AvatarUrl = dto.AvatarUrl,
                 Position = dto.Position,
                 CustomCss = dto.CustomCss
+
             };
 
             _context.StyleTemplates.Add(template);
@@ -79,6 +81,7 @@ namespace Voia.Api.Controllers
             template.Theme = dto.Theme;
             template.PrimaryColor = dto.PrimaryColor;
             template.SecondaryColor = dto.SecondaryColor;
+            template.HeaderBackgroundColor = dto.HeaderBackgroundColor;
             template.FontFamily = dto.FontFamily;
             template.AvatarUrl = dto.AvatarUrl;
             template.Position = dto.Position;

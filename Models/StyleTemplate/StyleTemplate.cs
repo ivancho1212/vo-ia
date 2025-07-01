@@ -45,5 +45,8 @@ namespace Voia.Api.Models.StyleTemplate
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        [Column("header_background_color")]
+        public string? HeaderBackgroundColor { get; set; }
+
     }
 }

@@ -12,5 +12,7 @@ namespace Voia.Api.Models
         public string AvatarUrl { get; set; }
         public string Position { get; set; }
         public string CustomCss { get; set; }
+        public string HeaderBackgroundColor { get; set; }
+
     }
 }

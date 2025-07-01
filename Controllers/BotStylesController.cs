@@ -90,16 +90,18 @@ namespace Voia.Api.Controllers
             }
 
             style.UserId = dto.UserId;
-            style.Name = dto.Name; // ← AQUI
+            style.Name = dto.Name;
             style.StyleTemplateId = dto.StyleTemplateId;
             style.Theme = dto.Theme;
             style.PrimaryColor = dto.PrimaryColor;
             style.SecondaryColor = dto.SecondaryColor;
+            style.HeaderBackgroundColor = dto.HeaderBackgroundColor; // 👈 Nuevo
             style.FontFamily = dto.FontFamily;
             style.AvatarUrl = dto.AvatarUrl;
             style.Position = dto.Position;
             style.CustomCss = dto.CustomCss;
             style.UpdatedAt = DateTime.UtcNow;
+
 
             await _context.SaveChangesAsync();
 
@@ -116,17 +118,19 @@ namespace Voia.Api.Controllers
             var style = new BotStyle
             {
                 UserId = dto.UserId,
-                Name = dto.Name, // ← AQUI
+                Name = dto.Name,
                 StyleTemplateId = dto.StyleTemplateId,
                 Theme = dto.Theme,
                 PrimaryColor = dto.PrimaryColor,
                 SecondaryColor = dto.SecondaryColor,
+                HeaderBackgroundColor = dto.HeaderBackgroundColor, // 👈 Nuevo
                 FontFamily = dto.FontFamily,
                 AvatarUrl = dto.AvatarUrl,
                 Position = dto.Position,
                 CustomCss = dto.CustomCss,
                 UpdatedAt = DateTime.UtcNow
             };
+
 
             _context.BotStyles.Add(style);
             await _context.SaveChangesAsync();

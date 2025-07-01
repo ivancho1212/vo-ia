@@ -33,6 +33,10 @@ namespace Voia.Api.Models
 
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
         public DateTime UpdatedAt { get; set; }
+
+        [Column("header_background_color")]
+        public string? HeaderBackgroundColor { get; set; }
+
     }
 
 }

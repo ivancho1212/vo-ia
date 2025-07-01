@@ -121,5 +121,10 @@ namespace Voia.Api.Hubs
 
             // (Opcional) Guardar el mensaje del admin en la base de datos si lo deseas
         }
+        public async Task LeaveRoom(string conversationId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
+        }
+
     }
 }

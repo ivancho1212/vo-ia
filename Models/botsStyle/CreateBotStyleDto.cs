@@ -10,4 +10,6 @@ public class CreateBotStyleDto
     public string AvatarUrl { get; set; }
     public string Position { get; set; } = "bottom-right";
     public string CustomCss { get; set; }
+    public string HeaderBackgroundColor { get; set; } = "#f5f5f5";
+
 }
