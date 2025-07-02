@@ -51,7 +51,23 @@ namespace Voia.Api.Hubs
 
         public async Task SendMessage(string conversationId, AskBotRequestDto request)
         {
-            // Emitir el mensaje del usuario
+            Console.WriteLine($"➡️ Recibido mensaje para BotId: {request.BotId}, UserId: {request.UserId}");
+
+            // Verificar si el usuario existe
+            var userExists = _context.Users.Any(u => u.Id == request.UserId);
+            if (!userExists)
+            {
+                Console.WriteLine($"❌ El usuario con ID {request.UserId} no existe. Cancelando.");
+                await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+                {
+                    conversationId = conversationId,
+                    from = "bot",
+                    text = "⚠️ Error: usuario no válido. No se puede procesar el mensaje."
+                });
+                return;
+            }
+
+            // Emitir mensaje del usuario
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
                 conversationId = conversationId,
@@ -59,23 +75,36 @@ namespace Voia.Api.Hubs
                 text = request.Question
             });
 
-            // Emitir estado de escritura
+            // Emitir "escribiendo"
             await Clients.Group(conversationId).SendAsync("Typing", new { from = "bot" });
 
-            // Simular respuesta IA
-            await Task.Delay(2000);
+            await Task.Delay(2000); // Simulación de procesamiento
 
-            var aiResponse = await _aiProviderService.GetBotResponseAsync(
-                request.BotId,
-                request.UserId,
-                request.Question
-            );
+            string botAnswer;
 
-            var botAnswer = string.IsNullOrWhiteSpace(aiResponse)
-                ? "Lo siento, no pude generar una respuesta en este momento."
-                : aiResponse;
+            try
+            {
+                var aiResponse = await _aiProviderService.GetBotResponseAsync(
+                    request.BotId,
+                    request.UserId,
+                    request.Question
+                );
 
-            // Guardar conversación
+                botAnswer = string.IsNullOrWhiteSpace(aiResponse)
+                    ? "Lo siento, no pude generar una respuesta en este momento."
+                    : aiResponse;
+            }
+            catch (NotSupportedException)
+            {
+                botAnswer = "🤖 Este bot aún no está conectado a un proveedor de IA. Pronto estará disponible.";
+            }
+            catch (Exception ex)
+            {
+                botAnswer = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
+                Console.WriteLine($"❌ Error en IA: {ex.Message}");
+            }
+
+            // Guardar la conversación
             var conversation = new Conversation
             {
                 BotId = request.BotId,
@@ -86,10 +115,18 @@ namespace Voia.Api.Hubs
                 CreatedAt = DateTime.UtcNow
             };
 
-            _context.Conversations.Add(conversation);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Conversations.Add(conversation);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al guardar conversación: {ex.Message}");
+                botAnswer = "⚠️ Error al guardar la conversación.";
+            }
 
-            // Emitir respuesta IA
+            // Respuesta del bot
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
                 conversationId = conversationId,
@@ -97,7 +134,7 @@ namespace Voia.Api.Hubs
                 text = botAnswer
             });
 
-            // Notificar al grupo admin
+            // Notificar a admin
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId = conversationId,
@@ -111,20 +148,17 @@ namespace Voia.Api.Hubs
 
         public async Task AdminMessage(string conversationId, string text)
         {
-            // Emitir el mensaje del admin al grupo
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
                 conversationId = conversationId,
                 from = "admin",
                 text = text
             });
-
-            // (Opcional) Guardar el mensaje del admin en la base de datos si lo deseas
         }
+
         public async Task LeaveRoom(string conversationId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
         }
-
     }
 }

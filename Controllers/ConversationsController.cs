@@ -6,19 +6,24 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR; // ✅ Necesario para IHubContext
+using Voia.Api.Hubs; // ✅ Asegúrate de que este sea el namespace donde está tu ChatHub
 
 namespace Voia.Api.Controllers
 {
-    [Authorize(Roles = "Admin,User")]
+    //[Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class ConversationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext; // ✅ Nuevo campo para SignalR
 
-        public ConversationsController(ApplicationDbContext context)
+        // 👇 Modificamos el constructor para incluir IHubContext
+        public ConversationsController(ApplicationDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         /// <summary>
@@ -46,6 +51,40 @@ namespace Voia.Api.Controllers
                 .ToListAsync();
 
             return Ok(conversations);
+        }
+
+        /// <summary>
+        /// Devuelve las conversaciones asociadas a los bots de un usuario específico.
+        /// Temporalmente sin autorización mientras se configura el flujo.
+        /// </summary>
+        [HttpGet("by-user/{userId}")]
+        //[AllowAnonymous] // Temporal para pruebas, luego reemplazar por [Authorize]
+        public async Task<IActionResult> GetConversationsByUser(int userId)
+        {
+            try
+            {
+                var conversations = await _context.Conversations
+                    .Include(c => c.User)
+                    .Include(c => c.Bot)
+                    .Where(c => c.Bot.UserId == userId) // 👈 Filtra por bots del usuario
+                    .Select(c => new
+                    {
+                        c.Id,
+                        Title = c.Title ?? string.Empty,
+                        UserMessage = c.UserMessage ?? string.Empty,
+                        BotResponse = c.BotResponse ?? string.Empty,
+                        CreatedAt = c.CreatedAt,
+                        User = c.User != null ? new { c.User.Name, c.User.Email } : null,
+                        Bot = c.Bot != null ? new { c.Bot.Name } : null
+                    })
+                    .ToListAsync();
+
+                return Ok(conversations);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener conversaciones.", error = ex.Message });
+            }
         }
 
         /// <summary>

@@ -19,9 +19,11 @@ namespace Voia.Api.Services.IAProviders
             {
                 "openai" => (IAApiClient)_serviceProvider.GetService(typeof(OpenAIClient)),
                 "gemini" => (IAApiClient)_serviceProvider.GetService(typeof(GeminiClient)),
+                "google" => (IAApiClient)_serviceProvider.GetService(typeof(GeminiClient)), // 👈 esta línea
                 "deepseek" => (IAApiClient)_serviceProvider.GetService(typeof(DeepSeekClient)),
                 _ => throw new NotSupportedException("IA provider not supported.")
             };
         }
+
     }
 }
