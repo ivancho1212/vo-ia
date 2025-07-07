@@ -48,9 +48,16 @@ public class BotConversationsController : ControllerBase
         }
 
         // Obtener respuesta del proveedor de IA
-        var response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
-        if (string.IsNullOrWhiteSpace(response))
-            response = "Lo siento, no pude generar una respuesta en este momento.";
+        string response = null;
+        bool isPhantomMessage = dto.Question.Contains("📎 El usuario ha enviado un archivo para revisión manual");
+
+        if (!isPhantomMessage)
+        {
+            response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
+            if (string.IsNullOrWhiteSpace(response))
+                response = "Lo siento, no pude generar una respuesta en este momento.";
+        }
+
 
         int conversationId;
 
@@ -64,7 +71,7 @@ public class BotConversationsController : ControllerBase
             }
 
             existingConv.UpdatedAt = DateTime.UtcNow;
-            existingConv.LastMessage = response;
+            existingConv.LastMessage = isPhantomMessage ? dto.Question : response;
             conversationId = existingConv.Id;
         }
         else
@@ -79,7 +86,7 @@ public class BotConversationsController : ControllerBase
                 BotResponse = response,
                 Status = "activa",
                 Blocked = false,
-                LastMessage = response,
+                LastMessage = isPhantomMessage ? dto.Question : response,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -91,29 +98,31 @@ public class BotConversationsController : ControllerBase
         }
 
         // Guardar mensaje del usuario
-        _context.Messages.Add(new Message
+        if (!isPhantomMessage)
         {
-            BotId = bot.Id,
-            UserId = dto.UserId,
-            ConversationId = conversationId,
-            Sender = "user",
-            MessageText = dto.Question,
-            CreatedAt = DateTime.UtcNow,
-            Source = "widget"
-        });
+            _context.Messages.Add(new Message
+            {
+                BotId = bot.Id,
+                UserId = dto.UserId,
+                ConversationId = conversationId,
+                Sender = "user", // ✅ Es mensaje del usuario
+                MessageText = dto.Question,
+                CreatedAt = DateTime.UtcNow,
+                Source = "widget"
+            });
 
-        // Guardar mensaje del bot
-        _context.Messages.Add(new Message
-        {
-            BotId = bot.Id,
-            UserId = dto.UserId,
-            ConversationId = conversationId,
-            Sender = "bot",
-            MessageText = response,
-            CreatedAt = DateTime.UtcNow,
-            Source = "widget"
-        });
-
+            // Guardar mensaje del bot
+            _context.Messages.Add(new Message
+            {
+                BotId = bot.Id,
+                UserId = dto.UserId,
+                ConversationId = conversationId,
+                Sender = "bot",
+                MessageText = response,
+                CreatedAt = DateTime.UtcNow,
+                Source = "widget"
+            });
+        }
         await _context.SaveChangesAsync();
 
         return Ok(new

@@ -407,18 +407,21 @@ namespace Voia.Api.Controllers
 
             return Ok(bot);
         }
-
         [HttpGet("{id}/context")]
-        public async Task<ActionResult<FullBotContextDto>> GetBotContext(int id)
+        public async Task<ActionResult<object>> GetBotContext(int id)
         {
             var bot = await _context.Bots
                 .Include(b => b.User)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
-            if (bot == null)
-                return NotFound();
+            if (bot == null) return NotFound();
 
-            // ⚠️ Cargar prompts en memoria porque EF no soporta ToString().ToLower()
+            // Obtener configuración del modelo
+            var aiModelConfig = await _context.AiModelConfigs
+                .Include(c => c.IaProvider)
+                .FirstOrDefaultAsync(c => c.Id == bot.AiModelConfigId);
+
+            // Prompts
             var templatePrompts = await _context.BotTemplatePrompts
                 .Where(p => p.BotTemplateId == bot.BotTemplateId)
                 .ToListAsync();
@@ -428,13 +431,21 @@ namespace Voia.Api.Controllers
 
             var customPrompts = await _context.BotCustomPrompts
                 .Where(p => p.BotTemplateId == bot.BotTemplateId)
-                .Select(p => new PromptMessageDto
-                {
-                    Role = p.Role.ToLower(), // el tipo es string, no enum
-                    Content = p.Content
-                })
+                .OrderBy(p => p.Id)
                 .ToListAsync();
 
+            var messages = new List<PromptMessageDto>();
+            if (!string.IsNullOrWhiteSpace(systemPrompt))
+            {
+                messages.Add(new PromptMessageDto { Role = "system", Content = systemPrompt });
+            }
+            messages.AddRange(customPrompts.Select(p => new PromptMessageDto
+            {
+                Role = p.Role.ToLowerInvariant(),
+                Content = p.Content
+            }));
+
+            // Entrenamiento adicional
             var urls = await _context.TrainingUrls
                 .Where(u => u.BotId == bot.Id)
                 .Select(u => u.Url)
@@ -447,25 +458,42 @@ namespace Voia.Api.Controllers
 
             var documents = await _context.UploadedDocuments
                 .Where(d => d.BotId == bot.Id)
-                .Select(d => d.FileName) // o Path si usas otra propiedad
+                .Select(d => d.FileName)
                 .ToListAsync();
 
-            var contextDto = new FullBotContextDto
+            // JSON final con settings
+            var result = new
             {
-                BotId = bot.Id,
-                Name = bot.Name,
-                Description = bot.Description,
-                IaProviderId = bot.IaProviderId,
-                AiModelConfigId = bot.AiModelConfigId ?? 0, // conversión segura de nullable
-                SystemPrompt = systemPrompt,
-                CustomPrompts = customPrompts,
-                Urls = urls,
-                CustomTexts = texts,
-                Documents = documents
+                botId = bot.Id,
+                name = bot.Name,
+                description = bot.Description,
+                provider = new
+                {
+                    id = bot.IaProviderId,
+                    name = aiModelConfig?.IaProvider?.Name?.ToLower(),
+                    model_config_id = aiModelConfig?.Id
+                },
+                settings = new
+                {
+                    modelName = aiModelConfig?.ModelName,
+                    temperature = aiModelConfig?.Temperature ?? 0.7m,
+                    frequencyPenalty = aiModelConfig?.FrequencyPenalty ?? 0.0m,
+                    presencePenalty = aiModelConfig?.PresencePenalty ?? 0.0m,
+                    maxTokens = 1000,      // si no está en base de datos, puedes dejar por defecto
+                    topP = 1.0m            // idem
+                },
+                messages = messages,
+                training = new
+                {
+                    documents = documents,
+                    urls = urls,
+                    customTexts = texts
+                }
             };
 
-            return Ok(contextDto);
+            return Ok(result);
         }
+
 
     }
 

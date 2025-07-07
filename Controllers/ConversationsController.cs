@@ -95,7 +95,7 @@ namespace Voia.Api.Controllers
         /// <response code="201">Devuelve la conversación recién creada.</response>
         /// <response code="404">Si el usuario o el bot no existen.</response>
         [HttpPost]
-        [HasPermission("CanCreateConversations")]
+      //  [HasPermission("CanCreateConversations")]
         public async Task<ActionResult<Conversation>> CreateConversation([FromBody] CreateConversationDto dto)
         {
             var user = await _context.Users.FindAsync(dto.UserId);
