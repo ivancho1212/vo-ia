@@ -73,7 +73,10 @@ builder
     {
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true; // Acepta PascalCase y camelCase
     });
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB de archivos (ajusta si necesitas más)
+});
 builder.Services.AddEndpointsApiExplorer();
 
 // ✅ SWAGGER CON JWT + XML
@@ -184,8 +187,5 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
-
-app.Run();
-
 
 app.Run();

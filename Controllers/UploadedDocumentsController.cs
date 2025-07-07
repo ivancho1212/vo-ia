@@ -83,9 +83,9 @@ namespace Voia.Api.Controllers
         /// </summary>
         [HttpPost]
         public async Task<ActionResult<UploadedDocumentResponseDto>> Create(
-    [FromForm] UploadedDocumentCreateDto dto,
-    [FromServices] TextChunkingService chunkingService,
-    [FromServices] TextExtractionService textExtractionService
+        [FromForm] UploadedDocumentCreateDto dto,
+        [FromServices] TextChunkingService chunkingService,
+        [FromServices] TextExtractionService textExtractionService
 )
         {
             if (dto.File == null || dto.File.Length == 0)

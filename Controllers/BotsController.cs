@@ -264,7 +264,7 @@ namespace Voia.Api.Controllers
             foreach (var doc in documentos)
             {
                 doc.BotId = bot.Id;
-               // doc.TemplateTrainingSessionId = null;
+                // doc.TemplateTrainingSessionId = null;
             }
 
             // ✅ Heredar URLs
@@ -275,7 +275,7 @@ namespace Voia.Api.Controllers
             foreach (var url in urls)
             {
                 url.BotId = bot.Id;
-               // url.TemplateTrainingSessionId = null;
+                // url.TemplateTrainingSessionId = null;
             }
 
             // ✅ Heredar textos planos
@@ -407,5 +407,67 @@ namespace Voia.Api.Controllers
 
             return Ok(bot);
         }
+
+        [HttpGet("{id}/context")]
+        public async Task<ActionResult<FullBotContextDto>> GetBotContext(int id)
+        {
+            var bot = await _context.Bots
+                .Include(b => b.User)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (bot == null)
+                return NotFound();
+
+            // ⚠️ Cargar prompts en memoria porque EF no soporta ToString().ToLower()
+            var templatePrompts = await _context.BotTemplatePrompts
+                .Where(p => p.BotTemplateId == bot.BotTemplateId)
+                .ToListAsync();
+
+            var systemPrompt = templatePrompts
+                .FirstOrDefault(p => p.Role == PromptRole.system)?.Content;
+
+            var customPrompts = await _context.BotCustomPrompts
+                .Where(p => p.BotTemplateId == bot.BotTemplateId)
+                .Select(p => new PromptMessageDto
+                {
+                    Role = p.Role.ToLower(), // el tipo es string, no enum
+                    Content = p.Content
+                })
+                .ToListAsync();
+
+            var urls = await _context.TrainingUrls
+                .Where(u => u.BotId == bot.Id)
+                .Select(u => u.Url)
+                .ToListAsync();
+
+            var texts = await _context.TrainingCustomTexts
+                .Where(t => t.BotId == bot.Id)
+                .Select(t => t.Content)
+                .ToListAsync();
+
+            var documents = await _context.UploadedDocuments
+                .Where(d => d.BotId == bot.Id)
+                .Select(d => d.FileName) // o Path si usas otra propiedad
+                .ToListAsync();
+
+            var contextDto = new FullBotContextDto
+            {
+                BotId = bot.Id,
+                Name = bot.Name,
+                Description = bot.Description,
+                IaProviderId = bot.IaProviderId,
+                AiModelConfigId = bot.AiModelConfigId ?? 0, // conversión segura de nullable
+                SystemPrompt = systemPrompt,
+                CustomPrompts = customPrompts,
+                Urls = urls,
+                CustomTexts = texts,
+                Documents = documents
+            };
+
+            return Ok(contextDto);
+        }
+
     }
+
 }
+

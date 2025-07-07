@@ -6,6 +6,8 @@ using Voia.Api.Data;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
+using System.Text.Json;
+using System.Collections.Generic;
 
 namespace Voia.Api.Hubs
 {
@@ -23,6 +25,11 @@ namespace Voia.Api.Hubs
         public async Task JoinRoom(string conversationId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
+        }
+
+        public async Task LeaveRoom(string conversationId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
         }
 
         public async Task JoinAdmin()
@@ -48,37 +55,75 @@ namespace Voia.Api.Hubs
 
             await Clients.Caller.SendAsync("InitialConversations", conversaciones);
         }
+        public async Task InitializeContext(string conversationId, object data)
+        {
+            try
+            {
+                // Extraer botId y userId del objeto dinámico
+                var json = JsonSerializer.Serialize(data);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                int botId = root.GetProperty("botId").GetInt32();
+                int userId = root.GetProperty("userId").GetInt32();
+
+                // Verifica si ya existe una conversación
+                var existing = _context.Conversations
+                    .FirstOrDefault(c => c.UserId == userId && c.BotId == botId);
+
+                if (existing != null)
+                {
+                    Console.WriteLine("🔄 Conversación ya existente.");
+                    return;
+                }
+
+                // Crea la conversación vacía (sin mensajes aún)
+                var newConversation = new Conversation
+                {
+                    BotId = botId,
+                    UserId = userId,
+                    Title = "Nueva conversación",
+                    UserMessage = null,
+                    BotResponse = null,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Conversations.Add(newConversation);
+                await _context.SaveChangesAsync();
+
+                Console.WriteLine($"✅ Contexto inicial preparado para usuario {userId} con bot {botId}.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error en InitializeContext: {ex.Message}");
+            }
+        }
 
         public async Task SendMessage(string conversationId, AskBotRequestDto request)
         {
-            Console.WriteLine($"➡️ Recibido mensaje para BotId: {request.BotId}, UserId: {request.UserId}");
-
-            // Verificar si el usuario existe
             var userExists = _context.Users.Any(u => u.Id == request.UserId);
             if (!userExists)
             {
-                Console.WriteLine($"❌ El usuario con ID {request.UserId} no existe. Cancelando.");
                 await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
                 {
-                    conversationId = conversationId,
+                    conversationId,
                     from = "bot",
                     text = "⚠️ Error: usuario no válido. No se puede procesar el mensaje."
                 });
                 return;
             }
 
-            // Emitir mensaje del usuario
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
-                conversationId = conversationId,
+                conversationId,
                 from = "user",
-                text = request.Question
+                text = request.Question,
+                timestamp = DateTime.UtcNow
             });
 
-            // Emitir "escribiendo"
             await Clients.Group(conversationId).SendAsync("Typing", new { from = "bot" });
 
-            await Task.Delay(2000); // Simulación de procesamiento
+            await Task.Delay(2000); // Simula procesamiento IA
 
             string botAnswer;
 
@@ -104,7 +149,6 @@ namespace Voia.Api.Hubs
                 Console.WriteLine($"❌ Error en IA: {ex.Message}");
             }
 
-            // Guardar la conversación
             var conversation = new Conversation
             {
                 BotId = request.BotId,
@@ -126,18 +170,17 @@ namespace Voia.Api.Hubs
                 botAnswer = "⚠️ Error al guardar la conversación.";
             }
 
-            // Respuesta del bot
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
-                conversationId = conversationId,
+                conversationId,
                 from = "bot",
-                text = botAnswer
+                text = botAnswer,
+                timestamp = DateTime.UtcNow
             });
 
-            // Notificar a admin
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
-                conversationId = conversationId,
+                conversationId,
                 from = "user",
                 text = request.Question,
                 timestamp = DateTime.UtcNow,
@@ -150,15 +193,127 @@ namespace Voia.Api.Hubs
         {
             await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
             {
-                conversationId = conversationId,
+                conversationId,
                 from = "admin",
-                text = text
+                text,
+                timestamp = DateTime.UtcNow
             });
         }
 
-        public async Task LeaveRoom(string conversationId)
+        public async Task SendFile(string conversationId, object payload)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
+            Console.WriteLine("📥 Se llamó a SendFile");
+
+            var json = JsonSerializer.Serialize(payload);
+            var wrapper = JsonSerializer.Deserialize<FilePayloadWrapper>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            if (wrapper == null)
+            {
+                await Clients.Caller.SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "bot",
+                    text = "⚠️ No se recibió archivo.",
+                    timestamp = DateTime.UtcNow
+                });
+                return;
+            }
+
+            var files = new List<FilePayload>();
+
+            if (wrapper.MultipleFiles != null && wrapper.MultipleFiles.Any())
+                files.AddRange(wrapper.MultipleFiles);
+            else if (wrapper.File != null)
+                files.Add(wrapper.File);
+
+            if (!files.Any())
+            {
+                await Clients.Caller.SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "bot",
+                    text = "⚠️ Archivo inválido o vacío.",
+                    timestamp = DateTime.UtcNow
+                });
+                return;
+            }
+
+            var allowedMimeTypes = new[]
+            {
+                // Imágenes
+                "image/jpeg", "image/png", "image/webp", "image/gif",
+
+                // Documentos
+                "application/pdf",
+                "application/msword",                             // .doc
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+                "application/vnd.ms-excel",                       // .xls
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+                "application/vnd.ms-powerpoint",                 // .ppt
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+            };
+
+
+            var validFiles = new List<FilePayload>();
+
+            foreach (var file in files)
+            {
+                if (string.IsNullOrWhiteSpace(file.FileContent) || !allowedMimeTypes.Contains(file.FileType))
+                    continue;
+
+                try
+                {
+                    var base64Data = file.FileContent.Contains(",")
+                        ? file.FileContent.Split(',')[1]
+                        : file.FileContent;
+
+                    var bytes = Convert.FromBase64String(base64Data);
+
+                    const int maxSize = 5 * 1024 * 1024; // 5 MB
+                    if (bytes.Length <= maxSize)
+                        validFiles.Add(file);
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            if (!validFiles.Any())
+            {
+                await Clients.Caller.SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "bot",
+                    text = "⚠️ Ninguno de los archivos es válido.",
+                    timestamp = DateTime.UtcNow
+                });
+                return;
+            }
+
+            Console.WriteLine($"✅ Archivos válidos recibidos: {validFiles.Count}");
+
+            // Enviar como mensaje agrupado
+            await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+            {
+                conversationId,
+                from = "user",
+                multipleFiles = validFiles,
+                timestamp = DateTime.UtcNow
+            });
+
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId,
+                from = "user",
+                text = $"📎 Se enviaron {validFiles.Count} archivo(s).",
+                timestamp = DateTime.UtcNow,
+                alias = "Usuario",
+                lastMessage = $"📎 Se enviaron {validFiles.Count} archivo(s)."
+            });
         }
     }
 }
