@@ -22,14 +22,29 @@ namespace Voia.Api.Hubs
             _context = context;
         }
 
-        public async Task JoinRoom(string conversationId)
+        public async Task JoinRoom(int conversationId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
+            if (conversationId <= 0)
+            {
+                Console.WriteLine("⚠️ conversationId es inválido.");
+                throw new HubException("El ID de conversación debe ser un número positivo.");
+            }
+
+            try
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
+                Console.WriteLine($"✅ Usuario unido al grupo: {conversationId}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error en JoinRoom: {ex.Message}");
+                throw;
+            }
         }
 
-        public async Task LeaveRoom(string conversationId)
+        public async Task LeaveRoom(int conversationId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId.ToString());
         }
 
         public async Task JoinAdmin()
@@ -55,11 +70,11 @@ namespace Voia.Api.Hubs
 
             await Clients.Caller.SendAsync("InitialConversations", conversaciones);
         }
-        public async Task InitializeContext(string conversationId, object data)
+
+        public async Task InitializeContext(int conversationId, object data)
         {
             try
             {
-                // Extraer botId y userId del objeto dinámico
                 var json = JsonSerializer.Serialize(data);
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
@@ -67,9 +82,8 @@ namespace Voia.Api.Hubs
                 int botId = root.GetProperty("botId").GetInt32();
                 int userId = root.GetProperty("userId").GetInt32();
 
-                // Verifica si ya existe una conversación
                 var existing = _context.Conversations
-                    .FirstOrDefault(c => c.UserId == userId && c.BotId == botId);
+                    .FirstOrDefault(c => c.Id == conversationId && c.UserId == userId && c.BotId == botId);
 
                 if (existing != null)
                 {
@@ -77,7 +91,6 @@ namespace Voia.Api.Hubs
                     return;
                 }
 
-                // Crea la conversación vacía (sin mensajes aún)
                 var newConversation = new Conversation
                 {
                     BotId = botId,
@@ -99,12 +112,12 @@ namespace Voia.Api.Hubs
             }
         }
 
-        public async Task SendMessage(string conversationId, AskBotRequestDto request)
+        public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
             var userExists = _context.Users.Any(u => u.Id == request.UserId);
             if (!userExists)
             {
-                await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
@@ -113,7 +126,7 @@ namespace Voia.Api.Hubs
                 return;
             }
 
-            await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "user",
@@ -121,9 +134,9 @@ namespace Voia.Api.Hubs
                 timestamp = DateTime.UtcNow
             });
 
-            await Clients.Group(conversationId).SendAsync("Typing", new { from = "bot" });
+            await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
 
-            await Task.Delay(2000); // Simula procesamiento IA
+            await Task.Delay(2000);
 
             string botAnswer;
 
@@ -170,7 +183,7 @@ namespace Voia.Api.Hubs
                 botAnswer = "⚠️ Error al guardar la conversación.";
             }
 
-            await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "bot",
@@ -189,9 +202,9 @@ namespace Voia.Api.Hubs
             });
         }
 
-        public async Task AdminMessage(string conversationId, string text)
+        public async Task AdminMessage(int conversationId, string text)
         {
-            await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "admin",
@@ -200,7 +213,16 @@ namespace Voia.Api.Hubs
             });
         }
 
-        public async Task SendFile(string conversationId, object payload)
+        public async Task Typing(int conversationId, string sender)
+        {
+            if (conversationId > 0 && !string.IsNullOrWhiteSpace(sender))
+            {
+                await Clients.Group(conversationId.ToString()).SendAsync("Typing", sender);
+                await Clients.Group("admin").SendAsync("Typing", conversationId.ToString(), sender);
+            }
+        }
+
+        public async Task SendFile(int conversationId, object payload)
         {
             Console.WriteLine("📥 Se llamó a SendFile");
 
@@ -243,19 +265,15 @@ namespace Voia.Api.Hubs
 
             var allowedMimeTypes = new[]
             {
-                // Imágenes
                 "image/jpeg", "image/png", "image/webp", "image/gif",
-
-                // Documentos
                 "application/pdf",
-                "application/msword",                             // .doc
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-                "application/vnd.ms-excel",                       // .xls
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
-                "application/vnd.ms-powerpoint",                 // .ppt
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+                "application/msword",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/vnd.ms-excel",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-powerpoint",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             };
-
 
             var validFiles = new List<FilePayload>();
 
@@ -272,7 +290,7 @@ namespace Voia.Api.Hubs
 
                     var bytes = Convert.FromBase64String(base64Data);
 
-                    const int maxSize = 5 * 1024 * 1024; // 5 MB
+                    const int maxSize = 5 * 1024 * 1024;
                     if (bytes.Length <= maxSize)
                         validFiles.Add(file);
                 }
@@ -296,8 +314,7 @@ namespace Voia.Api.Hubs
 
             Console.WriteLine($"✅ Archivos válidos recibidos: {validFiles.Count}");
 
-            // Enviar como mensaje agrupado
-            await Clients.Group(conversationId).SendAsync("ReceiveMessage", new
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "user",
