@@ -329,8 +329,10 @@ namespace Voia.Api.Hubs
                 text = $"📎 Se enviaron {validFiles.Count} archivo(s).",
                 timestamp = DateTime.UtcNow,
                 alias = "Usuario",
-                lastMessage = $"📎 Se enviaron {validFiles.Count} archivo(s)."
+                lastMessage = $"📎 Se enviaron {validFiles.Count} archivo(s).",
+                multipleFiles = validFiles // ✅ esto es lo que faltaba
             });
+
         }
     }
 }

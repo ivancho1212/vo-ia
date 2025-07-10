@@ -30,88 +30,90 @@ public class BotConversationsController : ControllerBase
     [HttpPost("ask")]
     public async Task<IActionResult> AskQuestion([FromBody] AskBotRequestDto dto)
     {
-        if (dto.UserId <= 0)
-        {
-            return BadRequest(new { success = false, error = "UserId inválido" });
-        }
+        bool isPhantomMessage = dto.Meta?.InternalOnly == true;
 
-        var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId);
-        if (bot == null)
-        {
-            return NotFound(new { success = false, error = "Bot no encontrado" });
-        }
-
-        var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
-        if (!userExists)
-        {
-            return BadRequest(new { success = false, error = "Usuario no encontrado" });
-        }
-
-        // Obtener respuesta del proveedor de IA
-        string response = null;
-        bool isPhantomMessage = dto.Question.Contains("📎 El usuario ha enviado un archivo para revisión manual");
-
+        // Validar usuario solo si no es mensaje interno
         if (!isPhantomMessage)
         {
-            response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
-            if (string.IsNullOrWhiteSpace(response))
-                response = "Lo siento, no pude generar una respuesta en este momento.";
+            if (dto.UserId <= 0)
+                return BadRequest(new { success = false, error = "UserId inválido" });
+
+            var userExists = await _context.Users.AnyAsync(u => u.Id == dto.UserId);
+            if (!userExists)
+                return BadRequest(new { success = false, error = "Usuario no encontrado" });
         }
 
+        // Validar bot
+        var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId);
+        if (bot == null)
+            return NotFound(new { success = false, error = "Bot no encontrado" });
+
+        string response = null;
+
+        // Solo intentar usar IA si no es phantom y hay texto
+        if (!isPhantomMessage && !string.IsNullOrWhiteSpace(dto.Question))
+        {
+            try
+            {
+                response = await _aiProviderService.GetBotResponseAsync(bot.Id, dto.UserId, dto.Question);
+                if (string.IsNullOrWhiteSpace(response))
+                    response = "Lo siento, no pude generar una respuesta en este momento.";
+            }
+            catch (Exception ex)
+            {
+                response = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
+                Console.WriteLine("❌ Error en IA: " + ex.Message);
+            }
+        }
 
         int conversationId;
 
         if (dto.ConversationId.HasValue)
         {
-            // Continuar conversación existente
             var existingConv = await _context.Conversations.FindAsync(dto.ConversationId.Value);
             if (existingConv == null)
-            {
                 return NotFound(new { success = false, error = "Conversación no encontrada." });
-            }
 
             existingConv.UpdatedAt = DateTime.UtcNow;
-            existingConv.LastMessage = isPhantomMessage ? dto.Question : response;
+            existingConv.LastMessage = string.IsNullOrWhiteSpace(response) ? dto.Question : response;
             conversationId = existingConv.Id;
         }
         else
         {
-            // Crear nueva conversación
             var newConv = new Conversation
             {
                 BotId = bot.Id,
                 UserId = dto.UserId,
-                Title = dto.Question.Length > 30 ? dto.Question.Substring(0, 30) : dto.Question,
+                Title = dto.Question?.Length > 30 ? dto.Question.Substring(0, 30) : dto.Question,
                 UserMessage = dto.Question,
                 BotResponse = response,
                 Status = "activa",
                 Blocked = false,
-                LastMessage = isPhantomMessage ? dto.Question : response,
+                LastMessage = string.IsNullOrWhiteSpace(response) ? dto.Question : response,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
             _context.Conversations.Add(newConv);
-            await _context.SaveChangesAsync(); // Importante para obtener el ID
+            await _context.SaveChangesAsync();
 
             conversationId = newConv.Id;
         }
 
-        // Guardar mensaje del usuario
-        if (!isPhantomMessage)
+        // Solo guardar mensajes reales
+        if (!isPhantomMessage && !string.IsNullOrWhiteSpace(dto.Question))
         {
             _context.Messages.Add(new Message
             {
                 BotId = bot.Id,
                 UserId = dto.UserId,
                 ConversationId = conversationId,
-                Sender = "user", // ✅ Es mensaje del usuario
+                Sender = "user",
                 MessageText = dto.Question,
                 CreatedAt = DateTime.UtcNow,
                 Source = "widget"
             });
 
-            // Guardar mensaje del bot
             _context.Messages.Add(new Message
             {
                 BotId = bot.Id,
@@ -123,6 +125,7 @@ public class BotConversationsController : ControllerBase
                 Source = "widget"
             });
         }
+
         await _context.SaveChangesAsync();
 
         return Ok(new
