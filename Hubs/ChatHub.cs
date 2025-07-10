@@ -8,6 +8,8 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Collections.Generic;
+using Voia.Api.Models.Conversations; // ✅ para usar ReplyToDto
+
 
 namespace Voia.Api.Hubs
 {
@@ -202,16 +204,31 @@ namespace Voia.Api.Hubs
             });
         }
 
-        public async Task AdminMessage(int conversationId, string text)
+        public async Task AdminMessage(int conversationId, string text, ReplyToDto? replyTo = null)
         {
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "admin",
                 text,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.UtcNow,
+                replyTo
+            });
+
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId,
+                from = "admin",
+                text,
+                timestamp = DateTime.UtcNow,
+                alias = "Administrador",
+                lastMessage = text,
+                replyTo
             });
         }
+
+
+
 
         public async Task Typing(int conversationId, string sender)
         {
