@@ -8,8 +8,6 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Collections.Generic;
-using Voia.Api.Models.Conversations; // ✅ para usar ReplyToDto
-
 
 namespace Voia.Api.Hubs
 {
@@ -17,6 +15,9 @@ namespace Voia.Api.Hubs
     {
         private readonly IAiProviderService _aiProviderService;
         private readonly ApplicationDbContext _context;
+
+        // ✅ Diccionario para controlar el estado de pausa de la IA
+        private static readonly Dictionary<int, bool> PausedConversations = new();
 
         public ChatHub(IAiProviderService aiProviderService, ApplicationDbContext context)
         {
@@ -114,6 +115,14 @@ namespace Voia.Api.Hubs
             }
         }
 
+        // ✅ Método para pausar o activar la IA desde el admin
+        public Task SetIAPaused(int conversationId, bool paused)
+        {
+            PausedConversations[conversationId] = paused;
+            Console.WriteLine($"🔁 IA {(paused ? "pausada" : "activada")} para conversación {conversationId}");
+            return Task.CompletedTask;
+        }
+
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
             var userExists = _context.Users.Any(u => u.Id == request.UserId);
@@ -135,6 +144,23 @@ namespace Voia.Api.Hubs
                 text = request.Question,
                 timestamp = DateTime.UtcNow
             });
+
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId,
+                from = "user",
+                text = request.Question,
+                timestamp = DateTime.UtcNow,
+                alias = $"Usuario {request.UserId}",
+                lastMessage = request.Question
+            });
+
+            // ✅ Verificar si IA está pausada
+            if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
+            {
+                Console.WriteLine($"⏸️ IA pausada. No se responde con IA para conversación {conversationId}");
+                return;
+            }
 
             await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
 
@@ -192,16 +218,6 @@ namespace Voia.Api.Hubs
                 text = botAnswer,
                 timestamp = DateTime.UtcNow
             });
-
-            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
-            {
-                conversationId,
-                from = "user",
-                text = request.Question,
-                timestamp = DateTime.UtcNow,
-                alias = $"Usuario {request.UserId}",
-                lastMessage = request.Question
-            });
         }
 
         public async Task AdminMessage(int conversationId, string text, ReplyToDto? replyTo = null)
@@ -226,9 +242,6 @@ namespace Voia.Api.Hubs
                 replyTo
             });
         }
-
-
-
 
         public async Task Typing(int conversationId, string sender)
         {
@@ -347,9 +360,8 @@ namespace Voia.Api.Hubs
                 timestamp = DateTime.UtcNow,
                 alias = "Usuario",
                 lastMessage = $"📎 Se enviaron {validFiles.Count} archivo(s).",
-                multipleFiles = validFiles // ✅ esto es lo que faltaba
+                multipleFiles = validFiles
             });
-
         }
     }
 }
