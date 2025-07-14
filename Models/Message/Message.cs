@@ -39,7 +39,14 @@ namespace Voia.Api.Models.Messages
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Relaciones
+        // ✅ Nuevo campo para soportar respuestas
+        [Column("reply_to_message_id")]
+        public int? ReplyToMessageId { get; set; }
+
+        [ForeignKey("ReplyToMessageId")]
+        public virtual Message? ReplyToMessage { get; set; }
+
+        // Relaciones existentes
         public virtual Bot Bot { get; set; }
         public virtual User User { get; set; }
         public virtual Conversation Conversation { get; set; }

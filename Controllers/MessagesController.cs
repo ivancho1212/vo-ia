@@ -33,6 +33,18 @@ namespace Voia.Api.Controllers
             return Ok(messages);
         }
 
+        [HttpGet("by-conversation/{conversationId}")]
+        public async Task<ActionResult<IEnumerable<Message>>> GetMessagesByConversation(int conversationId)
+        {
+            var messages = await _context.Messages
+                .Where(m => m.ConversationId == conversationId)
+                .OrderBy(m => m.CreatedAt)
+                .ToListAsync();
+
+            return Ok(messages);
+        }
+
+
         [HttpPost]
         public async Task<ActionResult<Message>> CreateMessage([FromBody] CreateMessageDto dto)
         {

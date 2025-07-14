@@ -88,45 +88,6 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
-        /// Crea una nueva conversación.
-        /// </summary>
-        /// <param name="dto">Datos necesarios para crear la conversación.</param>
-        /// <returns>La conversación creada.</returns>
-        /// <response code="201">Devuelve la conversación recién creada.</response>
-        /// <response code="404">Si el usuario o el bot no existen.</response>
-        [HttpPost]
-      //  [HasPermission("CanCreateConversations")]
-        public async Task<ActionResult<Conversation>> CreateConversation([FromBody] CreateConversationDto dto)
-        {
-            var user = await _context.Users.FindAsync(dto.UserId);
-            if (user == null)
-            {
-                return NotFound(new { message = $"User with ID {dto.UserId} not found." });
-            }
-
-            var bot = await _context.Bots.FindAsync(dto.BotId);
-            if (bot == null)
-            {
-                return NotFound(new { message = $"Bot with ID {dto.BotId} not found." });
-            }
-
-            var conversation = new Conversation
-            {
-                UserId = dto.UserId,
-                BotId = dto.BotId,
-                Title = dto.Title,
-                UserMessage = dto.UserMessage,
-                BotResponse = dto.BotResponse,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Conversations.Add(conversation);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetConversations), new { id = conversation.Id }, conversation);
-        }
-
-        /// <summary>
         /// Actualiza una conversación existente.
         /// </summary>
         /// <param name="id">ID de la conversación que se desea actualizar.</param>

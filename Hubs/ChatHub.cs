@@ -8,6 +8,8 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Collections.Generic;
+using Voia.Api.Models.Messages;
+
 
 namespace Voia.Api.Hubs
 {
@@ -74,7 +76,7 @@ namespace Voia.Api.Hubs
             await Clients.Caller.SendAsync("InitialConversations", conversaciones);
         }
 
-        public async Task InitializeContext(int conversationId, object data)
+        public async Task<int> InitializeContext(object data)
         {
             try
             {
@@ -86,12 +88,12 @@ namespace Voia.Api.Hubs
                 int userId = root.GetProperty("userId").GetInt32();
 
                 var existing = _context.Conversations
-                    .FirstOrDefault(c => c.Id == conversationId && c.UserId == userId && c.BotId == botId);
+                    .FirstOrDefault(c => c.UserId == userId && c.BotId == botId);
 
                 if (existing != null)
                 {
                     Console.WriteLine("🔄 Conversación ya existente.");
-                    return;
+                    return existing.Id;
                 }
 
                 var newConversation = new Conversation
@@ -99,19 +101,20 @@ namespace Voia.Api.Hubs
                     BotId = botId,
                     UserId = userId,
                     Title = "Nueva conversación",
-                    UserMessage = null,
-                    BotResponse = null,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "activa"
                 };
 
                 _context.Conversations.Add(newConversation);
                 await _context.SaveChangesAsync();
 
-                Console.WriteLine($"✅ Contexto inicial preparado para usuario {userId} con bot {botId}.");
+                Console.WriteLine($"✅ Conversación creada con ID: {newConversation.Id}");
+                return newConversation.Id;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Error en InitializeContext: {ex.Message}");
+                throw new HubException("No se pudo inicializar la conversación.");
             }
         }
 
@@ -190,26 +193,62 @@ namespace Voia.Api.Hubs
                 Console.WriteLine($"❌ Error en IA: {ex.Message}");
             }
 
-            var conversation = new Conversation
+            // ✅ Buscar si ya existe una conversación entre este usuario y este bot
+            var conversation = _context.Conversations
+                .Where(c => c.UserId == request.UserId && c.BotId == request.BotId)
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
+
+            if (conversation == null)
+            {
+                conversation = new Conversation
+                {
+                    BotId = request.BotId,
+                    UserId = request.UserId,
+                    Title = "Primera interacción",
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "activa"
+                };
+
+                _context.Conversations.Add(conversation);
+                await _context.SaveChangesAsync(); // Necesario para obtener el ID generado
+            }
+
+            // ✅ Actualizar último mensaje y fecha de actualización
+            conversation.UserMessage = request.Question;
+            conversation.BotResponse = botAnswer;
+            conversation.LastMessage = request.Question;
+            conversation.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // ✅ Guardar mensajes en la tabla `messages`
+            _context.Messages.AddRange(new[]
+            {
+            new Message
             {
                 BotId = request.BotId,
                 UserId = request.UserId,
-                Title = request.Question,
-                UserMessage = request.Question,
-                BotResponse = botAnswer,
+                ConversationId = conversation.Id,
+                Sender = "user",
+                MessageText = request.Question,
+                Source = "widget",
                 CreatedAt = DateTime.UtcNow
-            };
+            },
+            new Message
+            {
+                BotId = request.BotId,
+                UserId = request.UserId,
+                ConversationId = conversation.Id,
+                Sender = "bot",
+                MessageText = botAnswer,
+                Source = "widget",
+                CreatedAt = DateTime.UtcNow
+            }
+        });
 
-            try
-            {
-                _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"❌ Error al guardar conversación: {ex.Message}");
-                botAnswer = "⚠️ Error al guardar la conversación.";
-            }
+            await _context.SaveChangesAsync();
+
 
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
@@ -220,17 +259,50 @@ namespace Voia.Api.Hubs
             });
         }
 
-        public async Task AdminMessage(int conversationId, string text, ReplyToDto? replyTo = null)
+        public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null)
         {
+            var convo = await _context.Conversations.FindAsync(conversationId);
+
+            string? repliedText = null;
+
+            if (replyToMessageId.HasValue)
+            {
+                repliedText = _context.Messages
+                    .Where(m => m.Id == replyToMessageId.Value)
+                    .Select(m => m.MessageText)
+                    .FirstOrDefault();
+            }
+
+            if (convo != null)
+            {
+                var adminMessage = new Message
+                {
+                    BotId = convo.BotId,
+                    UserId = convo.UserId,
+                    ConversationId = conversationId,
+                    Sender = "admin",
+                    MessageText = text,
+                    Source = "admin-panel",
+                    CreatedAt = DateTime.UtcNow,
+                    ReplyToMessageId = replyToMessageId
+                };
+
+                _context.Messages.Add(adminMessage);
+                await _context.SaveChangesAsync();
+            }
+
+            // ✅ Emitir hacia el grupo de conversación
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "admin",
                 text,
                 timestamp = DateTime.UtcNow,
-                replyTo
+                replyToMessageId = replyToMessageId,
+                replyToText = repliedText
             });
 
+            // ✅ Emitir hacia el grupo admin
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId,
@@ -239,7 +311,8 @@ namespace Voia.Api.Hubs
                 timestamp = DateTime.UtcNow,
                 alias = "Administrador",
                 lastMessage = text,
-                replyTo
+                replyToMessageId = replyToMessageId,
+                replyToText = repliedText
             });
         }
 
