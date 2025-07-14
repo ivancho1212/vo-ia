@@ -15,7 +15,8 @@ using Voia.Api.Models.SupportTicket;
 using Voia.Api.Models.TrainingDataSessions;
 using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.UserPreferences;
-using Voia.Api.Models.BotConversation;
+using Voia.Api.Models.Chat;
+
 
 namespace Voia.Api.Data
 {
@@ -59,6 +60,7 @@ namespace Voia.Api.Data
         public DbSet<TrainingUrl> TrainingUrls { get; set; }
         public DbSet<UploadedDocument> UploadedDocuments { get; set; }
         public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
+        public DbSet<ChatUploadedFile> ChatUploadedFiles { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }

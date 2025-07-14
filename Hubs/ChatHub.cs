@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Services.Interfaces;
-using Voia.Api.Models.BotConversation;
+using Voia.Api.Models.Conversations;
 using Voia.Api.Models.Conversations;
 using Voia.Api.Data;
 using System.Threading.Tasks;
@@ -9,6 +9,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Collections.Generic;
 using Voia.Api.Models.Messages;
+using Voia.Api.Models.Chat;
+using System.IO;
+
 
 
 namespace Voia.Api.Hubs
@@ -129,6 +132,16 @@ namespace Voia.Api.Hubs
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
             var userExists = _context.Users.Any(u => u.Id == request.UserId);
+
+            string? repliedText = null;
+            if (request.ReplyToMessageId.HasValue)
+            {
+                repliedText = _context.Messages
+                    .Where(m => m.Id == request.ReplyToMessageId.Value)
+                    .Select(m => m.MessageText)
+                    .FirstOrDefault();
+            }
+
             if (!userExists)
             {
                 await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
@@ -145,8 +158,11 @@ namespace Voia.Api.Hubs
                 conversationId,
                 from = "user",
                 text = request.Question,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.UtcNow,
+                replyToMessageId = request.ReplyToMessageId,
+                replyToText = repliedText
             });
+
 
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
@@ -155,8 +171,11 @@ namespace Voia.Api.Hubs
                 text = request.Question,
                 timestamp = DateTime.UtcNow,
                 alias = $"Usuario {request.UserId}",
-                lastMessage = request.Question
+                lastMessage = request.Question,
+                replyToMessageId = request.ReplyToMessageId,
+                replyToText = repliedText
             });
+
 
             // ✅ Verificar si IA está pausada
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
@@ -233,7 +252,8 @@ namespace Voia.Api.Hubs
                 Sender = "user",
                 MessageText = request.Question,
                 Source = "widget",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ReplyToMessageId = request.ReplyToMessageId
             },
             new Message
             {
@@ -315,6 +335,61 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
         }
+        [HubMethodName("SendGroupedImages")]
+        public async Task SendGroupedImages(int conversationId, int userId, List<ChatFileDto> multipleFiles)
+        {
+            Console.WriteLine("📸 Recibiendo grupo de imágenes.");
+
+            var fileDtos = new List<object>();
+
+            foreach (var file in multipleFiles)
+            {
+                var base64Data = file.FileContent;
+                byte[] fileBytes = Convert.FromBase64String(base64Data);
+                var extension = Path.GetExtension(file.FileName);
+                var uniqueName = $"{Guid.NewGuid()}{extension}";
+                var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat", uniqueName);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllBytesAsync(path, fileBytes);
+
+                var dbFile = new ChatUploadedFile
+                {
+                    ConversationId = conversationId,
+                    UserId = userId,
+                    FileName = file.FileName,
+                    FileType = file.FileType,
+                    FilePath = $"/uploads/chat/{uniqueName}"
+                };
+
+                _context.ChatUploadedFiles.Add(dbFile);
+                await _context.SaveChangesAsync();
+
+                fileDtos.Add(new
+                {
+                    fileName = dbFile.FileName,
+                    fileType = dbFile.FileType,
+                    fileUrl = dbFile.FilePath
+                });
+            }
+
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+            {
+                conversationId,
+                from = "user",
+                images = fileDtos,
+                timestamp = DateTime.UtcNow
+            });
+
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId,
+                from = "user",
+                alias = $"Usuario {userId}",
+                text = "🖼️ Se enviaron múltiples imágenes.",
+                images = fileDtos,
+                timestamp = DateTime.UtcNow
+            });
+        }
 
         public async Task Typing(int conversationId, string sender)
         {
@@ -330,98 +405,76 @@ namespace Voia.Api.Hubs
             Console.WriteLine("📥 Se llamó a SendFile");
 
             var json = JsonSerializer.Serialize(payload);
-            var wrapper = JsonSerializer.Deserialize<FilePayloadWrapper>(
-                json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            );
+            var fileObj = JsonSerializer.Deserialize<ChatFileDto>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
 
-            if (wrapper == null)
+            if (fileObj == null || string.IsNullOrWhiteSpace(fileObj.FileContent))
             {
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
-                    text = "⚠️ No se recibió archivo.",
+                    text = "⚠️ Archivo inválido.",
                     timestamp = DateTime.UtcNow
                 });
                 return;
             }
 
-            var files = new List<FilePayload>();
+            // Procesar base64 y guardar archivo
+            var base64Data = fileObj.FileContent.Contains(",")
+                ? fileObj.FileContent.Split(',')[1]
+                : fileObj.FileContent;
 
-            if (wrapper.MultipleFiles != null && wrapper.MultipleFiles.Any())
-                files.AddRange(wrapper.MultipleFiles);
-            else if (wrapper.File != null)
-                files.Add(wrapper.File);
-
-            if (!files.Any())
+            byte[] fileBytes;
+            try
+            {
+                fileBytes = Convert.FromBase64String(base64Data);
+            }
+            catch
             {
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
-                    text = "⚠️ Archivo inválido o vacío.",
+                    text = "⚠️ Error al procesar el archivo.",
                     timestamp = DateTime.UtcNow
                 });
                 return;
             }
 
-            var allowedMimeTypes = new[]
+            var extension = Path.GetExtension(fileObj.FileName);
+            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
+            Directory.CreateDirectory(uploadsPath);
+
+            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+            var fullPath = Path.Combine(uploadsPath, uniqueFileName);
+
+            await File.WriteAllBytesAsync(fullPath, fileBytes);
+
+            var dbFile = new ChatUploadedFile
             {
-                "image/jpeg", "image/png", "image/webp", "image/gif",
-                "application/pdf",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/vnd.ms-powerpoint",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ConversationId = conversationId,
+                UserId = fileObj.UserId,
+                FileName = fileObj.FileName,
+                FileType = fileObj.FileType,
+                FilePath = $"/uploads/chat/{uniqueFileName}"
             };
 
-            var validFiles = new List<FilePayload>();
-
-            foreach (var file in files)
-            {
-                if (string.IsNullOrWhiteSpace(file.FileContent) || !allowedMimeTypes.Contains(file.FileType))
-                    continue;
-
-                try
-                {
-                    var base64Data = file.FileContent.Contains(",")
-                        ? file.FileContent.Split(',')[1]
-                        : file.FileContent;
-
-                    var bytes = Convert.FromBase64String(base64Data);
-
-                    const int maxSize = 5 * 1024 * 1024;
-                    if (bytes.Length <= maxSize)
-                        validFiles.Add(file);
-                }
-                catch
-                {
-                    continue;
-                }
-            }
-
-            if (!validFiles.Any())
-            {
-                await Clients.Caller.SendAsync("ReceiveMessage", new
-                {
-                    conversationId,
-                    from = "bot",
-                    text = "⚠️ Ninguno de los archivos es válido.",
-                    timestamp = DateTime.UtcNow
-                });
-                return;
-            }
-
-            Console.WriteLine($"✅ Archivos válidos recibidos: {validFiles.Count}");
+            _context.ChatUploadedFiles.Add(dbFile);
+            await _context.SaveChangesAsync();
 
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "user",
-                multipleFiles = validFiles,
+                file = new
+                {
+                    fileName = dbFile.FileName,
+                    fileType = dbFile.FileType,
+                    fileUrl = dbFile.FilePath
+                },
                 timestamp = DateTime.UtcNow
             });
 
@@ -429,12 +482,19 @@ namespace Voia.Api.Hubs
             {
                 conversationId,
                 from = "user",
-                text = $"📎 Se enviaron {validFiles.Count} archivo(s).",
+                text = "📎 Se envió un archivo.",
+                alias = $"Usuario {fileObj.UserId}",
+                lastMessage = "📎 Se envió un archivo.",
                 timestamp = DateTime.UtcNow,
-                alias = "Usuario",
-                lastMessage = $"📎 Se enviaron {validFiles.Count} archivo(s).",
-                multipleFiles = validFiles
+                file = new
+                {
+                    fileName = dbFile.FileName,
+                    fileType = dbFile.FileType,
+                    fileUrl = dbFile.FilePath
+                }
             });
         }
+
     }
+
 }

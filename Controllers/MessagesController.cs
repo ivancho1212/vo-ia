@@ -65,8 +65,10 @@ namespace Voia.Api.Controllers
                 MessageText = dto.MessageText,
                 TokensUsed = dto.TokensUsed ?? 0,
                 Source = dto.Source ?? "widget",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ReplyToMessageId = dto.ReplyToMessageId // ✅ importante
             };
+
 
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();

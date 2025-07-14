@@ -9,5 +9,8 @@ namespace Voia.Api.Models.Messages.DTOs
         public string MessageText { get; set; }
         public int? TokensUsed { get; set; }
         public string Source { get; set; }
+
+        // ✅ Agregar esto si lo necesitas
+        public int? ReplyToMessageId { get; set; }
     }
 }
