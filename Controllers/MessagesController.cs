@@ -10,7 +10,7 @@ using System;
 
 namespace Voia.Api.Controllers
 {
-    [Authorize(Roles = "Admin")]
+   // [Authorize(Roles = "Admin")]
     [Route("api/[controller]")]
     [ApiController]
     public class MessagesController : ControllerBase

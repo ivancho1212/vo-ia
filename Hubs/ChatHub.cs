@@ -344,13 +344,32 @@ namespace Voia.Api.Hubs
 
             foreach (var file in multipleFiles)
             {
-                var base64Data = file.FileContent;
-                byte[] fileBytes = Convert.FromBase64String(base64Data);
-                var extension = Path.GetExtension(file.FileName);
-                var uniqueName = $"{Guid.NewGuid()}{extension}";
-                var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat", uniqueName);
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllBytesAsync(path, fileBytes);
+                string finalPath;
+
+                // 🔁 Si ya viene con URL, no volver a guardar archivo
+                if (!string.IsNullOrWhiteSpace(file.FileUrl))
+                {
+                    finalPath = file.FileUrl;
+                }
+                else if (!string.IsNullOrWhiteSpace(file.FileContent))
+                {
+                    var base64Data = file.FileContent.Contains(",")
+                        ? file.FileContent.Split(',')[1]
+                        : file.FileContent;
+
+                    byte[] fileBytes = Convert.FromBase64String(base64Data);
+                    var extension = Path.GetExtension(file.FileName);
+                    var uniqueName = $"{Guid.NewGuid()}{extension}";
+                    var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat", uniqueName);
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    await File.WriteAllBytesAsync(path, fileBytes);
+
+                    finalPath = $"/uploads/chat/{uniqueName}";
+                }
+                else
+                {
+                    continue; // 🔴 ni base64 ni URL, se ignora
+                }
 
                 var dbFile = new ChatUploadedFile
                 {
@@ -358,7 +377,7 @@ namespace Voia.Api.Hubs
                     UserId = userId,
                     FileName = file.FileName,
                     FileType = file.FileType,
-                    FilePath = $"/uploads/chat/{uniqueName}"
+                    FilePath = finalPath
                 };
 
                 _context.ChatUploadedFiles.Add(dbFile);
@@ -372,6 +391,7 @@ namespace Voia.Api.Hubs
                 });
             }
 
+            // ✅ Emitir al grupo del usuario
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -380,6 +400,7 @@ namespace Voia.Api.Hubs
                 timestamp = DateTime.UtcNow
             });
 
+            // ✅ Notificar al grupo de admins
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId,

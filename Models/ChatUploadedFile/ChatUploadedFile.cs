@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Voia.Api.Models.Conversations; // ✅ Asegúrate de importar el namespace correcto
 
 namespace Voia.Api.Models.Chat
 {
@@ -30,6 +31,11 @@ namespace Voia.Api.Models.Chat
         [Column("uploaded_at")]
         public DateTime? UploadedAt { get; set; } = DateTime.UtcNow;
 
-        // No agregues is_image porque es generado por la DB (STORED GENERATED)
+        // ✅ Relación con conversación
+        [ForeignKey("ConversationId")]
+        public virtual Conversation Conversation { get; set; }
+        
+        [ForeignKey("UserId")] // ✅ Esto faltaba
+        public User? User { get; set; }
     }
 }

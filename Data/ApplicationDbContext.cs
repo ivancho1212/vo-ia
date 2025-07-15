@@ -289,6 +289,10 @@ namespace Voia.Api.Data
                     .ValueGeneratedOnAddOrUpdate();
             });
 
+            modelBuilder.Entity<ChatUploadedFile>()
+                .HasOne(f => f.Conversation)
+                .WithMany()
+                .HasForeignKey(f => f.ConversationId);
 
         }
     }

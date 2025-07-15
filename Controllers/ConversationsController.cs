@@ -8,6 +8,7 @@ using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR; // ✅ Necesario para IHubContext
 using Voia.Api.Hubs; // ✅ Asegúrate de que este sea el namespace donde está tu ChatHub
+using Voia.Api.Models.Messages;
 
 namespace Voia.Api.Controllers
 {
@@ -33,7 +34,7 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve una lista de todas las conversaciones.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        [HasPermission("CanViewConversations")]
+        // [HasPermission("CanViewConversations")]
         public async Task<ActionResult<IEnumerable<Conversation>>> GetConversations()
         {
             var conversations = await _context.Conversations
@@ -86,7 +87,60 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { message = "Error al obtener conversaciones.", error = ex.Message });
             }
         }
+        [HttpGet("history/{conversationId}")]
+        public async Task<IActionResult> GetConversationHistory(int conversationId)
+        {
+            var conversation = await _context.Conversations
+                .Include(c => c.User)
+                .Include(c => c.Bot)
+                .FirstOrDefaultAsync(c => c.Id == conversationId);
 
+            if (conversation == null)
+                return NotFound("Conversación no encontrada");
+
+            var userId = conversation.UserId;
+            var botId = conversation.BotId;
+
+            // ✅ Traer mensajes con info del usuario y bot
+            var messages = await _context.Messages
+                .Where(m => m.ConversationId == conversationId)
+                .Include(m => m.User)
+                .Include(m => m.Bot)
+                .Select(m => new ConversationItemDto
+                {
+                    Type = "message",
+                    Text = m.MessageText,
+                    Timestamp = m.CreatedAt,
+                    FromRole = m.Sender, // "user", "bot", "admin"
+                    FromId = m.Sender == "user" ? m.UserId : m.Sender == "bot" ? m.BotId : null,
+                    FromName = m.Sender == "user" ? m.User.Name : m.Sender == "bot" ? m.Bot.Name : "admin",
+                })
+                .ToListAsync();
+
+            // ✅ Traer archivos con info del usuario que los subió
+            var files = await _context.ChatUploadedFiles
+                .Where(f => f.ConversationId == conversationId)
+                .Include(f => f.User)
+                .Select(f => new ConversationItemDto
+                {
+                    Type = "file",
+                    FileName = f.FileName,
+                    FileType = f.FileType,
+                    FileUrl = f.FilePath,
+                    Timestamp = f.UploadedAt ?? DateTime.UtcNow,
+                    FromRole = "user",
+                    FromId = f.UserId,
+                    FromName = f.User.Name,
+                })
+                .ToListAsync();
+
+            var combined = messages
+                .Concat(files)
+                .OrderBy(item => item.Timestamp)
+                .ToList();
+
+            return Ok(combined);
+        }
         /// <summary>
         /// Actualiza una conversación existente.
         /// </summary>

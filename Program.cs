@@ -174,8 +174,9 @@ builder.Services.AddScoped<TextChunkingService>();
 var app = builder.Build();
 
 
-app.UseStaticFiles();
-app.UseCors("AllowFrontend");
+app.UseCors("AllowFrontend"); // 👈 Mover CORS arriba
+app.UseStaticFiles();         // ✅ Luego los archivos estáticos
+
 app.UseAuthentication();
 app.UseAuthorization();
 
