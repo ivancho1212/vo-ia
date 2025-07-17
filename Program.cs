@@ -10,6 +10,8 @@ using Voia.Api.Services;
 using Voia.Api.Services.Interfaces;
 using System.Net.Http.Headers;
 using Voia.Api.Services.IAProviders;
+using Voia.Api.Services.Chat;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -132,7 +134,9 @@ builder.Services.AddHttpClient<FastApiService>();
 
 builder.Services.AddScoped<IAiProviderService, AiProviderService>();
 
-builder.Services.AddScoped<IAClientFactory>(); // <--- agrega esta línea
+builder.Services.AddScoped<IChatFileService, ChatFileService>();
+
+builder.Services.AddScoped<IAClientFactory>();
 
 // ✅ Registro seguro de HttpClients para cada proveedor
 builder.Services.AddHttpClient<OpenAIClient>(client =>

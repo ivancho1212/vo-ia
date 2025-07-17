@@ -11,8 +11,8 @@ using System.Collections.Generic;
 using Voia.Api.Models.Messages;
 using Voia.Api.Models.Chat;
 using System.IO;
-
-
+using Voia.Api.Services.Chat;
+using Microsoft.Extensions.Logging;
 
 namespace Voia.Api.Hubs
 {
@@ -20,32 +20,37 @@ namespace Voia.Api.Hubs
     {
         private readonly IAiProviderService _aiProviderService;
         private readonly ApplicationDbContext _context;
-
-        // ✅ Diccionario para controlar el estado de pausa de la IA
+        private readonly IChatFileService _chatFileService;
         private static readonly Dictionary<int, bool> PausedConversations = new();
+        private readonly ILogger<ChatHub> _logger;
+        private const int TypingDelayMs = 2000;
 
-        public ChatHub(IAiProviderService aiProviderService, ApplicationDbContext context)
+
+        public ChatHub(IAiProviderService aiProviderService, ApplicationDbContext context, IChatFileService chatFileService, ILogger<ChatHub> logger)
         {
             _aiProviderService = aiProviderService;
             _context = context;
+            _chatFileService = chatFileService;
+            _logger = logger;
         }
+
 
         public async Task JoinRoom(int conversationId)
         {
             if (conversationId <= 0)
             {
-                Console.WriteLine("⚠️ conversationId es inválido.");
+                _logger.LogWarning("⚠️ conversationId es inválido.");
                 throw new HubException("El ID de conversación debe ser un número positivo.");
             }
 
             try
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
-                Console.WriteLine($"✅ Usuario unido al grupo: {conversationId}");
+                _logger.LogInformation("✅ Usuario unido al grupo: {ConversationId}", conversationId);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error en JoinRoom: {ex.Message}");
+                _logger.LogError(ex, "❌ Error en JoinRoom.");
                 throw;
             }
         }
@@ -95,7 +100,7 @@ namespace Voia.Api.Hubs
 
                 if (existing != null)
                 {
-                    Console.WriteLine("🔄 Conversación ya existente.");
+                    _logger.LogInformation("🔄 Conversación ya existente.");
                     return existing.Id;
                 }
 
@@ -111,7 +116,7 @@ namespace Voia.Api.Hubs
                 _context.Conversations.Add(newConversation);
                 await _context.SaveChangesAsync();
 
-                Console.WriteLine($"✅ Conversación creada con ID: {newConversation.Id}");
+                _logger.LogInformation("✅ Conversación creada con ID: {ConversationId}", newConversation.Id);
                 return newConversation.Id;
             }
             catch (Exception ex)
@@ -180,13 +185,13 @@ namespace Voia.Api.Hubs
             // ✅ Verificar si IA está pausada
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
             {
-                Console.WriteLine($"⏸️ IA pausada. No se responde con IA para conversación {conversationId}");
+                _logger.LogWarning("⏸️ IA pausada. No se responde con IA para conversación {ConversationId}", conversationId);
                 return;
             }
 
             await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
 
-            await Task.Delay(2000);
+            await Task.Delay(TypingDelayMs);
 
             string botAnswer;
 
@@ -209,7 +214,7 @@ namespace Voia.Api.Hubs
             catch (Exception ex)
             {
                 botAnswer = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
-                Console.WriteLine($"❌ Error en IA: {ex.Message}");
+                _logger.LogError(ex, "❌ Error en IA.");
             }
 
             // ✅ Buscar si ya existe una conversación entre este usuario y este bot
@@ -230,7 +235,6 @@ namespace Voia.Api.Hubs
                 };
 
                 _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync(); // Necesario para obtener el ID generado
             }
 
             // ✅ Actualizar último mensaje y fecha de actualización
@@ -338,7 +342,7 @@ namespace Voia.Api.Hubs
         [HubMethodName("SendGroupedImages")]
         public async Task SendGroupedImages(int conversationId, int userId, List<ChatFileDto> multipleFiles)
         {
-            Console.WriteLine("📸 Recibiendo grupo de imágenes.");
+            _logger.LogInformation("📸 Recibiendo grupo de imágenes.");
 
             var fileDtos = new List<object>();
 
@@ -357,14 +361,8 @@ namespace Voia.Api.Hubs
                         ? file.FileContent.Split(',')[1]
                         : file.FileContent;
 
-                    byte[] fileBytes = Convert.FromBase64String(base64Data);
-                    var extension = Path.GetExtension(file.FileName);
-                    var uniqueName = $"{Guid.NewGuid()}{extension}";
-                    var path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat", uniqueName);
-                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                    await File.WriteAllBytesAsync(path, fileBytes);
+                    finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName);
 
-                    finalPath = $"/uploads/chat/{uniqueName}";
                 }
                 else
                 {
@@ -423,7 +421,7 @@ namespace Voia.Api.Hubs
 
         public async Task SendFile(int conversationId, object payload)
         {
-            Console.WriteLine("📥 Se llamó a SendFile");
+            _logger.LogInformation("📥 Se llamó a SendFile");
 
             var json = JsonSerializer.Serialize(payload);
             var fileObj = JsonSerializer.Deserialize<ChatFileDto>(json, new JsonSerializerOptions
@@ -452,27 +450,24 @@ namespace Voia.Api.Hubs
             try
             {
                 fileBytes = Convert.FromBase64String(base64Data);
+
+                if (fileBytes.Length > 10 * 1024 * 1024) // 10 MB
+                    throw new InvalidOperationException("El archivo es demasiado grande.");
             }
-            catch
+            catch (Exception ex)
             {
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
-                    text = "⚠️ Error al procesar el archivo.",
+                    text = $"⚠️ Error al procesar el archivo: {ex.Message}",
                     timestamp = DateTime.UtcNow
                 });
                 return;
             }
 
-            var extension = Path.GetExtension(fileObj.FileName);
-            var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
-            Directory.CreateDirectory(uploadsPath);
 
-            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
-            var fullPath = Path.Combine(uploadsPath, uniqueFileName);
-
-            await File.WriteAllBytesAsync(fullPath, fileBytes);
+            var filePath = await _chatFileService.SaveBase64FileAsync(base64Data, fileObj.FileName);
 
             var dbFile = new ChatUploadedFile
             {
@@ -480,8 +475,9 @@ namespace Voia.Api.Hubs
                 UserId = fileObj.UserId,
                 FileName = fileObj.FileName,
                 FileType = fileObj.FileType,
-                FilePath = $"/uploads/chat/{uniqueFileName}"
+                FilePath = filePath
             };
+
 
             _context.ChatUploadedFiles.Add(dbFile);
             await _context.SaveChangesAsync();
