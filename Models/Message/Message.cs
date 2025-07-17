@@ -10,9 +10,9 @@ namespace Voia.Api.Models.Messages
         [Key]
         public int Id { get; set; }
 
-        [Required]
         [Column("bot_id")]
-        public int BotId { get; set; }
+        public int? BotId { get; set; } // ✅ Ahora sí acepta null
+
 
         [Required]
         [Column("user_id")]

@@ -59,15 +59,21 @@ namespace Voia.Api.Controllers
         /// Temporalmente sin autorización mientras se configura el flujo.
         /// </summary>
         [HttpGet("by-user/{userId}")]
-        //[AllowAnonymous] // Temporal para pruebas, luego reemplazar por [Authorize]
-        public async Task<IActionResult> GetConversationsByUser(int userId)
+        public async Task<IActionResult> GetConversationsByUser(int userId, int page = 1, int limit = 10)
         {
             try
             {
-                var conversations = await _context.Conversations
+                var query = _context.Conversations
                     .Include(c => c.User)
                     .Include(c => c.Bot)
-                    .Where(c => c.Bot.UserId == userId) // 👈 Filtra por bots del usuario
+                    .Where(c => c.Bot.UserId == userId);
+
+                var total = await query.CountAsync();
+
+                var conversations = await query
+                    .OrderByDescending(c => c.CreatedAt)
+                    .Skip((page - 1) * limit)
+                    .Take(limit)
                     .Select(c => new
                     {
                         c.Id,
@@ -80,13 +86,20 @@ namespace Voia.Api.Controllers
                     })
                     .ToListAsync();
 
-                return Ok(conversations);
+                return Ok(new
+                {
+                    page,
+                    limit,
+                    total,
+                    conversations
+                });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error al obtener conversaciones.", error = ex.Message });
             }
         }
+
         [HttpGet("history/{conversationId}")]
         public async Task<IActionResult> GetConversationHistory(int conversationId)
         {

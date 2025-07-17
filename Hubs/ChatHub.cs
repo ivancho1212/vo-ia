@@ -381,6 +381,20 @@ namespace Voia.Api.Hubs
                 _context.ChatUploadedFiles.Add(dbFile);
                 await _context.SaveChangesAsync();
 
+                var fileMessage = new Message
+                {
+                    BotId = null,
+                    UserId = userId,
+                    ConversationId = conversationId,
+                    Sender = "user",
+                    MessageText = $"📎 {dbFile.FileName}",
+                    Source = "widget",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Messages.Add(fileMessage);
+                await _context.SaveChangesAsync();
+
                 fileDtos.Add(new
                 {
                     fileName = dbFile.FileName,
