@@ -111,29 +111,36 @@ namespace Voia.Api.Controllers
             if (conversation == null)
                 return NotFound("Conversación no encontrada");
 
-            var userId = conversation.UserId;
-            var botId = conversation.BotId;
-
-            // ✅ Traer mensajes con info del usuario y bot
-            var messages = await _context.Messages
+            // Traer mensajes y convertirlos en memoria
+            var messagesList = await _context.Messages
                 .Where(m => m.ConversationId == conversationId)
                 .Include(m => m.User)
                 .Include(m => m.Bot)
+                .ToListAsync(); // ✅ Trae a memoria antes de usar null propagation
+
+            var messages = messagesList
                 .Select(m => new ConversationItemDto
                 {
                     Type = "message",
                     Text = m.MessageText,
                     Timestamp = m.CreatedAt,
-                    FromRole = m.Sender, // "user", "bot", "admin"
-                    FromId = m.Sender == "user" ? m.UserId : m.Sender == "bot" ? m.BotId : null,
-                    FromName = m.Sender == "user" ? m.User.Name : m.Sender == "bot" ? m.Bot.Name : "admin",
+                    FromRole = m.Sender,
+                    FromId = m.Sender == "user" ? m.UserId :
+                            m.Sender == "bot" ? m.BotId :
+                            0, // admin fijo
+                    FromName = m.Sender == "user" ? (m.User?.Name ?? "Usuario") :
+                            m.Sender == "bot" ? (m.Bot?.Name ?? "Bot") :
+                            "Admin"
                 })
-                .ToListAsync();
+                .ToList();
 
-            // ✅ Traer archivos con info del usuario que los subió
-            var files = await _context.ChatUploadedFiles
+            // Traer archivos y convertirlos en memoria
+            var filesList = await _context.ChatUploadedFiles
                 .Where(f => f.ConversationId == conversationId)
                 .Include(f => f.User)
+                .ToListAsync();
+
+            var files = filesList
                 .Select(f => new ConversationItemDto
                 {
                     Type = "file",
@@ -143,10 +150,11 @@ namespace Voia.Api.Controllers
                     Timestamp = f.UploadedAt ?? DateTime.UtcNow,
                     FromRole = "user",
                     FromId = f.UserId,
-                    FromName = f.User.Name,
+                    FromName = f.User?.Name ?? "Usuario"
                 })
-                .ToListAsync();
+                .ToList();
 
+            // Combinar y ordenar
             var combined = messages
                 .Concat(files)
                 .OrderBy(item => item.Timestamp)
@@ -154,6 +162,10 @@ namespace Voia.Api.Controllers
 
             return Ok(combined);
         }
+
+        /// <summary>
+
+
         /// <summary>
         /// Actualiza una conversación existente.
         /// </summary>
