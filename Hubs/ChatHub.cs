@@ -69,17 +69,17 @@ namespace Voia.Api.Hubs
         private async Task SendInitialConversations()
         {
             var conversaciones = _context.Conversations
-                .GroupBy(c => c.UserId)
-                .Select(g => new
-                {
-                    id = g.Key,
-                    alias = $"Usuario {g.Key.ToString().Substring(0, 4)}",
-                    lastMessage = g.OrderByDescending(c => c.CreatedAt).First().UserMessage,
-                    updatedAt = g.Max(c => c.CreatedAt),
-                    status = "activa",
-                    blocked = false
-                })
-                .ToList();
+            .OrderByDescending(c => c.UpdatedAt)
+            .Select(c => new
+            {
+                id = c.Id,
+                alias = $"Usuario {c.UserId.ToString().Substring(0, 4)}",
+                lastMessage = c.UserMessage,
+                updatedAt = c.UpdatedAt,
+                status = c.Status,
+                blocked = false
+            })
+            .ToList();
 
             await Clients.Caller.SendAsync("InitialConversations", conversaciones);
         }
@@ -168,7 +168,6 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
 
-
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId,
@@ -181,8 +180,48 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
 
+            // Buscar o crear la conversación
+            var conversation = _context.Conversations
+                .Where(c => c.UserId == request.UserId && c.BotId == request.BotId)
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
 
-            // ✅ Verificar si IA está pausada
+            if (conversation == null)
+            {
+                conversation = new Conversation
+                {
+                    BotId = request.BotId,
+                    UserId = request.UserId,
+                    Title = "Primera interacción",
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "activa"
+                };
+
+                _context.Conversations.Add(conversation);
+            }
+
+            // Guardar mensaje del usuario SIEMPRE
+            var userMessage = new Message
+            {
+                BotId = request.BotId,
+                UserId = request.UserId,
+                ConversationId = conversation.Id,
+                Sender = "user",
+                MessageText = request.Question,
+                Source = "widget",
+                CreatedAt = DateTime.UtcNow,
+                ReplyToMessageId = request.ReplyToMessageId
+            };
+            _context.Messages.Add(userMessage);
+
+            // Actualizar conversación
+            conversation.UserMessage = request.Question;
+            conversation.LastMessage = request.Question;
+            conversation.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Verificar si la IA está pausada DESPUÉS de guardar el mensaje del usuario
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
             {
                 _logger.LogWarning("⏸️ IA pausada. No se responde con IA para conversación {ConversationId}", conversationId);
@@ -217,49 +256,8 @@ namespace Voia.Api.Hubs
                 _logger.LogError(ex, "❌ Error en IA.");
             }
 
-            // ✅ Buscar si ya existe una conversación entre este usuario y este bot
-            var conversation = _context.Conversations
-                .Where(c => c.UserId == request.UserId && c.BotId == request.BotId)
-                .OrderByDescending(c => c.CreatedAt)
-                .FirstOrDefault();
-
-            if (conversation == null)
-            {
-                conversation = new Conversation
-                {
-                    BotId = request.BotId,
-                    UserId = request.UserId,
-                    Title = "Primera interacción",
-                    CreatedAt = DateTime.UtcNow,
-                    Status = "activa"
-                };
-
-                _context.Conversations.Add(conversation);
-            }
-
-            // ✅ Actualizar último mensaje y fecha de actualización
-            conversation.UserMessage = request.Question;
-            conversation.BotResponse = botAnswer;
-            conversation.LastMessage = request.Question;
-            conversation.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            // ✅ Guardar mensajes en la tabla `messages`
-            _context.Messages.AddRange(new[]
-            {
-            new Message
-            {
-                BotId = request.BotId,
-                UserId = request.UserId,
-                ConversationId = conversation.Id,
-                Sender = "user",
-                MessageText = request.Question,
-                Source = "widget",
-                CreatedAt = DateTime.UtcNow,
-                ReplyToMessageId = request.ReplyToMessageId
-            },
-            new Message
+            // Guardar mensaje del bot
+            var botMessage = new Message
             {
                 BotId = request.BotId,
                 UserId = request.UserId,
@@ -268,11 +266,14 @@ namespace Voia.Api.Hubs
                 MessageText = botAnswer,
                 Source = "widget",
                 CreatedAt = DateTime.UtcNow
-            }
-        });
+            };
+            _context.Messages.Add(botMessage);
+
+            // Actualizar respuesta del bot en conversación
+            conversation.BotResponse = botAnswer;
+            conversation.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
-
 
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
