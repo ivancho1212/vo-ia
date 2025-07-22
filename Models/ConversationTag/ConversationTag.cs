@@ -5,29 +5,29 @@ using Voia.Api.Models.Messages;
 
 namespace Voia.Api.Models.ConversationTag
 {
+    [Table("conversation_tags")]
     public class ConversationTag
     {
         [Key]
+        [Column("id")]
         public int Id { get; set; }
 
-        [Required]
+        [Column("conversation_id")]
         public int ConversationId { get; set; }
 
-        [Required]
+        [ForeignKey("ConversationId")]
+        public virtual Conversation? Conversation { get; set; }
+
+        [Column("label")]
         public string Label { get; set; } = string.Empty;
 
-        public string? Color { get; set; }
-
+        [Column("highlighted_message_id")]
         public int? HighlightedMessageId { get; set; }
 
-        [ForeignKey("ConversationId")]
-        public Conversation? Conversation { get; set; }
-
         [ForeignKey("HighlightedMessageId")]
-        public Message? HighlightedMessage { get; set; }
+        public virtual Message? HighlightedMessage { get; set; }
 
-        // 🆕 Propiedades de auditoría
+        [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public DateTime? UpdatedAt { get; set; }
     }
 }
