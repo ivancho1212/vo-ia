@@ -14,6 +14,7 @@ using System.IO;
 using Voia.Api.Services.Chat;
 using Microsoft.Extensions.Logging;
 
+
 namespace Voia.Api.Hubs
 {
     public class ChatHub : Hub
@@ -340,90 +341,97 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
         }
+
         [HubMethodName("SendGroupedImages")]
         public async Task SendGroupedImages(int conversationId, int userId, List<ChatFileDto> multipleFiles)
         {
-            _logger.LogInformation("📸 Recibiendo grupo de imágenes.");
-
-            var fileDtos = new List<object>();
-
-            foreach (var file in multipleFiles)
+            try
             {
-                string finalPath;
+                _logger.LogInformation("📸 Recibiendo grupo de imágenes.");
+                var fileDtos = new List<object>();
 
-                // 🔁 Si ya viene con URL, no volver a guardar archivo
-                if (!string.IsNullOrWhiteSpace(file.FileUrl))
+                foreach (var file in multipleFiles)
                 {
-                    finalPath = file.FileUrl;
+                    string finalPath;
+
+                    if (!string.IsNullOrWhiteSpace(file.FileUrl))
+                    {
+                        finalPath = file.FileUrl;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(file.FileContent))
+                    {
+                        var base64Data = file.FileContent.Contains(",")
+                            ? file.FileContent.Split(',')[1]
+                            : file.FileContent;
+
+                        finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("❌ Archivo inválido: sin URL ni contenido base64.");
+                        continue;
+                    }
+
+                    var dbFile = new ChatUploadedFile
+                    {
+                        ConversationId = conversationId,
+                        UserId = userId,
+                        FileName = file.FileName,
+                        FileType = file.FileType,
+                        FilePath = finalPath
+                    };
+
+                    _context.ChatUploadedFiles.Add(dbFile);
+                    await _context.SaveChangesAsync();
+
+                    var fileMessage = new Message
+                    {
+                        BotId = 1, // 🔧 Usa un valor válido
+                        UserId = userId,
+                        ConversationId = conversationId,
+                        Sender = "user",
+                        MessageText = $"📎 {dbFile.FileName}",
+                        Source = "widget",
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _context.Messages.Add(fileMessage);
+                    await _context.SaveChangesAsync();
+
+                    fileDtos.Add(new
+                    {
+                        fileName = dbFile.FileName,
+                        fileType = dbFile.FileType,
+                        fileUrl = dbFile.FilePath
+                    });
                 }
-                else if (!string.IsNullOrWhiteSpace(file.FileContent))
+
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
-                    var base64Data = file.FileContent.Contains(",")
-                        ? file.FileContent.Split(',')[1]
-                        : file.FileContent;
+                    conversationId,
+                    from = "user",
+                    images = fileDtos,
+                    text = "", // para no enviarlo vacío
+                    timestamp = DateTime.UtcNow
+                });
 
-                    finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName);
-
-                }
-                else
+                await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
                 {
-                    continue; // 🔴 ni base64 ni URL, se ignora
-                }
-
-                var dbFile = new ChatUploadedFile
-                {
-                    ConversationId = conversationId,
-                    UserId = userId,
-                    FileName = file.FileName,
-                    FileType = file.FileType,
-                    FilePath = finalPath
-                };
-
-                _context.ChatUploadedFiles.Add(dbFile);
-                await _context.SaveChangesAsync();
-
-                var fileMessage = new Message
-                {
-                    BotId = null,
-                    UserId = userId,
-                    ConversationId = conversationId,
-                    Sender = "user",
-                    MessageText = $"📎 {dbFile.FileName}",
-                    Source = "widget",
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.Messages.Add(fileMessage);
-                await _context.SaveChangesAsync();
-
-                fileDtos.Add(new
-                {
-                    fileName = dbFile.FileName,
-                    fileType = dbFile.FileType,
-                    fileUrl = dbFile.FilePath
+                    conversationId,
+                    from = "user",
+                    alias = $"Usuario {userId}",
+                    text = "Se enviaron múltiples imágenes.",
+                    images = fileDtos,
+                    timestamp = DateTime.UtcNow
                 });
             }
-
-            // ✅ Emitir al grupo del usuario
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+            catch (Exception ex)
             {
-                conversationId,
-                from = "user",
-                images = fileDtos,
-                timestamp = DateTime.UtcNow
-            });
-
-            // ✅ Notificar al grupo de admins
-            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
-            {
-                conversationId,
-                from = "user",
-                alias = $"Usuario {userId}",
-                text = "🖼️ Se enviaron múltiples imágenes.",
-                images = fileDtos,
-                timestamp = DateTime.UtcNow
-            });
+                _logger.LogError(ex, "❌ Error al enviar imágenes agrupadas: {Message}", ex.Message);
+                throw new HubException("Ocurrió un error al enviar las imágenes.");
+            }
         }
+
 
         public async Task Typing(int conversationId, string sender)
         {

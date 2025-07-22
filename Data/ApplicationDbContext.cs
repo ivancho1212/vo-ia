@@ -16,6 +16,7 @@ using Voia.Api.Models.TrainingDataSessions;
 using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.UserPreferences;
 using Voia.Api.Models.Chat;
+using Voia.Api.Models.ConversationTag;
 
 
 namespace Voia.Api.Data
@@ -61,6 +62,7 @@ namespace Voia.Api.Data
         public DbSet<UploadedDocument> UploadedDocuments { get; set; }
         public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
         public DbSet<ChatUploadedFile> ChatUploadedFiles { get; set; }
+        public DbSet<ConversationTag> ConversationTags { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -265,6 +267,18 @@ namespace Voia.Api.Data
                     .HasForeignKey(e => e.BotTemplateId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
+
+            modelBuilder.Entity<ConversationTag>()
+                    .HasOne(ct => ct.Conversation)
+                    .WithMany()
+                    .HasForeignKey(ct => ct.ConversationId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ConversationTag>()
+                    .HasOne(ct => ct.HighlightedMessage)
+                    .WithMany()
+                    .HasForeignKey(ct => ct.HighlightedMessageId)
+                    .OnDelete(DeleteBehavior.Restrict);
 
 
 
