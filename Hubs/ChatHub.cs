@@ -13,7 +13,7 @@ using Voia.Api.Models.Chat;
 using System.IO;
 using Voia.Api.Services.Chat;
 using Microsoft.Extensions.Logging;
-
+using Microsoft.EntityFrameworkCore;
 
 namespace Voia.Api.Hubs
 {
@@ -69,22 +69,45 @@ namespace Voia.Api.Hubs
 
         private async Task SendInitialConversations()
         {
-            var conversaciones = _context.Conversations
-            .OrderByDescending(c => c.UpdatedAt)
-            .Select(c => new
-            {
-                id = c.Id,
-                alias = $"Usuario {c.UserId.ToString().Substring(0, 4)}",
-                lastMessage = c.UserMessage,
-                updatedAt = c.UpdatedAt,
-                status = c.Status,
-                blocked = false
-            })
-            .ToList();
+            // Usamos ToListAsync para no bloquear el hilo
+            var conversaciones = await _context.Conversations
+                .OrderByDescending(c => c.UpdatedAt)
+                .Select(c => new
+                {
+                    id = c.Id,
+                    // ✅ SOLUCIÓN: Enviamos el UserId completo. Es más seguro.
+                    alias = $"Usuario {c.UserId}",
+                    lastMessage = c.UserMessage,
+                    updatedAt = c.UpdatedAt,
+                    status = c.Status,
+                    blocked = false // Este campo debe venir de la base de datos si existe
+                })
+                .ToListAsync();
 
             await Clients.Caller.SendAsync("InitialConversations", conversaciones);
         }
+        public async Task UserIsActive(int conversationId)
+        {
+            var conversation = await _context.Conversations.FindAsync(conversationId);
+            if (conversation != null)
+            {
+                bool statusChanged = false;
+                if (conversation.Status == "inactiva")
+                {
+                    conversation.Status = "activa";
+                    statusChanged = true; // El estado cambió
+                }
 
+                conversation.LastActiveAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                // ✅ Si el estado cambió, notificar al panel de admin
+                if (statusChanged)
+                {
+                    await Clients.Group("admin").SendAsync("ConversationStatusChanged", conversation.Id, "activa");
+                }
+            }
+        }
         public async Task<int> InitializeContext(object data)
         {
             try

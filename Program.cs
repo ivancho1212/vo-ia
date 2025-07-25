@@ -81,6 +81,7 @@ builder.Services.AddSignalR(options =>
 });
 builder.Services.AddEndpointsApiExplorer();
 
+builder.Services.AddHostedService<InactiveConversationWorker>();
 // ✅ SWAGGER CON JWT + XML
 builder.Services.AddSwaggerGen(c =>
 {

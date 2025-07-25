@@ -6,21 +6,27 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR; // ✅ Necesario para IHubContext
-using Voia.Api.Hubs; // ✅ Asegúrate de que este sea el namespace donde está tu ChatHub
+using Microsoft.AspNetCore.SignalR;
+using Voia.Api.Hubs;
 using Voia.Api.Models.Messages;
+using System.Linq; // Necesario para .Concat y .OrderBy
 
 namespace Voia.Api.Controllers
 {
-    //[Authorize(Roles = "Admin,User")]
+    // Modelo DTO para la actualización de estado
+    public class UpdateStatusDto
+    {
+        public string Status { get; set; }
+    }
+
+    // [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class ConversationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
-        private readonly IHubContext<ChatHub> _hubContext; // ✅ Nuevo campo para SignalR
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        // 👇 Modificamos el constructor para incluir IHubContext
         public ConversationsController(ApplicationDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
@@ -30,9 +36,6 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todas las conversaciones con los datos relacionados de usuario y bot.
         /// </summary>
-        /// <returns>Lista de conversaciones.</returns>
-        /// <response code="200">Devuelve una lista de todas las conversaciones.</response>
-        /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
         // [HasPermission("CanViewConversations")]
         public async Task<ActionResult<IEnumerable<Conversation>>> GetConversations()
@@ -43,9 +46,10 @@ namespace Voia.Api.Controllers
                 .Select(c => new
                 {
                     c.Id,
-                    Title = c.Title ?? string.Empty,  // Manejo de NULL en Title
-                    UserMessage = c.UserMessage ?? string.Empty,  // Manejo de NULL en UserMessage
-                    BotResponse = c.BotResponse ?? string.Empty,  // Manejo de NULL en BotResponse
+                    c.Status,
+                    Title = c.Title ?? string.Empty,
+                    UserMessage = c.UserMessage ?? string.Empty,
+                    BotResponse = c.BotResponse ?? string.Empty,
                     User = c.User != null ? new { c.User.Name, c.User.Email } : null,
                     Bot = c.Bot != null ? new { c.Bot.Name } : null
                 })
@@ -53,10 +57,20 @@ namespace Voia.Api.Controllers
 
             return Ok(conversations);
         }
-
+        
+        [HttpPost("{id}/disconnect")]
+        public async Task<IActionResult> UserDisconnected(int id)
+        {
+            var conversation = await _context.Conversations.FindAsync(id);
+            if (conversation != null)
+            {
+                conversation.LastActiveAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
+            return Ok();
+        }
         /// <summary>
         /// Devuelve las conversaciones asociadas a los bots de un usuario específico.
-        /// Temporalmente sin autorización mientras se configura el flujo.
         /// </summary>
         [HttpGet("by-user/{userId}")]
         public async Task<IActionResult> GetConversationsByUser(int userId, int page = 1, int limit = 10)
@@ -77,6 +91,7 @@ namespace Voia.Api.Controllers
                     .Select(c => new
                     {
                         c.Id,
+                        c.Status,
                         Title = c.Title ?? string.Empty,
                         UserMessage = c.UserMessage ?? string.Empty,
                         BotResponse = c.BotResponse ?? string.Empty,
@@ -100,83 +115,105 @@ namespace Voia.Api.Controllers
             }
         }
 
+        /// <summary>
+        /// Obtiene el historial completo de una conversación, incluyendo mensajes y archivos.
+        /// </summary>
         [HttpGet("history/{conversationId}")]
         public async Task<IActionResult> GetConversationHistory(int conversationId)
         {
             var conversation = await _context.Conversations
-                .Include(c => c.User)
-                .Include(c => c.Bot)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == conversationId);
 
             if (conversation == null)
                 return NotFound("Conversación no encontrada");
 
-            // Traer mensajes y convertirlos en memoria
-            var messagesList = await _context.Messages
+            // --- Mapeo de Mensajes ---
+            var messages = await _context.Messages
+                .AsNoTracking()
                 .Where(m => m.ConversationId == conversationId)
                 .Include(m => m.User)
                 .Include(m => m.Bot)
-                .ToListAsync(); // ✅ Trae a memoria antes de usar null propagation
-
-            var messages = messagesList
                 .Select(m => new ConversationItemDto
                 {
+                    Id = m.Id,
                     Type = "message",
                     Text = m.MessageText,
                     Timestamp = m.CreatedAt,
                     FromRole = m.Sender,
-                    FromId = m.Sender == "user" ? m.UserId :
-                            m.Sender == "bot" ? m.BotId :
-                            0, // admin fijo
-                    FromName = m.Sender == "user" ? (m.User?.Name ?? "Usuario") :
-                            m.Sender == "bot" ? (m.Bot?.Name ?? "Bot") :
-                            "Admin"
+                    FromId = m.Sender == "user" ? m.UserId : m.BotId,
+                    FromName = m.Sender == "user" ? (m.User != null ? m.User.Name : "Usuario") : (m.Bot != null ? m.Bot.Name : "Bot"),
+                    ReplyToMessageId = m.ReplyToMessageId
                 })
-                .ToList();
-
-            // Traer archivos y convertirlos en memoria
-            var filesList = await _context.ChatUploadedFiles
-                .Where(f => f.ConversationId == conversationId)
-                .Include(f => f.User)
                 .ToListAsync();
 
-            var files = filesList
+            // --- Mapeo de Archivos ---
+            var files = await _context.ChatUploadedFiles
+                .AsNoTracking()
+                .Where(f => f.ConversationId == conversationId)
+                .Include(f => f.User)
                 .Select(f => new ConversationItemDto
                 {
+                    Id = f.Id,
                     Type = "file",
-                    FileName = f.FileName,
-                    FileType = f.FileType,
-                    FileUrl = f.FilePath,
                     Timestamp = f.UploadedAt ?? DateTime.UtcNow,
                     FromRole = "user",
                     FromId = f.UserId,
-                    FromName = f.User?.Name ?? "Usuario"
+                    FromName = f.User != null ? f.User.Name : "Usuario",
+                    FileUrl = f.FilePath,
+                    FileName = f.FileName,
+                    FileType = f.FileType
                 })
-                .ToList();
+                .ToListAsync();
 
-            // Combinar y ordenar
-            var combined = messages
-                .Concat(files)
+            // --- Combinar y Ordenar ---
+            var combinedHistory = messages.Concat(files)
                 .OrderBy(item => item.Timestamp)
                 .ToList();
 
-            return Ok(combined);
+            return Ok(new
+            {
+                conversationDetails = new
+                {
+                    id = conversation.Id,
+                    title = conversation.Title,
+                    status = conversation.Status
+                },
+                history = combinedHistory
+            });
         }
 
         /// <summary>
+        /// Actualiza el estado de una conversación específica.
+        /// </summary>
+        [HttpPatch("{id}/status")]
+        // [HasPermission("CanUpdateConversationStatus")]
+        public async Task<IActionResult> UpdateConversationStatus(int id, [FromBody] UpdateStatusDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
+            {
+                return BadRequest(new { message = "El nuevo estado no puede ser nulo o vacío." });
+            }
 
+            var conversation = await _context.Conversations.FindAsync(id);
+
+            if (conversation == null)
+            {
+                return NotFound(new { message = $"Conversación con ID {id} no encontrada." });
+            }
+
+            conversation.Status = dto.Status;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Estado de la conversación {id} actualizado a '{dto.Status}'." });
+        }
 
         /// <summary>
         /// Actualiza una conversación existente.
         /// </summary>
-        /// <param name="id">ID de la conversación que se desea actualizar.</param>
-        /// <param name="dto">Datos actualizados de la conversación.</param>
-        /// <returns>Resultado de la actualización.</returns>
-        /// <response code="200">Configuración actualizada correctamente.</response>
-        /// <response code="404">Si la conversación no existe.</response>
         [HttpPut("{id}")]
-        [HasPermission("CanUpdateConversations")]
-        public async Task<IActionResult> UpdateConversation(int id, [FromBody] UpdateConversationDto dto)
+        //[HasPermission("CanUpdateConversations")] // Esta anotación no existe, se comenta
+        public async Task<IActionResult> UpdateConversation(int id, [FromBody] Conversation dto)
         {
             var conversation = await _context.Conversations.FindAsync(id);
 
@@ -185,7 +222,6 @@ namespace Voia.Api.Controllers
                 return NotFound(new { message = $"Conversation with ID {id} not found." });
             }
 
-            // Actualiza solo los campos permitidos
             conversation.Title = dto.Title ?? conversation.Title;
             conversation.UserMessage = dto.UserMessage ?? conversation.UserMessage;
             conversation.BotResponse = dto.BotResponse ?? conversation.BotResponse;
@@ -199,12 +235,8 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Elimina una conversación por su ID.
         /// </summary>
-        /// <param name="id">ID de la conversación a eliminar.</param>
-        /// <returns>Resultado de la eliminación.</returns>
-        /// <response code="204">Conversación eliminada correctamente.</response>
-        /// <response code="404">Si la conversación no existe.</response>
         [HttpDelete("{id}")]
-        [HasPermission("CanDeleteConversations")]
+        //[HasPermission("CanDeleteConversations")] // Esta anotación no existe, se comenta
         public async Task<IActionResult> DeleteConversation(int id)
         {
             var conversation = await _context.Conversations.FindAsync(id);

@@ -40,6 +40,9 @@ namespace Voia.Api.Models.Conversations
 
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        // ✅ PROPIEDAD AÑADIDA
+        [Column("last_active_at")]
+        public DateTime? LastActiveAt { get; set; }
 
         // Relaciones de navegación
         public virtual User User { get; set; }
