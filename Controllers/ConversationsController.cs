@@ -57,7 +57,7 @@ namespace Voia.Api.Controllers
 
             return Ok(conversations);
         }
-        
+
         [HttpPost("{id}/disconnect")]
         public async Task<IActionResult> UserDisconnected(int id)
         {
@@ -115,9 +115,6 @@ namespace Voia.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// Obtiene el historial completo de una conversación, incluyendo mensajes y archivos.
-        /// </summary>
         [HttpGet("history/{conversationId}")]
         public async Task<IActionResult> GetConversationHistory(int conversationId)
         {
@@ -143,6 +140,9 @@ namespace Voia.Api.Controllers
                     FromRole = m.Sender,
                     FromId = m.Sender == "user" ? m.UserId : m.BotId,
                     FromName = m.Sender == "user" ? (m.User != null ? m.User.Name : "Usuario") : (m.Bot != null ? m.Bot.Name : "Bot"),
+                    FromAvatarUrl = m.Sender == "user"
+            ? (m.User != null ? m.User.AvatarUrl : null)
+            : "https://yourdomain.com/images/default-bot-avatar.png", // o la URL que prefieras
                     ReplyToMessageId = m.ReplyToMessageId
                 })
                 .ToListAsync();
@@ -155,11 +155,12 @@ namespace Voia.Api.Controllers
                 .Select(f => new ConversationItemDto
                 {
                     Id = f.Id,
-                    Type = "file",
+                    Type = f.FileType.StartsWith("image") ? "image" : "file", // 👈 diferenciar tipo
                     Timestamp = f.UploadedAt ?? DateTime.UtcNow,
                     FromRole = "user",
                     FromId = f.UserId,
                     FromName = f.User != null ? f.User.Name : "Usuario",
+                    FromAvatarUrl = f.User != null ? f.User.AvatarUrl : null,
                     FileUrl = f.FilePath,
                     FileName = f.FileName,
                     FileType = f.FileType
