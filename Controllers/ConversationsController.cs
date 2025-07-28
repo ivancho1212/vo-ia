@@ -50,6 +50,7 @@ namespace Voia.Api.Controllers
                     Title = c.Title ?? string.Empty,
                     UserMessage = c.UserMessage ?? string.Empty,
                     BotResponse = c.BotResponse ?? string.Empty,
+                    IsWithAI = c.IsWithAI,
                     User = c.User != null ? new { c.User.Name, c.User.Email } : null,
                     Bot = c.Bot != null ? new { c.Bot.Name } : null
                 })
@@ -96,6 +97,7 @@ namespace Voia.Api.Controllers
                         UserMessage = c.UserMessage ?? string.Empty,
                         BotResponse = c.BotResponse ?? string.Empty,
                         CreatedAt = c.CreatedAt,
+                        IsWithAI = c.IsWithAI,
                         User = c.User != null ? new { c.User.Name, c.User.Email } : null,
                         Bot = c.Bot != null ? new { c.Bot.Name } : null
                     })
@@ -178,7 +180,8 @@ namespace Voia.Api.Controllers
                 {
                     id = conversation.Id,
                     title = conversation.Title,
-                    status = conversation.Status
+                    status = conversation.Status,
+                    isWithAI = conversation.IsWithAI
                 },
                 history = combinedHistory
             });
@@ -226,6 +229,7 @@ namespace Voia.Api.Controllers
             conversation.Title = dto.Title ?? conversation.Title;
             conversation.UserMessage = dto.UserMessage ?? conversation.UserMessage;
             conversation.BotResponse = dto.BotResponse ?? conversation.BotResponse;
+            conversation.IsWithAI = dto.IsWithAI; // ← solo si quieres que pueda modificarse desde el frontend
 
             _context.Conversations.Update(conversation);
             await _context.SaveChangesAsync();
@@ -251,5 +255,27 @@ namespace Voia.Api.Controllers
 
             return Ok(new { message = $"Conversation with ID {id} was deleted successfully." });
         }
+        public class UpdateIsWithAIDto
+        {
+            public bool IsWithAI { get; set; }
+        }
+
+        [HttpPatch("{id}/with-ai")]
+        public async Task<IActionResult> UpdateIsWithAI(int id, [FromBody] UpdateIsWithAIDto dto)
+        {
+            var conversation = await _context.Conversations.FindAsync(id);
+            if (conversation == null)
+            {
+                return NotFound(new { message = $"Conversación con ID {id} no encontrada." });
+            }
+
+            conversation.IsWithAI = dto.IsWithAI;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Campo isWithAI actualizado a {dto.IsWithAI} para la conversación {id}." });
+        }
+
     }
+
+
 }

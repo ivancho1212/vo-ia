@@ -28,6 +28,8 @@ namespace Voia.Api.Models.Conversations
 
         [Column("status")]
         public string Status { get; set; } = "activa";
+        [Column("is_with_ai")]
+        public bool IsWithAI { get; set; } = true; // o false si prefieres por defecto
 
         [Column("blocked")]
         public bool Blocked { get; set; } = false;

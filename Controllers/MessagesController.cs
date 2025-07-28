@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models.Messages;
@@ -7,10 +6,10 @@ using Voia.Api.Models.Messages.DTOs;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using System.Linq;
 
 namespace Voia.Api.Controllers
 {
-   // [Authorize(Roles = "Admin")]
     [Route("api/[controller]")]
     [ApiController]
     public class MessagesController : ControllerBase
@@ -22,6 +21,7 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
+        // Obtener todos los mensajes
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Message>>> GetMessages()
         {
@@ -30,9 +30,11 @@ namespace Voia.Api.Controllers
                 .Include(m => m.Bot)
                 .Include(m => m.Conversation)
                 .ToListAsync();
+
             return Ok(messages);
         }
 
+        // Obtener mensajes por conversación
         [HttpGet("by-conversation/{conversationId}")]
         public async Task<ActionResult<IEnumerable<Message>>> GetMessagesByConversation(int conversationId)
         {
@@ -44,7 +46,40 @@ namespace Voia.Api.Controllers
             return Ok(messages);
         }
 
+        // Obtener solo mensajes no leídos de una conversación
+        [HttpGet("unread/by-conversation/{conversationId}")]
+        public async Task<ActionResult<IEnumerable<Message>>> GetUnreadMessagesByConversation(int conversationId)
+        {
+            var messages = await _context.Messages
+                .Where(m => m.ConversationId == conversationId && m.Read == false && m.Sender == "user")
+                .OrderBy(m => m.CreatedAt)
+                .ToListAsync();
 
+            return Ok(messages);
+        }
+
+        // Marcar mensajes como leídos
+        [HttpPost("mark-read/{conversationId}")]
+        public async Task<IActionResult> MarkMessagesAsRead(int conversationId)
+        {
+            var messages = await _context.Messages
+                .Where(m => m.ConversationId == conversationId && m.Read == false && m.Sender == "user")
+                .ToListAsync();
+
+            if (!messages.Any())
+                return Ok(new { message = "No unread messages to update." });
+
+            foreach (var message in messages)
+            {
+                message.Read = true;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"{messages.Count} message(s) marked as read." });
+        }
+
+        // Crear un nuevo mensaje
         [HttpPost]
         public async Task<ActionResult<Message>> CreateMessage([FromBody] CreateMessageDto dto)
         {
@@ -66,9 +101,9 @@ namespace Voia.Api.Controllers
                 TokensUsed = dto.TokensUsed ?? 0,
                 Source = dto.Source ?? "widget",
                 CreatedAt = DateTime.UtcNow,
-                ReplyToMessageId = dto.ReplyToMessageId // ✅ importante
+                ReplyToMessageId = dto.ReplyToMessageId,
+                Read = dto.Sender != "user" // Marcar como leído si no es del usuario
             };
-
 
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
@@ -76,6 +111,7 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetMessages), new { id = message.Id }, message);
         }
 
+        // Actualizar mensaje
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateMessage(int id, [FromBody] UpdateMessageDto dto)
         {
@@ -95,6 +131,7 @@ namespace Voia.Api.Controllers
             return Ok(message);
         }
 
+        // Eliminar mensaje
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteMessage(int id)
         {

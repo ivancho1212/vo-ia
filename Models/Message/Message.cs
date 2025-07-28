@@ -39,6 +39,10 @@ namespace Voia.Api.Models.Messages
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        [Column("read")]
+        public bool Read { get; set; } = false;
+
+
         // ✅ Nuevo campo para soportar respuestas
         [Column("reply_to_message_id")]
         public int? ReplyToMessageId { get; set; }
