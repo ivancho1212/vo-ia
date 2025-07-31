@@ -308,7 +308,7 @@ namespace Voia.Api.Hubs
             });
         }
 
-        public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null)
+        public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null, string? replyToText = null)
         {
             var convo = await _context.Conversations.FindAsync(conversationId);
 

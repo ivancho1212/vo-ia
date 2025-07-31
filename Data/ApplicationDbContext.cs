@@ -280,8 +280,6 @@ namespace Voia.Api.Data
                     .HasForeignKey(ct => ct.HighlightedMessageId)
                     .OnDelete(DeleteBehavior.Restrict);
 
-
-
             // Configuración para BotStyle
             modelBuilder.Entity<BotStyle>(entity =>
             {

@@ -186,6 +186,91 @@ namespace Voia.Api.Controllers
                 history = combinedHistory
             });
         }
+        [HttpGet("with-last-message")]
+        public async Task<IActionResult> GetConversationsWithLastMessage()
+        {
+            var conversations = await _context.Conversations
+                .Include(c => c.User)
+                .Include(c => c.Bot)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Status,
+                    Title = c.Title ?? string.Empty,
+                    IsWithAI = c.IsWithAI,
+                    User = c.User != null ? new { c.User.Name, c.User.Email } : null,
+                    Bot = c.Bot != null ? new { c.Bot.Name } : null,
+
+                    // Último mensaje de texto
+                    LastTextMessage = _context.Messages
+                        .Where(m => m.ConversationId == c.Id && m.MessageText != null)
+                        .OrderByDescending(m => m.CreatedAt)
+                        .Select(m => new
+                        {
+                            Type = "text",
+                            Content = m.MessageText,
+                            Url = (string)null,
+                            Timestamp = m.CreatedAt
+                        })
+                        .FirstOrDefault(),
+
+                    // Último archivo (imagen u otro)
+                    LastFile = _context.ChatUploadedFiles
+                        .Where(f => f.ConversationId == c.Id)
+                        .OrderByDescending(f => f.UploadedAt)
+                        .Select(f => new
+                        {
+                            Type = f.FileType.StartsWith("image") ? "image" : "file",
+                            Content = f.FileName,
+                            Url = f.FilePath,
+                            Timestamp = f.UploadedAt
+                        })
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
+
+            // Seleccionar el mensaje más reciente
+            var withLastMessages = conversations.Select(c =>
+            {
+                var lastText = c.LastTextMessage != null
+                    ? new
+                    {
+                        Type = "text",
+                        Content = c.LastTextMessage.Content,
+                        Url = (string)null,
+                        Timestamp = (DateTime?)c.LastTextMessage.Timestamp
+                    }
+                    : null;
+
+                var lastFile = c.LastFile != null
+                    ? new
+                    {
+                        Type = c.LastFile.Type,
+                        Content = c.LastFile.Content,
+                        Url = c.LastFile.Url,
+                        Timestamp = c.LastFile.Timestamp
+                    }
+                    : null;
+
+                var latest = lastText != null && (lastFile == null || lastText.Timestamp > lastFile.Timestamp)
+                    ? lastText
+                    : lastFile;
+
+                return new
+                {
+                    c.Id,
+                    c.Status,
+                    c.Title,
+                    c.IsWithAI,
+                    c.User,
+                    c.Bot,
+                    LastMessage = latest
+                };
+            });
+
+            return Ok(withLastMessages); // <-- ESTA LÍNEA ES LA CLAVE
+        }
+
 
         /// <summary>
         /// Actualiza el estado de una conversación específica.
