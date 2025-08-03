@@ -36,6 +36,13 @@ namespace Voia.Api.Models
 
         [Column("header_background_color")]
         public string? HeaderBackgroundColor { get; set; }
+        [Column("allow_image_upload")]
+        public bool AllowImageUpload { get; set; } = true;
+
+        [Column("allow_file_upload")]
+        public bool AllowFileUpload { get; set; } = true;
+        public string? Title { get; set; }
+
 
     }
 

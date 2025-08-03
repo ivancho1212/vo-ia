@@ -95,13 +95,15 @@ namespace Voia.Api.Controllers
             style.Theme = dto.Theme;
             style.PrimaryColor = dto.PrimaryColor;
             style.SecondaryColor = dto.SecondaryColor;
-            style.HeaderBackgroundColor = dto.HeaderBackgroundColor; // 👈 Nuevo
+            style.HeaderBackgroundColor = dto.HeaderBackgroundColor;
             style.FontFamily = dto.FontFamily;
             style.AvatarUrl = dto.AvatarUrl;
             style.Position = dto.Position;
             style.CustomCss = dto.CustomCss;
+            style.Title = dto.Title; // ✅ Nuevo campo
+            style.AllowImageUpload = dto.AllowImageUpload; // ✅ Nuevo campo
+            style.AllowFileUpload = dto.AllowFileUpload;   // ✅ Nuevo campo
             style.UpdatedAt = DateTime.UtcNow;
-
 
             await _context.SaveChangesAsync();
 
@@ -115,29 +117,37 @@ namespace Voia.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateStyle([FromBody] CreateBotStyleDto dto)
         {
-            var style = new BotStyle
+            try
             {
-                UserId = dto.UserId,
-                Name = dto.Name,
-                StyleTemplateId = dto.StyleTemplateId,
-                Theme = dto.Theme,
-                PrimaryColor = dto.PrimaryColor,
-                SecondaryColor = dto.SecondaryColor,
-                HeaderBackgroundColor = dto.HeaderBackgroundColor, // 👈 Nuevo
-                FontFamily = dto.FontFamily,
-                AvatarUrl = dto.AvatarUrl,
-                Position = dto.Position,
-                CustomCss = dto.CustomCss,
-                UpdatedAt = DateTime.UtcNow
-            };
+                var style = new BotStyle
+                {
+                    UserId = dto.UserId,
+                    Name = dto.Name,
+                    StyleTemplateId = dto.StyleTemplateId,
+                    Theme = dto.Theme,
+                    PrimaryColor = dto.PrimaryColor,
+                    SecondaryColor = dto.SecondaryColor,
+                    HeaderBackgroundColor = dto.HeaderBackgroundColor,
+                    FontFamily = dto.FontFamily,
+                    AvatarUrl = dto.AvatarUrl,
+                    Position = dto.Position,
+                    CustomCss = dto.CustomCss,
+                    Title = dto.Title,
+                    AllowImageUpload = dto.AllowImageUpload,
+                    AllowFileUpload = dto.AllowFileUpload,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
+                _context.BotStyles.Add(style);
+                await _context.SaveChangesAsync();
 
-            _context.BotStyles.Add(style);
-            await _context.SaveChangesAsync();
-
-            return Ok(style);
+                return Ok(style);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+            }
         }
-
 
         /// <summary>
         /// Elimina un estilo de bot.

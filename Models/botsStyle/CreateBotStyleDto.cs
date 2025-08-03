@@ -11,5 +11,9 @@ public class CreateBotStyleDto
     public string Position { get; set; } = "bottom-right";
     public string CustomCss { get; set; }
     public string HeaderBackgroundColor { get; set; } = "#f5f5f5";
+    public string? Title { get; set; }
+    public bool AllowImageUpload { get; set; } = true;
+    public bool AllowFileUpload { get; set; } = true;
+
 
 }

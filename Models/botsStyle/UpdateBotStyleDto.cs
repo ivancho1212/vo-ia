@@ -13,6 +13,9 @@ namespace Voia.Api.Models
         public string Position { get; set; }
         public string CustomCss { get; set; }
         public string HeaderBackgroundColor { get; set; }
+        public string? Title { get; set; }
+        public bool AllowImageUpload { get; set; }
+        public bool AllowFileUpload { get; set; }
 
     }
 }
