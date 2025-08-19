@@ -11,14 +11,12 @@ namespace Voia.Api.Models
     public class User
     {
         public int Id { get; set; }
-
         public string Name { get; set; }
         public string Email { get; set; }
         public string Password { get; set; }
 
         [Column("role_id")]
         public int RoleId { get; set; }
-
 
         public int? DocumentTypeId { get; set; }
         public string Phone { get; set; }
@@ -30,10 +28,12 @@ namespace Voia.Api.Models
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 
+        // 🔹 Relaciones
         public Role Role { get; set; }
-
         public ICollection<Subscription> Subscriptions { get; set; }
 
+        // 🔹 Agregar relación con consentimientos
+        public ICollection<UserConsent> Consents { get; set; }
     }
 
 }

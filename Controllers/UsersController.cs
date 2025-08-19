@@ -304,7 +304,7 @@ namespace Voia.Api.Controllers
                     Name = createUserDto.Name,
                     Email = createUserDto.Email,
                     Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                    RoleId = fixedRoleId, // Asegura que todos los usuarios desde el frontend tengan rol 2
+                    RoleId = fixedRoleId, 
                     DocumentTypeId = createUserDto.DocumentTypeId,
                     Phone = createUserDto.Phone,
                     Address = createUserDto.Address,

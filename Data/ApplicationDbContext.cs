@@ -63,6 +63,7 @@ namespace Voia.Api.Data
         public DbSet<BotDataCaptureField> BotDataCaptureFields { get; set; }
         public DbSet<ChatUploadedFile> ChatUploadedFiles { get; set; }
         public DbSet<ConversationTag> ConversationTags { get; set; }
+        public DbSet<UserConsent> UserConsents { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }

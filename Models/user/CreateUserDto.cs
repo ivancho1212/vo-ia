@@ -18,7 +18,6 @@ namespace Voia.Api.Models.DTOs
         [Required(ErrorMessage = "El tipo de documento es obligatorio.")]
         public int DocumentTypeId { get; set; }
 
-
         [Required(ErrorMessage = "El número de teléfono es obligatorio.")]
         [RegularExpression(@"^3\d{9}$", ErrorMessage = "Teléfono inválido. Debe comenzar con 3 y tener 10 dígitos.")]
         public string Phone { get; set; }
@@ -35,5 +34,12 @@ namespace Voia.Api.Models.DTOs
         public string AvatarUrl { get; set; }
 
         public bool IsVerified { get; set; } = false;
+
+
+        // ✅ Consentimientos
+        [Required(ErrorMessage = "Debes aceptar los Términos y Condiciones.")]
+        public bool AcceptTerms { get; set; }  // obligatorio
+
+        public bool AllowAiTraining { get; set; } = false; // opcional
     }
 }
