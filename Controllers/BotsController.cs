@@ -142,7 +142,7 @@ namespace Voia.Api.Controllers
             }
 
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 45;
+            int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 2;
             Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
 
             // Validar si ya existe un bot con ese nombre
