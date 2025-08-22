@@ -22,12 +22,12 @@ namespace Voia.Api.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly FastApiService _fastApiService;
-
-        public BotsController(ApplicationDbContext context, FastApiService fastApiService)
+        private readonly VectorSearchService _vectorSearch;
+        public BotsController(ApplicationDbContext context, FastApiService fastApiService, VectorSearchService vectorSearch)
         {
             _context = context;
             _fastApiService = fastApiService;
-
+            _vectorSearch = vectorSearch;
         }
 
         /// <summary>
@@ -408,7 +408,7 @@ namespace Voia.Api.Controllers
             return Ok(bot);
         }
         [HttpGet("{id}/context")]
-        public async Task<ActionResult<object>> GetBotContext(int id)
+        public async Task<ActionResult<object>> GetBotContext(int id, string query = "")
         {
             var bot = await _context.Bots
                 .Include(b => b.User)
@@ -416,12 +416,10 @@ namespace Voia.Api.Controllers
 
             if (bot == null) return NotFound();
 
-            // Obtener configuración del modelo
             var aiModelConfig = await _context.AiModelConfigs
                 .Include(c => c.IaProvider)
                 .FirstOrDefaultAsync(c => c.Id == bot.AiModelConfigId);
 
-            // Prompts
             var templatePrompts = await _context.BotTemplatePrompts
                 .Where(p => p.BotTemplateId == bot.BotTemplateId)
                 .ToListAsync();
@@ -429,20 +427,59 @@ namespace Voia.Api.Controllers
             var systemPrompt = templatePrompts
                 .FirstOrDefault(p => p.Role == PromptRole.system)?.Content;
 
+            var captureFields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == bot.Id)
+                .Select(f => new
+                {
+                    f.Id,
+                    f.FieldName,
+                    f.FieldType,
+                    IsRequired = f.IsRequired ?? false
+                })
+                .ToListAsync();
+
+            string captureInstruction = null;
+            if (captureFields.Any())
+            {
+                var requiredFields = string.Join(", ",
+                    captureFields.Where(f => f.IsRequired).Select(f => f.FieldName));
+
+                var optionalFields = string.Join(", ",
+                    captureFields.Where(f => !f.IsRequired).Select(f => f.FieldName));
+
+                var parts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(requiredFields))
+                    parts.Add($"(obligatorios) {requiredFields}");
+                if (!string.IsNullOrWhiteSpace(optionalFields))
+                    parts.Add($"(opcionales) {optionalFields}");
+
+                var fieldsPhrase = string.Join(" ", parts);
+
+                captureInstruction =
+                    $"Antes de avanzar, captura con tacto la siguiente información del usuario: {fieldsPhrase}. " +
+                    "Haz preguntas de una en una, valida repitiendo el dato y pidiendo confirmación. " +
+                    "Si ya tienes un dato, no lo vuelvas a pedir; continúa con el siguiente. " +
+                    "Una vez confirmados los obligatorios, puedes proceder con la solicitud del usuario.";
+            }
+
+            var systemPromptFinal = string.IsNullOrWhiteSpace(systemPrompt)
+                ? captureInstruction
+                : $"{systemPrompt}\n\n{captureInstruction}";
+
             var customPrompts = await _context.BotCustomPrompts
                 .Where(p => p.BotTemplateId == bot.BotTemplateId)
                 .OrderBy(p => p.Id)
                 .ToListAsync();
 
-            var messages = new List<PromptMessageDto>();
-            if (!string.IsNullOrWhiteSpace(systemPrompt))
+            var messages = new List<object>();
+            if (!string.IsNullOrWhiteSpace(systemPromptFinal))
             {
-                messages.Add(new PromptMessageDto { Role = "system", Content = systemPrompt });
+                messages.Add(new { role = "system", content = systemPromptFinal });
             }
-            messages.AddRange(customPrompts.Select(p => new PromptMessageDto
+            messages.AddRange(customPrompts.Select(p => new
             {
-                Role = p.Role.ToLowerInvariant(),
-                Content = p.Content
+                role = p.Role.ToLowerInvariant(),
+                content = p.Content
             }));
 
             // Entrenamiento adicional
@@ -461,7 +498,9 @@ namespace Voia.Api.Controllers
                 .Select(d => d.FileName)
                 .ToListAsync();
 
-            // JSON final con settings
+            // 🔹 Traer vectores desde Python
+            var vectors = await _vectorSearch.SearchVectorsAsync(bot.Id, query);
+
             var result = new
             {
                 botId = bot.Id,
@@ -479,15 +518,26 @@ namespace Voia.Api.Controllers
                     temperature = aiModelConfig?.Temperature ?? 0.7m,
                     frequencyPenalty = aiModelConfig?.FrequencyPenalty ?? 0.0m,
                     presencePenalty = aiModelConfig?.PresencePenalty ?? 0.0m,
-                    maxTokens = 1000,      // si no está en base de datos, puedes dejar por defecto
-                    topP = 1.0m            // idem
+                    maxTokens = 1000,
+                    topP = 1.0m
                 },
-                messages = messages,
+                messages,
                 training = new
                 {
-                    documents = documents,
-                    urls = urls,
-                    customTexts = texts
+                    documents,
+                    urls,
+                    customTexts = texts,
+                    vectors // ✅ Aquí agregamos los vectores
+                },
+                capture = new
+                {
+                    fields = captureFields.Select(f => new
+                    {
+                        id = f.Id,
+                        name = f.FieldName,
+                        type = f.FieldType,
+                        required = f.IsRequired
+                    })
                 }
             };
 

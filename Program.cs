@@ -174,6 +174,7 @@ builder.Services.AddHttpClient<GeminiClient>()
 
 builder.Services.AddScoped<TextExtractionService>();
 builder.Services.AddScoped<TextChunkingService>();
+builder.Services.AddHttpClient<VectorSearchService>();
 
 
 var app = builder.Build();
