@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Services.Interfaces;
 using Voia.Api.Models.Conversations;
-using Voia.Api.Models.Conversations;
 using Voia.Api.Data;
 using System.Threading.Tasks;
 using System;
@@ -14,6 +13,8 @@ using System.IO;
 using Voia.Api.Services.Chat;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Api.Services;
+using Voia.Api.Models;
 
 namespace Voia.Api.Hubs
 {
@@ -24,6 +25,7 @@ namespace Voia.Api.Hubs
         private readonly IChatFileService _chatFileService;
         private static readonly Dictionary<int, bool> PausedConversations = new();
         private readonly ILogger<ChatHub> _logger;
+        private readonly TokenCounterService _tokenCounter;
         private const int TypingDelayMs = 2000;
 
 
@@ -157,9 +159,9 @@ namespace Voia.Api.Hubs
             Console.WriteLine($"🔁 IA {(paused ? "pausada" : "activada")} para conversación {conversationId}");
             return Task.CompletedTask;
         }
-
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
+            // Verificar que el usuario existe
             var userExists = _context.Users.Any(u => u.Id == request.UserId);
 
             string? repliedText = null;
@@ -182,6 +184,7 @@ namespace Voia.Api.Hubs
                 return;
             }
 
+            // Emitir mensaje del usuario
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -220,23 +223,36 @@ namespace Voia.Api.Hubs
                     CreatedAt = DateTime.UtcNow,
                     Status = "activa"
                 };
-
                 _context.Conversations.Add(conversation);
+                await _context.SaveChangesAsync(); // Guardar para obtener el Id
             }
 
-            // Guardar mensaje del usuario SIEMPRE
+            // Guardar mensaje del usuario
             var userMessage = new Message
             {
                 BotId = request.BotId,
                 UserId = request.UserId,
                 ConversationId = conversation.Id,
                 Sender = "user",
-                MessageText = request.Question,
+                MessageText = request.Question ?? string.Empty,
                 Source = "widget",
                 CreatedAt = DateTime.UtcNow,
                 ReplyToMessageId = request.ReplyToMessageId
             };
             _context.Messages.Add(userMessage);
+
+            // Contar tokens del usuario y registrar
+            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request?.Question))
+            {
+                int userTokens = _tokenCounter.CountTokens(request.Question);
+                _context.TokenUsageLogs.Add(new TokenUsageLog
+                {
+                    UserId = request.UserId,
+                    BotId = request.BotId,
+                    TokensUsed = userTokens,
+                    UsageDate = DateTime.UtcNow
+                });
+            }
 
             // Actualizar conversación
             conversation.UserMessage = request.Question;
@@ -245,7 +261,7 @@ namespace Voia.Api.Hubs
 
             await _context.SaveChangesAsync();
 
-            // Verificar si la IA está pausada DESPUÉS de guardar el mensaje del usuario
+            // Verificar si la IA está pausada
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
             {
                 _logger.LogWarning("⏸️ IA pausada. No se responde con IA para conversación {ConversationId}", conversationId);
@@ -253,7 +269,6 @@ namespace Voia.Api.Hubs
             }
 
             await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
-
             await Task.Delay(TypingDelayMs);
 
             string botAnswer;
@@ -287,11 +302,24 @@ namespace Voia.Api.Hubs
                 UserId = request.UserId,
                 ConversationId = conversation.Id,
                 Sender = "bot",
-                MessageText = botAnswer,
+                MessageText = botAnswer ?? string.Empty,
                 Source = "widget",
                 CreatedAt = DateTime.UtcNow
             };
             _context.Messages.Add(botMessage);
+
+            // Contar tokens de la respuesta del bot y registrar
+            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer))
+            {
+                int botTokens = _tokenCounter.CountTokens(botAnswer);
+                _context.TokenUsageLogs.Add(new TokenUsageLog
+                {
+                    UserId = request.UserId,
+                    BotId = request.BotId,
+                    TokensUsed = botTokens,
+                    UsageDate = DateTime.UtcNow
+                });
+            }
 
             // Actualizar respuesta del bot en conversación
             conversation.BotResponse = botAnswer;

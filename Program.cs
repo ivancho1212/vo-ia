@@ -11,6 +11,7 @@ using Voia.Api.Services.Interfaces;
 using System.Net.Http.Headers;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Services.Chat;
+using Api.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -175,6 +176,7 @@ builder.Services.AddHttpClient<GeminiClient>()
 builder.Services.AddScoped<TextExtractionService>();
 builder.Services.AddScoped<TextChunkingService>();
 builder.Services.AddHttpClient<VectorSearchService>();
+builder.Services.AddSingleton<TokenCounterService>();
 
 
 var app = builder.Build();

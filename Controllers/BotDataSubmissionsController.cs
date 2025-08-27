@@ -77,19 +77,22 @@ namespace Voia.Api.Controllers
 
                     var values = group
                         .Where(g => fieldNames.ContainsKey(g.CaptureFieldId))
+                        .GroupBy(g => fieldNames[g.CaptureFieldId])
                         .ToDictionary(
-                            g => fieldNames[g.CaptureFieldId],
-                            g => g.SubmissionValue
+                            gr => gr.Key,
+                            gr => gr.Select(x => x.SubmissionValue).ToList()
                         );
 
                     return new
                     {
                         sessionId,
                         userId,
-                        values
+                        values,
+                        createdAt = group.Max(x => x.SubmittedAt) // 👈 última fecha captada
                     };
                 })
                 .ToList();
+
 
             return Ok(grouped);
         }
@@ -120,20 +123,19 @@ namespace Voia.Api.Controllers
 
             // ✅ Agrupar en memoria
             var grouped = allSubmissions
-                .GroupBy(s => new { s.UserId, s.SubmissionSessionId })
-                .Select(g => new Voia.Api.Dtos.Bot.BotDataGroupedSubmissionDto
+                .Where(s => fields.ContainsKey(s.CaptureFieldId))
+                .Select(s => new
                 {
-                    UserId = g.Key.UserId,
-                    SessionId = g.Key.SubmissionSessionId,
-                    CreatedAt = g.Max(x => x.SubmittedAt),
-                    Values = g
-                        .Where(s => fields.ContainsKey(s.CaptureFieldId))
-                        .ToDictionary(
-                            s => fields[s.CaptureFieldId],
-                            s => s.SubmissionValue ?? ""
-                        )
+                    UserId = s.UserId,
+                    SessionId = s.SubmissionSessionId,
+                    CreatedAt = s.SubmittedAt,
+                    Field = fields[s.CaptureFieldId],
+                    Value = s.SubmissionValue
                 })
+                .OrderBy(x => x.SessionId)
+                .ThenBy(x => x.CreatedAt)
                 .ToList();
+
 
             return Ok(grouped);
         }
@@ -172,11 +174,47 @@ namespace Voia.Api.Controllers
 
         // POST: api/botdatasubmissions
         [HttpPost]
-        public async Task<ActionResult<BotDataSubmissionResponseDto>> Create(BotDataSubmissionCreateDto dto)
+        public async Task<ActionResult<BotDataSubmissionResponseDto>> Create([FromBody] BotDataSubmissionCreateDto dto)
         {
+            // Log detallado del payload recibido
+            Console.WriteLine("[BotDataSubmissions] Payload recibido:");
+            try
+            {
+                var rawBody = await new System.IO.StreamReader(Request.Body).ReadToEndAsync();
+                Console.WriteLine($"[BotDataSubmissions] JSON recibido: {rawBody}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BotDataSubmissions] Error leyendo el body: {ex.Message}");
+            }
+            Console.WriteLine($"BotId: {dto.BotId}, CaptureFieldId: {dto.CaptureFieldId}, SubmissionValue: {dto.SubmissionValue}, UserId: {dto.UserId}, SubmissionSessionId: {dto.SubmissionSessionId}");
+
+            // Validación explícita de campos obligatorios
+            if (dto.BotId == 0)
+            {
+                Console.WriteLine("[BotDataSubmissions] ❌ ERROR: BotId es 0 o no enviado");
+                return BadRequest(new { Message = "El campo BotId es obligatorio y debe ser distinto de 0." });
+            }
+            if (dto.CaptureFieldId == 0)
+            {
+                Console.WriteLine("[BotDataSubmissions] ❌ ERROR: CaptureFieldId es 0 o no enviado");
+                return BadRequest(new { Message = "El campo CaptureFieldId es obligatorio y debe ser distinto de 0." });
+            }
             if (dto.UserId == null && string.IsNullOrWhiteSpace(dto.SubmissionSessionId))
             {
-                return BadRequest(new { Message = "Debe especificar un userId o un submissionSessionId para asociar el origen del dato." });
+                Console.WriteLine("[BotDataSubmissions] ❌ ERROR: Falta userId y submissionSessionId");
+                return BadRequest(new
+                {
+                    Message = "Debe especificar un userId o un submissionSessionId para asociar el origen del dato.",
+                    Debug = new
+                    {
+                        dto.BotId,
+                        dto.CaptureFieldId,
+                        dto.SubmissionValue,
+                        dto.UserId,
+                        dto.SubmissionSessionId
+                    }
+                });
             }
 
             var submission = new BotDataSubmission
