@@ -29,12 +29,18 @@ namespace Voia.Api.Hubs
         private const int TypingDelayMs = 2000;
 
 
-        public ChatHub(IAiProviderService aiProviderService, ApplicationDbContext context, IChatFileService chatFileService, ILogger<ChatHub> logger)
+        public ChatHub(
+            IAiProviderService aiProviderService,
+            ApplicationDbContext context,
+            IChatFileService chatFileService,
+            ILogger<ChatHub> logger,
+            TokenCounterService tokenCounter)  // <-- agregado
         {
             _aiProviderService = aiProviderService;
             _context = context;
             _chatFileService = chatFileService;
             _logger = logger;
+            _tokenCounter = tokenCounter;  // <-- asignado
         }
 
 
