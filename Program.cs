@@ -12,7 +12,7 @@ using System.Net.Http.Headers;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Services.Chat;
 using Api.Services;
-
+using Voia.Api.Services.Mocks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -177,7 +177,7 @@ builder.Services.AddScoped<TextExtractionService>();
 builder.Services.AddScoped<TextChunkingService>();
 builder.Services.AddHttpClient<VectorSearchService>();
 builder.Services.AddSingleton<TokenCounterService>();
-
+builder.Services.AddScoped<IAiProviderService, MockAiProviderService>();
 
 var app = builder.Build();
 
