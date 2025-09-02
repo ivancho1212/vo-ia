@@ -178,6 +178,8 @@ builder.Services.AddScoped<TextChunkingService>();
 builder.Services.AddHttpClient<VectorSearchService>();
 builder.Services.AddSingleton<TokenCounterService>();
 builder.Services.AddScoped<IAiProviderService, MockAiProviderService>();
+builder.Services.AddScoped<BotDataCaptureService>();
+builder.Services.AddScoped<PromptBuilderService>();
 
 var app = builder.Build();
 

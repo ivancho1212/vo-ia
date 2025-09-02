@@ -9,7 +9,7 @@ namespace Voia.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-   // [Authorize] // 👈 opcional, si quieres que requiera token como tus otros endpoints
+    // [Authorize] // 👈 opcional, si quieres que requiera token como tus otros endpoints
     public class AiController : ControllerBase
     {
         private readonly IAiProviderService _aiProviderService;
@@ -19,30 +19,36 @@ namespace Voia.Api.Controllers
             _aiProviderService = aiProviderService;
         }
 
-       [HttpPost("GetResponse")]
+        [HttpPost("GetResponse")]
         public async Task<IActionResult> GetResponse([FromBody] AiRequestDto request)
         {
             Console.WriteLine("📥 Request recibido:");
             Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(request));
 
-            // Llamada normal
-            var response = await _aiProviderService.GetBotResponseAsync(
-                request.BotId,
-                request.UserId,
-                request.Question,
-                request.CapturedFields
-            );
+            // 🔹 Lógica temporal hasta que actives los proveedores reales
+            var fakeResponse = new
+            {
+                BotId = request.BotId,
+                UserId = request.UserId,
+                Question = request.Question,
+                Answer = $"🤖 (Respuesta simulada) El bot {request.BotId} recibió tu pregunta: '{request.Question}'",
+                CapturedFields = request.CapturedFields
+            };
 
-            Console.WriteLine("📤 Respuesta de IA:");
-            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));
+            Console.WriteLine("📤 Respuesta de IA simulada:");
+            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(fakeResponse));
 
-            return Ok(response);
+            // Simular asincronía (opcional)
+            await Task.Delay(100);
+
+            return Ok(fakeResponse);
         }
+
 
     }
 
     // 👇 DTO que mapea lo que manda tu frontend
-        public class AiRequestDto
+    public class AiRequestDto
     {
         public int BotId { get; set; }
         public int UserId { get; set; }

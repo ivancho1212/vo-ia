@@ -27,20 +27,23 @@ namespace Voia.Api.Hubs
         private readonly ILogger<ChatHub> _logger;
         private readonly TokenCounterService _tokenCounter;
         private const int TypingDelayMs = 2000;
-
+        private readonly BotDataCaptureService _dataCaptureService;
 
         public ChatHub(
             IAiProviderService aiProviderService,
             ApplicationDbContext context,
             IChatFileService chatFileService,
             ILogger<ChatHub> logger,
-            TokenCounterService tokenCounter)  // <-- agregado
+            TokenCounterService tokenCounter,
+            BotDataCaptureService dataCaptureService   // 👈 nuevo
+        )
         {
             _aiProviderService = aiProviderService;
             _context = context;
             _chatFileService = chatFileService;
             _logger = logger;
-            _tokenCounter = tokenCounter;  // <-- asignado
+            _tokenCounter = tokenCounter;
+            _dataCaptureService = dataCaptureService;  // 👈 asignar
         }
 
 
@@ -181,37 +184,16 @@ namespace Voia.Api.Hubs
 
             if (!userExists)
             {
-                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+                await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
-                    text = "⚠️ Error: usuario no válido. No se puede procesar el mensaje."
+                    text = "⚠️ Error: usuario no válido. No se puede procesar el mensaje.",
+                    status = "error",
+                    tempId = request.TempId
                 });
                 return;
             }
-
-            // Emitir mensaje del usuario
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
-            {
-                conversationId,
-                from = "user",
-                text = request.Question,
-                timestamp = DateTime.UtcNow,
-                replyToMessageId = request.ReplyToMessageId,
-                replyToText = repliedText
-            });
-
-            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
-            {
-                conversationId,
-                from = "user",
-                text = request.Question,
-                timestamp = DateTime.UtcNow,
-                alias = $"Usuario {request.UserId}",
-                lastMessage = request.Question,
-                replyToMessageId = request.ReplyToMessageId,
-                replyToText = repliedText
-            });
 
             // Buscar o crear la conversación
             var conversation = _context.Conversations
@@ -230,10 +212,11 @@ namespace Voia.Api.Hubs
                     Status = "activa"
                 };
                 _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync(); // Guardar para obtener el Id
+                await _context.SaveChangesAsync();
             }
 
-            // Guardar mensaje del usuario
+            // Guardar mensaje del usuario en BD
+            // Guardar mensaje del usuario en BD
             var userMessage = new Message
             {
                 BotId = request.BotId,
@@ -260,6 +243,21 @@ namespace Voia.Api.Hubs
                 });
             }
 
+            // ✅ CAPTURA DE DATOS EN TIEMPO REAL
+            var capturedData = await _dataCaptureService.ProcessMessageAsync(
+                request.BotId,
+                request.UserId,
+                Context.ConnectionId,   // usamos la conexión como sessionId
+                request.Question ?? string.Empty
+            );
+
+            if (capturedData.Any())
+            {
+                _logger.LogInformation("📊 Datos capturados: {Data}",
+                    string.Join(", ", capturedData.Select(c => $"{c.CaptureFieldId}={c.SubmissionValue}")));
+            }
+
+
             // Actualizar conversación
             conversation.UserMessage = request.Question;
             conversation.LastMessage = request.Question;
@@ -267,13 +265,54 @@ namespace Voia.Api.Hubs
 
             await _context.SaveChangesAsync();
 
-            // Verificar si la IA está pausada
+            // 🔹 Confirmación privada al usuario (reemplaza optimista con id real)
+            await Clients.Caller.SendAsync("ReceiveMessage", new
+            {
+                conversationId,
+                from = "user",
+                text = request.Question,
+                timestamp = userMessage.CreatedAt,
+                replyToMessageId = request.ReplyToMessageId,
+                replyToText = repliedText,
+                id = userMessage.Id,          // id real en BD
+                tempId = request.TempId,      // el que mandó el frontend
+                status = "sent"
+            });
+
+            // 🔹 Notificación al grupo (otros usuarios de la conversación)
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+            {
+                conversationId,
+                from = "user",
+                text = request.Question,
+                timestamp = userMessage.CreatedAt,
+                replyToMessageId = request.ReplyToMessageId,
+                replyToText = repliedText,
+                id = userMessage.Id
+            });
+
+            // 🔹 Notificación a admin
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId,
+                from = "user",
+                text = request.Question,
+                timestamp = userMessage.CreatedAt,
+                alias = $"Usuario {request.UserId}",
+                lastMessage = request.Question,
+                replyToMessageId = request.ReplyToMessageId,
+                replyToText = repliedText,
+                id = userMessage.Id
+            });
+
+            // Si la IA está pausada, terminar aquí
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
             {
                 _logger.LogWarning("⏸️ IA pausada. No se responde con IA para conversación {ConversationId}", conversationId);
                 return;
             }
 
+            // Simular "escribiendo..."
             await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
             await Task.Delay(TypingDelayMs);
 
@@ -314,7 +353,7 @@ namespace Voia.Api.Hubs
             };
             _context.Messages.Add(botMessage);
 
-            // Contar tokens de la respuesta del bot y registrar
+            // Contar tokens de la respuesta del bot
             if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer))
             {
                 int botTokens = _tokenCounter.CountTokens(botAnswer);
@@ -333,12 +372,14 @@ namespace Voia.Api.Hubs
 
             await _context.SaveChangesAsync();
 
+            // 🔹 Enviar respuesta del bot al grupo
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "bot",
                 text = botAnswer,
-                timestamp = DateTime.UtcNow
+                timestamp = botMessage.CreatedAt,
+                id = botMessage.Id
             });
         }
 

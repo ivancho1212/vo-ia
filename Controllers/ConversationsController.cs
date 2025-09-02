@@ -9,28 +9,33 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
 using Voia.Api.Models.Messages;
-using System.Linq; // Necesario para .Concat y .OrderBy
+using System.Linq;
+using Voia.Api.Services; 
+using Voia.Api.Services.Chat;
+
 
 namespace Voia.Api.Controllers
 {
-    // Modelo DTO para la actualización de estado
-    public class UpdateStatusDto
-    {
-        public string Status { get; set; }
-    }
-
-    // [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
     public class ConversationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly IHubContext<ChatHub> _hubContext;
+        private readonly BotDataCaptureService _captureService;
+        private readonly PromptBuilderService _promptBuilder;
 
-        public ConversationsController(ApplicationDbContext context, IHubContext<ChatHub> hubContext)
+        public ConversationsController(
+            ApplicationDbContext context,
+            IHubContext<ChatHub> hubContext,
+            BotDataCaptureService captureService,
+            PromptBuilderService promptBuilder
+        )
         {
             _context = context;
             _hubContext = hubContext;
+            _captureService = captureService;
+            _promptBuilder = promptBuilder;
         }
 
         /// <summary>
@@ -360,7 +365,68 @@ namespace Voia.Api.Controllers
             return Ok(new { message = $"Campo isWithAI actualizado a {dto.IsWithAI} para la conversación {id}." });
         }
 
+        /// <summary>
+        /// Envía un mensaje en una conversación y procesa captura de datos + prompt.
+        /// </summary>
+        [HttpPost("{conversationId}/send")]
+        public async Task<IActionResult> SendMessage(int conversationId, [FromBody] UserMessageDto request)
+        {
+            var conversation = await _context.Conversations
+                .Include(c => c.Bot)
+                .FirstOrDefaultAsync(c => c.Id == conversationId);
+    
+            if (conversation == null)
+                return NotFound("Conversación no encontrada");
+    
+            // 1. Capturar datos del mensaje
+            var newSubmissions = await _captureService.ProcessMessageAsync(
+                conversation.BotId,
+                conversation.UserId,
+                conversationId.ToString(),
+                request.Message
+            );
+    
+            // 2. Traer todos los campos con sus valores actuales
+            var capturedFields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == conversation.BotId)
+                .Select(f => new DataField
+                {
+                    FieldName = f.FieldName,
+                    Value = _context.BotDataSubmissions
+                        .Where(s => s.BotId == conversation.BotId && s.CaptureFieldId == f.Id &&
+                                    (s.UserId == conversation.UserId || s.SubmissionSessionId == conversationId.ToString()))
+                        .OrderByDescending(s => s.SubmittedAt)
+                        .Select(s => s.SubmissionValue)
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
+    
+            // 3. Construir prompt dinámico
+            var prompt = _promptBuilder.BuildDynamicPrompt(
+                conversation.Title ?? "Asistente",
+                request.Message,
+                null, // contexto adicional si lo tienes
+                null, // resumen si lo tienes
+                capturedFields
+            );
+    
+            // (luego aquí llamarías al proveedor de IA con `prompt`)
+            return Ok(new
+            {
+                captured = newSubmissions.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue }),
+                prompt
+            });
+        }
+    
+        // DTOs internos
+        public class UserMessageDto
+        {
+            public string Message { get; set; }
+        }
+    
+        public class UpdateStatusDto
+        {
+            public string Status { get; set; }
+        }
     }
-
-
 }

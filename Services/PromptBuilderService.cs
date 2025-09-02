@@ -1,5 +1,7 @@
+using System;
 using System.Text;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace Voia.Api.Services
 {
@@ -11,9 +13,13 @@ namespace Voia.Api.Services
 
     public class PromptBuilderService
     {
+        /// <summary>
+        /// Construye un prompt indicando el estado de captura de datos.
+        /// </summary>
         public string BuildDataCaptureStatusPrompt(List<DataField> fields)
         {
-            if (fields == null || fields.Count == 0) return "";
+            if (fields == null || fields.Count == 0)
+                return string.Empty;
 
             var captured = fields.Where(f => !string.IsNullOrEmpty(f.Value)).ToList();
             var missing = fields.Where(f => string.IsNullOrEmpty(f.Value)).ToList();
@@ -35,6 +41,9 @@ namespace Voia.Api.Services
             return status.ToString();
         }
 
+        /// <summary>
+        /// Construye un prompt dinámico con contexto, historial y estado de datos.
+        /// </summary>
         public string BuildDynamicPrompt(
             string systemMessage,
             string userMessage,
@@ -43,8 +52,13 @@ namespace Voia.Api.Services
             List<DataField> capturedFields
         )
         {
-            var contextInfo = string.IsNullOrWhiteSpace(relevantContext) ? "Sin resultados relevantes en la base de conocimiento." : relevantContext.Trim();
-            var historyInfo = string.IsNullOrWhiteSpace(conversationSummary) ? "No hay historial previo." : conversationSummary.Trim();
+            var contextInfo = string.IsNullOrWhiteSpace(relevantContext)
+                ? "Sin resultados relevantes en la base de conocimiento."
+                : relevantContext.Trim();
+
+            var historyInfo = string.IsNullOrWhiteSpace(conversationSummary)
+                ? "No hay historial previo."
+                : conversationSummary.Trim();
 
             return $@"
 {systemMessage}
