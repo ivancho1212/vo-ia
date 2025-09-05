@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Api.Services;
 using Voia.Api.Models;
+using Voia.Api.Services;
 
 namespace Voia.Api.Hubs
 {
@@ -23,11 +24,14 @@ namespace Voia.Api.Hubs
         private readonly IAiProviderService _aiProviderService;
         private readonly ApplicationDbContext _context;
         private readonly IChatFileService _chatFileService;
-        private static readonly Dictionary<int, bool> PausedConversations = new();
         private readonly ILogger<ChatHub> _logger;
         private readonly TokenCounterService _tokenCounter;
-        private const int TypingDelayMs = 2000;
         private readonly BotDataCaptureService _dataCaptureService;
+        private readonly HttpClient _httpClient; // <--- HttpClient inyectado
+        private const int TypingDelayMs = 1000; // 1 segundo
+        private static readonly Dictionary<int, bool> PausedConversations = new();
+        private readonly PromptBuilderService _promptBuilderService;
+
 
         public ChatHub(
             IAiProviderService aiProviderService,
@@ -35,7 +39,9 @@ namespace Voia.Api.Hubs
             IChatFileService chatFileService,
             ILogger<ChatHub> logger,
             TokenCounterService tokenCounter,
-            BotDataCaptureService dataCaptureService   // 👈 nuevo
+            BotDataCaptureService dataCaptureService,
+            HttpClient httpClient,
+            PromptBuilderService promptBuilderService // 👈 agregado
         )
         {
             _aiProviderService = aiProviderService;
@@ -43,9 +49,10 @@ namespace Voia.Api.Hubs
             _chatFileService = chatFileService;
             _logger = logger;
             _tokenCounter = tokenCounter;
-            _dataCaptureService = dataCaptureService;  // 👈 asignar
+            _dataCaptureService = dataCaptureService;
+            _httpClient = httpClient;
+            _promptBuilderService = promptBuilderService; // 👈 asignado
         }
-
 
         public async Task JoinRoom(int conversationId)
         {
@@ -170,36 +177,35 @@ namespace Voia.Api.Hubs
         }
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
-            // Verificar que el usuario existe
-            var userExists = _context.Users.Any(u => u.Id == request.UserId);
-
-            string? repliedText = null;
-            if (request.ReplyToMessageId.HasValue)
-            {
-                repliedText = _context.Messages
-                    .Where(m => m.Id == request.ReplyToMessageId.Value)
-                    .Select(m => m.MessageText)
-                    .FirstOrDefault();
-            }
-
-            if (!userExists)
+            // Validación de usuario
+            if (!_context.Users.Any(u => u.Id == request.UserId))
             {
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
-                    text = "⚠️ Error: usuario no válido. No se puede procesar el mensaje.",
+                    text = "⚠️ Error: usuario no válido.",
                     status = "error",
                     tempId = request.TempId
                 });
                 return;
             }
 
-            // Buscar o crear la conversación
-            var conversation = _context.Conversations
+            // Obtener mensaje al que se responde
+            string? repliedText = null;
+            if (request.ReplyToMessageId.HasValue)
+            {
+                repliedText = await _context.Messages
+                    .Where(m => m.Id == request.ReplyToMessageId.Value)
+                    .Select(m => m.MessageText)
+                    .FirstOrDefaultAsync();
+            }
+
+            // Buscar o crear conversación
+            var conversation = await _context.Conversations
                 .Where(c => c.UserId == request.UserId && c.BotId == request.BotId)
                 .OrderByDescending(c => c.CreatedAt)
-                .FirstOrDefault();
+                .FirstOrDefaultAsync();
 
             if (conversation == null)
             {
@@ -215,8 +221,7 @@ namespace Voia.Api.Hubs
                 await _context.SaveChangesAsync();
             }
 
-            // Guardar mensaje del usuario en BD
-            // Guardar mensaje del usuario en BD
+            // Guardar mensaje del usuario
             var userMessage = new Message
             {
                 BotId = request.BotId,
@@ -230,24 +235,23 @@ namespace Voia.Api.Hubs
             };
             _context.Messages.Add(userMessage);
 
-            // Contar tokens del usuario y registrar
-            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request?.Question))
+            // Contar tokens de usuario
+            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request.Question))
             {
-                int userTokens = _tokenCounter.CountTokens(request.Question);
                 _context.TokenUsageLogs.Add(new TokenUsageLog
                 {
                     UserId = request.UserId,
                     BotId = request.BotId,
-                    TokensUsed = userTokens,
+                    TokensUsed = _tokenCounter.CountTokens(request.Question),
                     UsageDate = DateTime.UtcNow
                 });
             }
 
-            // ✅ CAPTURA DE DATOS EN TIEMPO REAL
+            // Captura de datos
             var capturedData = await _dataCaptureService.ProcessMessageAsync(
                 request.BotId,
                 request.UserId,
-                Context.ConnectionId,   // usamos la conexión como sessionId
+                Context.ConnectionId,
                 request.Question ?? string.Empty
             );
 
@@ -257,15 +261,13 @@ namespace Voia.Api.Hubs
                     string.Join(", ", capturedData.Select(c => $"{c.CaptureFieldId}={c.SubmissionValue}")));
             }
 
-
             // Actualizar conversación
             conversation.UserMessage = request.Question;
             conversation.LastMessage = request.Question;
             conversation.UpdatedAt = DateTime.UtcNow;
-
             await _context.SaveChangesAsync();
 
-            // 🔹 Confirmación privada al usuario (reemplaza optimista con id real)
+            // Confirmación al usuario y notificaciones a grupo y admin
             await Clients.Caller.SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -274,12 +276,11 @@ namespace Voia.Api.Hubs
                 timestamp = userMessage.CreatedAt,
                 replyToMessageId = request.ReplyToMessageId,
                 replyToText = repliedText,
-                id = userMessage.Id,          // id real en BD
-                tempId = request.TempId,      // el que mandó el frontend
+                id = userMessage.Id,
+                tempId = request.TempId,
                 status = "sent"
             });
 
-            // 🔹 Notificación al grupo (otros usuarios de la conversación)
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -291,7 +292,6 @@ namespace Voia.Api.Hubs
                 id = userMessage.Id
             });
 
-            // 🔹 Notificación a admin
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId,
@@ -305,14 +305,14 @@ namespace Voia.Api.Hubs
                 id = userMessage.Id
             });
 
-            // Si la IA está pausada, terminar aquí
+            // IA pausada
             if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
             {
-                _logger.LogWarning("⏸️ IA pausada. No se responde con IA para conversación {ConversationId}", conversationId);
+                _logger.LogWarning("⏸️ IA pausada para conversación {ConversationId}", conversationId);
                 return;
             }
 
-            // Simular "escribiendo..."
+            // "Escribiendo..."
             await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
             await Task.Delay(TypingDelayMs);
 
@@ -320,19 +320,51 @@ namespace Voia.Api.Hubs
 
             try
             {
-                var aiResponse = await _aiProviderService.GetBotResponseAsync(
-                    request.BotId,
-                    request.UserId,
-                    request.Question
-                );
+                var capturedFields = await _context.BotDataCaptureFields
+                    .Where(f => f.BotId == request.BotId)
+                    .Select(f => new DataField
+                    {
+                        FieldName = f.FieldName,
+                        Value = _context.BotDataSubmissions
+                            .Where(s => s.BotId == request.BotId &&
+                                        s.CaptureFieldId == f.Id &&
+                                        (s.UserId == request.UserId || s.SubmissionSessionId == Context.ConnectionId))
+                            .OrderByDescending(s => s.SubmittedAt)
+                            .Select(s => s.SubmissionValue)
+                            .FirstOrDefault()
+                    })
+                    .ToListAsync();
 
-                botAnswer = string.IsNullOrWhiteSpace(aiResponse)
-                    ? "Lo siento, no pude generar una respuesta en este momento."
-                    : aiResponse;
+                // ⚡ Si usamos Mock, no necesitamos PromptBuilderService
+                string finalPrompt;
+
+                if (_aiProviderService is Voia.Api.Services.Mocks.MockAiProviderService)
+                {
+                    // 👀 Con el mock, también queremos ver el prompt completo
+                    finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
+                        request.BotId,
+                        request.Question ?? "",
+                        capturedFields
+                    );
+                }
+                else
+                {
+                    // Con un proveedor real decides si mandas solo la pregunta o todo el prompt
+                    finalPrompt = request.Question ?? "";
+                }
+
+            // Llamada directa al Mock (o provider real si después lo cambias)
+            botAnswer = await _aiProviderService.GetBotResponseAsync(
+                request.BotId,
+                request.UserId,
+                finalPrompt,
+                capturedFields
+            ) ?? "Lo siento, no pude generar una respuesta en este momento.";
+
             }
             catch (NotSupportedException)
             {
-                botAnswer = "🤖 Este bot aún no está conectado a un proveedor de IA. Pronto estará disponible.";
+                botAnswer = "🤖 Este bot aún no está conectado a un proveedor de IA.";
             }
             catch (Exception ex)
             {
@@ -347,32 +379,30 @@ namespace Voia.Api.Hubs
                 UserId = request.UserId,
                 ConversationId = conversation.Id,
                 Sender = "bot",
-                MessageText = botAnswer ?? string.Empty,
+                MessageText = botAnswer,
                 Source = "widget",
                 CreatedAt = DateTime.UtcNow
             };
             _context.Messages.Add(botMessage);
 
-            // Contar tokens de la respuesta del bot
+            // Contar tokens de la respuesta
             if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer))
             {
-                int botTokens = _tokenCounter.CountTokens(botAnswer);
                 _context.TokenUsageLogs.Add(new TokenUsageLog
                 {
                     UserId = request.UserId,
                     BotId = request.BotId,
-                    TokensUsed = botTokens,
+                    TokensUsed = _tokenCounter.CountTokens(botAnswer),
                     UsageDate = DateTime.UtcNow
                 });
             }
 
-            // Actualizar respuesta del bot en conversación
+            // Actualizar conversación con respuesta
             conversation.BotResponse = botAnswer;
             conversation.UpdatedAt = DateTime.UtcNow;
-
             await _context.SaveChangesAsync();
 
-            // 🔹 Enviar respuesta del bot al grupo
+            // Enviar respuesta al grupo
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,

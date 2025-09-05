@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
 using Voia.Api.Models.Messages;
 using System.Linq;
-using Voia.Api.Services; 
+using Voia.Api.Services;
 using Voia.Api.Services.Chat;
 
 
@@ -62,6 +62,33 @@ namespace Voia.Api.Controllers
                 .ToListAsync();
 
             return Ok(conversations);
+        }
+        [HttpPost("create-empty")]
+        public async Task<IActionResult> CreateEmptyConversation([FromBody] CreateEmptyConversationDto dto)
+        {
+            if (dto.UserId <= 0 || dto.BotId <= 0)
+                return BadRequest("UserId y BotId son requeridos.");
+
+            var conversation = new Conversation
+            {
+                UserId = dto.UserId,
+                BotId = dto.BotId,
+                Title = "Chat con bot",
+                CreatedAt = DateTime.UtcNow,
+                Status = "active",
+                IsWithAI = true
+            };
+
+            _context.Conversations.Add(conversation);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { conversationId = conversation.Id });
+        }
+
+        public class CreateEmptyConversationDto
+        {
+            public int UserId { get; set; }
+            public int BotId { get; set; }
         }
 
         [HttpPost("{id}/disconnect")]
@@ -374,10 +401,10 @@ namespace Voia.Api.Controllers
             var conversation = await _context.Conversations
                 .Include(c => c.Bot)
                 .FirstOrDefaultAsync(c => c.Id == conversationId);
-    
+
             if (conversation == null)
                 return NotFound("Conversación no encontrada");
-    
+
             // 1. Capturar datos del mensaje
             var newSubmissions = await _captureService.ProcessMessageAsync(
                 conversation.BotId,
@@ -385,7 +412,7 @@ namespace Voia.Api.Controllers
                 conversationId.ToString(),
                 request.Message
             );
-    
+
             // 2. Traer todos los campos con sus valores actuales
             var capturedFields = await _context.BotDataCaptureFields
                 .Where(f => f.BotId == conversation.BotId)
@@ -400,16 +427,14 @@ namespace Voia.Api.Controllers
                         .FirstOrDefault()
                 })
                 .ToListAsync();
-    
-            // 3. Construir prompt dinámico
-            var prompt = _promptBuilder.BuildDynamicPrompt(
-                conversation.Title ?? "Asistente",
+
+            // 3. Construir prompt dinámico usando el método correcto
+            var prompt = await _promptBuilder.BuildPromptFromBotContextAsync(
+                conversation.BotId,
                 request.Message,
-                null, // contexto adicional si lo tienes
-                null, // resumen si lo tienes
                 capturedFields
             );
-    
+
             // (luego aquí llamarías al proveedor de IA con `prompt`)
             return Ok(new
             {
@@ -417,13 +442,13 @@ namespace Voia.Api.Controllers
                 prompt
             });
         }
-    
+
         // DTOs internos
         public class UserMessageDto
         {
             public string Message { get; set; }
         }
-    
+
         public class UpdateStatusDto
         {
             public string Status { get; set; }

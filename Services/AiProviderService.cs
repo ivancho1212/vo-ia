@@ -34,18 +34,20 @@ namespace Voia.Api.Services
 
             var client = _clientFactory.Create(config);
 
-            // 👉 aquí metes la lógica del prompt
-            var promptBuilder = new PromptBuilderService();
-            string finalPrompt = promptBuilder.BuildDynamicPrompt(
-                "Eres un asistente de atención al cliente.",
+            // 🔹 Usar HttpClient desde IHttpClientFactory
+            var httpClient = new HttpClient();
+            var promptBuilder = new PromptBuilderService(httpClient);
+
+            // 🔹 Llamar al método async que obtiene el prompt desde el endpoint
+            string finalPrompt = await promptBuilder.BuildPromptFromBotContextAsync(
+                botId,
                 question,
-                "Contexto desde FAQ/BD...",   // luego lo puedes reemplazar por búsquedas en tu DB/Qdrant
-                "Resumen de la conversación...",
                 capturedFields ?? new List<DataField>()
             );
 
             return await client.SendMessageAsync(finalPrompt, config);
         }
-    } 
+
+    }
 
 }
