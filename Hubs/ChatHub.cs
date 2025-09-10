@@ -335,31 +335,20 @@ namespace Voia.Api.Hubs
                     })
                     .ToListAsync();
 
-                // ⚡ Si usamos Mock, no necesitamos PromptBuilderService
-                string finalPrompt;
+                // 1. Construir siempre el prompt completo, sea mock o real.
+                string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
+                    request.BotId,
+                    request.Question ?? "",
+                    capturedFields
+                );
 
-                if (_aiProviderService is Voia.Api.Services.Mocks.MockAiProviderService)
-                {
-                    // 👀 Con el mock, también queremos ver el prompt completo
-                    finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
-                        request.BotId,
-                        request.Question ?? "",
-                        capturedFields
-                    );
-                }
-                else
-                {
-                    // Con un proveedor real decides si mandas solo la pregunta o todo el prompt
-                    finalPrompt = request.Question ?? "";
-                }
-
-            // Llamada directa al Mock (o provider real si después lo cambias)
-            botAnswer = await _aiProviderService.GetBotResponseAsync(
-                request.BotId,
-                request.UserId,
-                finalPrompt,
-                capturedFields
-            ) ?? "Lo siento, no pude generar una respuesta en este momento.";
+                // 2. Llamar al proveedor de IA (mock o real) con el prompt completo.
+                botAnswer = await _aiProviderService.GetBotResponseAsync(
+                    request.BotId,
+                    request.UserId,
+                    finalPrompt, // Usamos el prompt completo en todos los casos
+                    capturedFields
+                ) ?? "Lo siento, no pude generar una respuesta en este momento.";
 
             }
             catch (NotSupportedException)
@@ -370,6 +359,21 @@ namespace Voia.Api.Hubs
             {
                 botAnswer = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
                 _logger.LogError(ex, "❌ Error en IA.");
+            }
+
+            // 🧠 Deserializar la respuesta si es un JSON (como la del mock)
+            string displayText = botAnswer;
+            try
+            {
+                var jsonResponse = JsonDocument.Parse(botAnswer);
+                if (jsonResponse.RootElement.TryGetProperty("Answer", out var answerElement))
+                {
+                    displayText = answerElement.GetString() ?? botAnswer;
+                }
+            }
+            catch (JsonException)
+            {
+                // No es un JSON, usar la respuesta tal cual.
             }
 
             // Guardar mensaje del bot
@@ -407,7 +411,7 @@ namespace Voia.Api.Hubs
             {
                 conversationId,
                 from = "bot",
-                text = botAnswer,
+                text = displayText, // ✅ Usamos el texto extraído
                 timestamp = botMessage.CreatedAt,
                 id = botMessage.Id
             });

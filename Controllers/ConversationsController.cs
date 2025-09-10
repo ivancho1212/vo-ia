@@ -12,6 +12,7 @@ using Voia.Api.Models.Messages;
 using System.Linq;
 using Voia.Api.Services;
 using Voia.Api.Services.Chat;
+using Voia.Api.Services.Interfaces;
 
 
 namespace Voia.Api.Controllers
@@ -24,18 +25,21 @@ namespace Voia.Api.Controllers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly BotDataCaptureService _captureService;
         private readonly PromptBuilderService _promptBuilder;
+        private readonly IAiProviderService _aiProviderService;
 
         public ConversationsController(
             ApplicationDbContext context,
             IHubContext<ChatHub> hubContext,
             BotDataCaptureService captureService,
-            PromptBuilderService promptBuilder
+            PromptBuilderService promptBuilder,
+            IAiProviderService aiProviderService
         )
         {
             _context = context;
             _hubContext = hubContext;
             _captureService = captureService;
             _promptBuilder = promptBuilder;
+            _aiProviderService = aiProviderService;
         }
 
         /// <summary>
@@ -218,6 +222,7 @@ namespace Voia.Api.Controllers
                 history = combinedHistory
             });
         }
+       
         [HttpGet("with-last-message")]
         public async Task<IActionResult> GetConversationsWithLastMessage()
         {
@@ -428,18 +433,48 @@ namespace Voia.Api.Controllers
                 })
                 .ToListAsync();
 
-            // 3. Construir prompt dinámico usando el método correcto
-            var prompt = await _promptBuilder.BuildPromptFromBotContextAsync(
+            // 3. Construir el prompt y obtener respuesta del bot (mock o IA real)
+            string finalPrompt = await _promptBuilder.BuildPromptFromBotContextAsync(
                 conversation.BotId,
                 request.Message,
                 capturedFields
             );
 
-            // (luego aquí llamarías al proveedor de IA con `prompt`)
+            string botResponse = await _aiProviderService.GetBotResponseAsync(
+                conversation.BotId,
+                conversation.UserId,
+                finalPrompt, // Usamos el prompt completo que construimos
+                capturedFields
+            );
+
+            // 4. Guardar mensaje en DB
+            var message = new Message
+            {
+                ConversationId = conversationId,
+                Sender = "ai",
+                BotId = conversation.BotId,
+                MessageText = botResponse,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Messages.Add(message);
+            await _context.SaveChangesAsync();
+
+            // 5. Enviar mensaje al frontend vía SignalR
+            await _hubContext.Clients.Group($"conversation_{conversationId}")
+                .SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "ai",
+                    text = botResponse,
+                    id = message.Id.ToString(),
+                    timestamp = message.CreatedAt
+                });
+
+            // 6. Retornar ok al POST original
             return Ok(new
             {
                 captured = newSubmissions.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue }),
-                prompt
+                botResponse
             });
         }
 

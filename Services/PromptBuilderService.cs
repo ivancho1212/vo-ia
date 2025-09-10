@@ -64,7 +64,14 @@ namespace Voia.Api.Services
             List<DataField> capturedFields
         )
         {
-            // Llamada al endpoint
+            // En modo desarrollo/demo, devolvemos un prompt simple que el mock entiende
+            bool isMock = true; // 👈 Puedes usar una variable de configuración si quieres
+            if (isMock)
+            {
+                return $"👤 Usuario dice: {userMessage}";
+            }
+
+            // Llamada al endpoint real
             var url = $"http://localhost:5006/api/Bots/{botId}/context";
             FullBotContextDto botContext;
             try
@@ -74,7 +81,6 @@ namespace Voia.Api.Services
             }
             catch (Exception ex)
             {
-                // En caso de error, usar prompt básico
                 return $"⚠️ No se pudo obtener contexto del bot: {ex.Message}\nUsuario dice: {userMessage}";
             }
 
@@ -84,7 +90,7 @@ namespace Voia.Api.Services
             if (!string.IsNullOrWhiteSpace(botContext.SystemPrompt))
                 sb.AppendLine(botContext.SystemPrompt.Trim());
 
-            // 2️⃣ Estado de captura: combinar campos del contexto con valores capturados
+            // 2️⃣ Estado de captura
             var captureFieldsFromContext = botContext.Capture?.Fields?
                 .Select(f => new DataField
                 {
@@ -96,8 +102,7 @@ namespace Voia.Api.Services
             sb.AppendLine();
             sb.AppendLine(BuildDataCaptureStatusPrompt(captureFieldsFromContext));
 
-
-            // 3️⃣ Documentos / URLs / CustomTexts
+            // 3️⃣ Recursos del bot
             sb.AppendLine();
             sb.AppendLine("--- RECURSOS DEL BOT ---");
             if ((botContext.Documents?.Any() ?? false) ||
@@ -118,7 +123,7 @@ namespace Voia.Api.Services
                 sb.AppendLine("Sin recursos adicionales.");
             }
 
-            // 4️⃣ Historial de CustomPrompts (resumen previo)
+            // 4️⃣ Historial de CustomPrompts
             sb.AppendLine();
             sb.AppendLine("🗨️ Conversación previa:");
             if (botContext.CustomPrompts?.Any() ?? false)
@@ -133,5 +138,6 @@ namespace Voia.Api.Services
 
             return sb.ToString();
         }
+
     }
 }

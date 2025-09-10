@@ -165,8 +165,7 @@ builder.Services.AddHttpClient<GeminiClient>()
     });
 
 // Registro de PromptBuilderService con HttpClient
-builder.Services.AddHttpClient<PromptBuilderService>(); 
-builder.Services.AddScoped(sp => sp.GetRequiredService<PromptBuilderService>());
+builder.Services.AddHttpClient<PromptBuilderService>();
 
 // Vector search service
 builder.Services.AddHttpClient<VectorSearchService>();
