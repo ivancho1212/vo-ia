@@ -1,64 +1,44 @@
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Net.Http.Json;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Voia.Api.Services.Interfaces;
 using System.Text.Json;
-using Voia.Api.Models.AiModelConfigs;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Voia.Api.Services.Mocks
 {
     public class MockAiProviderService : IAiProviderService
     {
-        public Task<string> GetBotResponseAsync(int botId, int userId, string question, List<DataField> capturedFields = null)
+        public async Task<string> GetBotResponseAsync(
+            int botId,
+            int userId,
+            string question,
+            List<DataField> capturedFields = null)
         {
-            // 🧠 El mock ahora es más inteligente: extrae la pregunta real del prompt completo.
-            string userQuestion = question;
-            string userSaysMarker = "👤 Usuario dice:";
-            int markerIndex = question.LastIndexOf(userSaysMarker);
-            if (markerIndex != -1)
+            // ✅ FIX: Simular la extracción de datos si el prompt lo solicita.
+            if (question.Contains("You are a data extraction expert"))
             {
-                userQuestion = question.Substring(markerIndex + userSaysMarker.Length).Trim();
+                var extractedData = new Dictionary<string, string>();
+                
+                // Usamos una regex simple para simular la extracción en el mock
+                var nameMatch = System.Text.RegularExpressions.Regex.Match(question, @"(?:mi\s+nombre\s+es|me\s+llamo|soy)\s+([a-zA-Z\s]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                
+                if (nameMatch.Success)
+                {
+                    extractedData["Nombre"] = nameMatch.Groups[1].Value.Trim();
+                }
+
+                // Podrías añadir más regex para otros campos si lo necesitas para las pruebas
+
+                return await Task.FromResult(JsonSerializer.Serialize(extractedData));
             }
 
-            // Buscar si tenemos un nombre capturado
-            string nombre = capturedFields?
-                .FirstOrDefault(f => f.FieldName.ToLower() == "nombre")?
-                .Value;
-
-            var responseTextBuilder = new System.Text.StringBuilder();
-            responseTextBuilder.Append($"[MOCK] ¡Hola! Soy el bot {botId} y recibí tu pregunta: '{userQuestion}'.");
-
-            // Si tenemos nombre, añadimos saludo personalizado
-            if (!string.IsNullOrWhiteSpace(nombre))
-            {
-                responseTextBuilder.Append($" ¡Qué tal, {nombre}!");
-            }
-
-            string direccion = capturedFields?
-                .FirstOrDefault(f => f.FieldName.ToLower() == "direccion")?
-                .Value;
-            if (!string.IsNullOrWhiteSpace(direccion))
-            {
-                responseTextBuilder.Append($" Veo que tu dirección es: {direccion}.");
-            }
-
-            string telefono = capturedFields?
-                .FirstOrDefault(f => f.FieldName.ToLower() == "telefono")?
-                .Value;
-            if (!string.IsNullOrWhiteSpace(telefono))
-            {
-                responseTextBuilder.Append($" Tu teléfono registrado es: {telefono}.");
-            }
-
-            // Construir el objeto de respuesta que simula la respuesta real de la IA
-            var mockResponseObject = new
-            {
-                Answer = responseTextBuilder.ToString(),
-                CapturedFields = capturedFields
-            };
-
-            // Serializar el objeto a un string JSON
-            return Task.FromResult(JsonSerializer.Serialize(mockResponseObject));
+            // ✅ FIX: Para una conversación normal, el mock ahora devuelve el JSON completo que recibe.
+            // El 'question' que llega aquí es el JSON construido por PromptBuilderService.
+            return await Task.FromResult(question);
         }
     }
 }

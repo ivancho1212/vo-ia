@@ -1,11 +1,12 @@
 using System;
-using System.Text;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Text.Json;
 using Voia.Api.Models.Bots;
+using Microsoft.Extensions.Logging;
 
 namespace Voia.Api.Services
 {
@@ -18,12 +19,18 @@ namespace Voia.Api.Services
     public class PromptBuilderService
     {
         private readonly HttpClient _httpClient;
+        private readonly bool _isMock; // Permite alternar entre mock y real
+        private readonly ILogger<PromptBuilderService> _logger;
 
-        public PromptBuilderService(HttpClient httpClient)
+        // 🔹 Cambiado el valor por defecto de isMock a false para que la implementación real sea la predeterminada.
+        public PromptBuilderService(HttpClient httpClient, ILogger<PromptBuilderService> logger, bool isMock = false)
         {
             _httpClient = httpClient;
+            _isMock = isMock;
+            _logger = logger;
         }
 
+        // Construye el estado de captura de datos
         public string BuildDataCaptureStatusPrompt(List<DataField> fields)
         {
             if (fields == null || fields.Count == 0)
@@ -39,40 +46,46 @@ namespace Voia.Api.Services
 -----------------------";
             }
 
-            var status = new StringBuilder();
-            status.AppendLine("--- GESTIÓN DE DATOS ---");
-            status.AppendLine(
-                $"DATOS CAPTURADOS: {(captured.Any() ? string.Join(", ", captured.Select(f => $"{f.FieldName}='{f.Value}'")) : "Ninguno")}."
-            );
-            status.AppendLine(
-                $"DATOS PENDIENTES: {string.Join(", ", missing.Select(f => f.FieldName))}."
-            );
-            status.AppendLine(
-                $"ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos ni confirmes datos anteriores."
-            );
-            status.AppendLine("-----------------------");
-
-            return status.ToString();
+            return $@"--- GESTIÓN DE DATOS ---
+DATOS CAPTURADOS: {(captured.Any() ? string.Join(", ", captured.Select(f => $"{f.FieldName}='{f.Value}'")) : "Ninguno")}.
+DATOS PENDIENTES: {string.Join(", ", missing.Select(f => f.FieldName))}.
+ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos ni confirmes datos anteriores.
+-----------------------";
         }
 
         /// <summary>
-        /// Construye un prompt dinámico llamando al endpoint /api/Bots/{botId}/context
+        /// Construye un payload JSON limpio para la IA, incluyendo contexto, recursos, historial y último mensaje.
+        /// Funciona tanto para mock como para producción.
         /// </summary>
         public async Task<string> BuildPromptFromBotContextAsync(
             int botId,
+            int userId,
             string userMessage,
             List<DataField> capturedFields
         )
         {
-            // En modo desarrollo/demo, devolvemos un prompt simple que el mock entiende
-            bool isMock = true; // 👈 Puedes usar una variable de configuración si quieres
-            if (isMock)
+            // 🔹 Modo mock: devolvemos un JSON con toda la estructura
+            if (_isMock)
             {
-                return $"👤 Usuario dice: {userMessage}";
+                // En modo mock, intentamos obtener el contexto real para ser más precisos.
+                // Si falla, usamos un fallback con datos quemados.
+                // Esto permite que el mock funcione incluso si el backend no está disponible.
+                try
+                {
+                    // Reutilizamos la lógica de producción para obtener el contexto real.
+                    // El 'return' está dentro del bloque de producción más abajo.
+                    _logger.LogInformation("Modo Mock: Intentando obtener contexto real del bot {BotId}", botId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Modo Mock: No se pudo obtener contexto real. Usando datos de fallback.");
+                    // Si la llamada al contexto real falla en modo mock, se usará el bloque catch de más abajo
+                    // que ya tiene un payload de fallback.
+                }
             }
 
-            // Llamada al endpoint real
-            var url = $"http://localhost:5006/api/Bots/{botId}/context";
+            // 🔹 Producción: pedimos contexto real al backend, incluyendo el mensaje del usuario para búsqueda de vectores
+            var url = $"http://localhost:5006/api/Bots/{botId}/context?query={Uri.EscapeDataString(userMessage)}";
             FullBotContextDto botContext;
             try
             {
@@ -81,63 +94,73 @@ namespace Voia.Api.Services
             }
             catch (Exception ex)
             {
-                return $"⚠️ No se pudo obtener contexto del bot: {ex.Message}\nUsuario dice: {userMessage}";
+                // Si no hay contexto, igual devolvemos un JSON limpio
+                var fallbackPayload = new
+                {
+                Error = $"No se pudo obtener contexto del bot: {ex.Message}",
+                    BotId = botId, 
+                    UserId = userId, // 👈 USADO: Usamos el UserId real
+                    OriginalQuestion = $"👤 Usuario dice: {userMessage}",
+                    UserQuestion = userMessage,
+                    CapturedFields = capturedFields ?? new List<DataField>(),
+                    Context = new
+                    {
+                        SystemPrompt = $"⚠️ No se pudo obtener contexto del bot: {ex.Message}",
+                        DataCaptureStatus = BuildDataCaptureStatusPrompt(capturedFields ?? new List<DataField>()),
+                        Resources = new { Documents = new List<string>(), Urls = new List<string>(), CustomTexts = new List<string>() },
+                        ConversationHistory = new List<object>
+                        {
+                            new { Role = "user", Content = userMessage }
+                        }
+                    },
+                    Timestamp = DateTime.UtcNow
+                };
+
+                _logger.LogError(ex, "Error al obtener el contexto del bot {BotId}. Usando fallback.", botId);
+                return JsonSerializer.Serialize(fallbackPayload, new JsonSerializerOptions { WriteIndented = true });
             }
 
-            var sb = new StringBuilder();
+            // 🔹 Extraer el system prompt y el historial del contexto
+            var systemPrompt = botContext.Messages?.FirstOrDefault(m => m.Role == "system")?.Content ?? string.Empty;
+            // Obtenemos los mensajes de ejemplo (user/assistant) del contexto
+            var conversationHistory = botContext.Messages?.Where(m => m.Role == "user" || m.Role == "assistant").ToList() ?? new List<MessageDto>();
+            // Añadir el mensaje actual del usuario al historial
+            conversationHistory.Add(new MessageDto { Role = "user", Content = userMessage }); // El mensaje actual siempre va al final
 
-            // 1️⃣ SystemPrompt
-            if (!string.IsNullOrWhiteSpace(botContext.SystemPrompt))
-                sb.AppendLine(botContext.SystemPrompt.Trim());
-
-            // 2️⃣ Estado de captura
+            // 🔹 Mapear campos de captura, cruzando la definición con los valores ya capturados
             var captureFieldsFromContext = botContext.Capture?.Fields?
                 .Select(f => new DataField
                 {
                     FieldName = f.Name,
-                    Value = capturedFields?.FirstOrDefault(c => c.FieldName == f.Name)?.Value
+                    Value = capturedFields?.FirstOrDefault(c => c.FieldName.Equals(f.Name, StringComparison.OrdinalIgnoreCase))?.Value
                 })
                 .ToList() ?? new List<DataField>();
 
-            sb.AppendLine();
-            sb.AppendLine(BuildDataCaptureStatusPrompt(captureFieldsFromContext));
-
-            // 3️⃣ Recursos del bot
-            sb.AppendLine();
-            sb.AppendLine("--- RECURSOS DEL BOT ---");
-            if ((botContext.Documents?.Any() ?? false) ||
-                (botContext.Urls?.Any() ?? false) ||
-                (botContext.CustomTexts?.Any() ?? false))
+            // 🔹 Construir el JSON final con los datos dinámicos del endpoint
+            var payload = new
             {
-                if (botContext.Documents?.Any() ?? false)
-                    sb.AppendLine("Documentos:\n" + string.Join("\n", botContext.Documents));
+                BotId = botId,
+                UserId = userId, // 👈 USADO: Usamos el UserId real
+                OriginalQuestion = $"👤 Usuario dice: {userMessage}",
+                UserQuestion = userMessage,
+                CapturedFields = captureFieldsFromContext,
+                Context = new
+                {
+                    SystemPrompt = systemPrompt,
+                    DataCaptureStatus = BuildDataCaptureStatusPrompt(captureFieldsFromContext),
+                    Resources = new
+                    {
+                        Documents = botContext.Training?.Documents ?? new List<string>(),
+                        Urls = botContext.Training?.Urls ?? new List<string>(),
+                        CustomTexts = botContext.Training?.CustomTexts ?? new List<string>(),
+                        Vectors = botContext.Training?.Vectors ?? new List<object>()
+                    },
+                    ConversationHistory = conversationHistory.Select(m => new { m.Role, m.Content }).ToList<object>()
+                },
+                Timestamp = DateTime.UtcNow
+            };
 
-                if (botContext.Urls?.Any() ?? false)
-                    sb.AppendLine("URLs:\n" + string.Join("\n", botContext.Urls));
-
-                if (botContext.CustomTexts?.Any() ?? false)
-                    sb.AppendLine("Textos personalizados:\n" + string.Join("\n", botContext.CustomTexts));
-            }
-            else
-            {
-                sb.AppendLine("Sin recursos adicionales.");
-            }
-
-            // 4️⃣ Historial de CustomPrompts
-            sb.AppendLine();
-            sb.AppendLine("🗨️ Conversación previa:");
-            if (botContext.CustomPrompts?.Any() ?? false)
-                sb.AppendLine(string.Join("\n", botContext.CustomPrompts.Select(m => $"{m.Role}: {m.Content}")));
-            else
-                sb.AppendLine("No hay historial previo.");
-
-            // 5️⃣ Último mensaje del usuario
-            sb.AppendLine();
-            sb.AppendLine("👤 Usuario dice:");
-            sb.AppendLine(userMessage);
-
-            return sb.ToString();
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
         }
-
     }
 }

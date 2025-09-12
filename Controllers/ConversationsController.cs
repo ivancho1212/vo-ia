@@ -415,7 +415,8 @@ namespace Voia.Api.Controllers
                 conversation.BotId,
                 conversation.UserId,
                 conversationId.ToString(),
-                request.Message
+                request.Message,
+                new List<DataField>() // Se pasa una lista vacía porque este endpoint no mantiene estado de campos.
             );
 
             // 2. Traer todos los campos con sus valores actuales
@@ -424,10 +425,10 @@ namespace Voia.Api.Controllers
                 .Select(f => new DataField
                 {
                     FieldName = f.FieldName,
-                    Value = _context.BotDataSubmissions
-                        .Where(s => s.BotId == conversation.BotId && s.CaptureFieldId == f.Id &&
-                                    (s.UserId == conversation.UserId || s.SubmissionSessionId == conversationId.ToString()))
-                        .OrderByDescending(s => s.SubmittedAt)
+                    // 🔹 CORRECCIÓN: Usamos el conversationId como identificador de sesión único para aislar los datos por visitante.
+                    Value = _context.BotDataSubmissions.Where(s =>
+                            s.BotId == conversation.BotId && s.CaptureFieldId == f.Id && s.SubmissionSessionId == conversationId.ToString())
+                        .OrderByDescending(s => s.SubmittedAt) // Tomamos el más reciente para esta sesión
                         .Select(s => s.SubmissionValue)
                         .FirstOrDefault()
                 })
@@ -436,7 +437,8 @@ namespace Voia.Api.Controllers
             // 3. Construir el prompt y obtener respuesta del bot (mock o IA real)
             string finalPrompt = await _promptBuilder.BuildPromptFromBotContextAsync(
                 conversation.BotId,
-                request.Message,
+                conversation.UserId, // 👈 AÑADIDO: Pasamos el UserId de la conversación
+                request.Message, // Mensaje del usuario
                 capturedFields
             );
 
@@ -473,7 +475,7 @@ namespace Voia.Api.Controllers
             // 6. Retornar ok al POST original
             return Ok(new
             {
-                captured = newSubmissions.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue }),
+                captured = newSubmissions.Select(s => new { FieldName = s.CaptureField?.FieldName, s.SubmissionValue }),
                 botResponse
             });
         }
@@ -481,12 +483,12 @@ namespace Voia.Api.Controllers
         // DTOs internos
         public class UserMessageDto
         {
-            public string Message { get; set; }
+            public required string Message { get; set; }
         }
 
         public class UpdateStatusDto
         {
-            public string Status { get; set; }
+            public required string Status { get; set; }
         }
     }
 }

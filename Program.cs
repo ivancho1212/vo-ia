@@ -130,6 +130,7 @@ builder.Services.AddScoped<IAiProviderService, MockAiProviderService>();
 builder.Services.AddScoped<IChatFileService, ChatFileService>();
 builder.Services.AddScoped<IAClientFactory>();
 builder.Services.AddScoped<BotDataCaptureService>();
+builder.Services.AddScoped<DataExtractionService>(); // ✅ FIX: Registrar el nuevo servicio
 
 builder.Services.AddScoped<TextExtractionService>();
 builder.Services.AddScoped<TextChunkingService>();

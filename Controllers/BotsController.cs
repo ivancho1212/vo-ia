@@ -412,6 +412,7 @@ namespace Voia.Api.Controllers
         {
             var bot = await _context.Bots
                 .Include(b => b.User)
+                .Include(b => b.Style) // ✅ FIX: Incluir la relación con BotStyle
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (bot == null) return NotFound();
@@ -522,6 +523,7 @@ namespace Voia.Api.Controllers
                     topP = 1.0m
                 },
                 messages,
+                style = bot.Style, // ✅ FIX: Añadir el objeto de estilo a la respuesta
                 training = new
                 {
                     documents,
@@ -548,4 +550,3 @@ namespace Voia.Api.Controllers
     }
 
 }
-

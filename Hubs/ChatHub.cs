@@ -171,6 +171,7 @@ namespace Voia.Api.Hubs
         // ✅ Método para pausar o activar la IA desde el admin
         public Task SetIAPaused(int conversationId, bool paused)
         {
+            _logger.LogInformation("Setting IA paused status for conversation {ConversationId} to {Paused}", conversationId, paused);
             PausedConversations[conversationId] = paused;
             Console.WriteLine($"🔁 IA {(paused ? "pausada" : "activada")} para conversación {conversationId}");
             return Task.CompletedTask;
@@ -180,6 +181,7 @@ namespace Voia.Api.Hubs
             // Validación de usuario
             if (!_context.Users.Any(u => u.Id == request.UserId))
             {
+                _logger.LogWarning("Invalid user ID {UserId} attempted to send a message.", request.UserId);
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
@@ -190,6 +192,10 @@ namespace Voia.Api.Hubs
                 });
                 return;
             }
+
+            // 🔴 SOLUCIÓN: Asegurar que el cliente esté en el grupo de la conversación.
+            // Esto es idempotente y soluciona el problema de estado transitorio del Hub.
+            await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
 
             // Obtener mensaje al que se responde
             string? repliedText = null;
@@ -247,12 +253,28 @@ namespace Voia.Api.Hubs
                 });
             }
 
-            // Captura de datos
+            // 🔹 PASO 1: Obtener el estado actual de los campos capturados para esta conversación
+            var currentCapturedFields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == request.BotId)
+                .Select(f => new DataField
+                {
+                    FieldName = f.FieldName,
+                    Value = _context.BotDataSubmissions.Where(s =>
+                            s.BotId == request.BotId && s.CaptureFieldId == f.Id &&
+                            s.SubmissionSessionId == conversationId.ToString())
+                        .OrderByDescending(s => s.SubmittedAt)
+                        .Select(s => s.SubmissionValue)
+                        .FirstOrDefault()
+                })
+                .ToListAsync();
+
+            // 🔹 PASO 2: Procesar el mensaje para capturar nuevos datos
             var capturedData = await _dataCaptureService.ProcessMessageAsync(
                 request.BotId,
                 request.UserId,
-                Context.ConnectionId,
-                request.Question ?? string.Empty
+                conversationId.ToString(), // Usamos el ID de conversación como ID de sesión
+                request.Question ?? string.Empty,
+                currentCapturedFields // ✅ FIX: Pasamos la lista de campos que obtuvimos
             );
 
             if (capturedData.Any())
@@ -320,36 +342,36 @@ namespace Voia.Api.Hubs
 
             try
             {
+                // 1️⃣ Obtener campos capturados desde la DB
                 var capturedFields = await _context.BotDataCaptureFields
                     .Where(f => f.BotId == request.BotId)
                     .Select(f => new DataField
                     {
                         FieldName = f.FieldName,
-                        Value = _context.BotDataSubmissions
-                            .Where(s => s.BotId == request.BotId &&
-                                        s.CaptureFieldId == f.Id &&
-                                        (s.UserId == request.UserId || s.SubmissionSessionId == Context.ConnectionId))
-                            .OrderByDescending(s => s.SubmittedAt)
+                        // 🔹 CORRECCIÓN: Usamos el conversationId como identificador de sesión único para aislar los datos por visitante.
+                        Value = _context.BotDataSubmissions.Where(s =>
+                                s.BotId == request.BotId && s.CaptureFieldId == f.Id &&
+                                s.SubmissionSessionId == conversationId.ToString())
+                            .OrderByDescending(s => s.SubmittedAt) // Tomamos el más reciente para esta sesión
                             .Select(s => s.SubmissionValue)
                             .FirstOrDefault()
                     })
-                    .ToListAsync();
+            .ToListAsync();       
+ 
+            string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
+                request.BotId,
+                request.UserId,
+                request.Question ?? "",
+                currentCapturedFields // ✅ FIX: Usamos la lista que ya fue actualizada por el servicio de captura.
+            );
 
-                // 1. Construir siempre el prompt completo, sea mock o real.
-                string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
-                    request.BotId,
-                    request.Question ?? "",
-                    capturedFields
-                );
-
-                // 2. Llamar al proveedor de IA (mock o real) con el prompt completo.
-                botAnswer = await _aiProviderService.GetBotResponseAsync(
-                    request.BotId,
-                    request.UserId,
-                    finalPrompt, // Usamos el prompt completo en todos los casos
-                    capturedFields
-                ) ?? "Lo siento, no pude generar una respuesta en este momento.";
-
+            // 3️⃣ Llamar al AI provider con el prompt final que contiene todo el contexto.
+            botAnswer = await _aiProviderService.GetBotResponseAsync(
+                request.BotId,
+                request.UserId,
+                finalPrompt, // Pasamos el JSON completo
+                currentCapturedFields // ✅ FIX: Pasamos la lista actualizada.
+            ) ?? "Lo siento, no pude generar una respuesta en este momento.";
             }
             catch (NotSupportedException)
             {
@@ -361,7 +383,7 @@ namespace Voia.Api.Hubs
                 _logger.LogError(ex, "❌ Error en IA.");
             }
 
-            // 🧠 Deserializar la respuesta si es un JSON (como la del mock)
+            // 4️⃣ Deserializar JSON (si es mock)
             string displayText = botAnswer;
             try
             {
@@ -373,7 +395,7 @@ namespace Voia.Api.Hubs
             }
             catch (JsonException)
             {
-                // No es un JSON, usar la respuesta tal cual.
+                // No es JSON, usamos tal cual
             }
 
             // Guardar mensaje del bot
@@ -383,7 +405,7 @@ namespace Voia.Api.Hubs
                 UserId = request.UserId,
                 ConversationId = conversation.Id,
                 Sender = "bot",
-                MessageText = botAnswer,
+                MessageText = displayText, // ✅ Guardar el texto limpio
                 Source = "widget",
                 CreatedAt = DateTime.UtcNow
             };
@@ -410,7 +432,7 @@ namespace Voia.Api.Hubs
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
-                from = "bot",
+                from = "bot", // ✅ Cambiado a "bot" para consistencia con el resto del frontend
                 text = displayText, // ✅ Usamos el texto extraído
                 timestamp = botMessage.CreatedAt,
                 id = botMessage.Id
