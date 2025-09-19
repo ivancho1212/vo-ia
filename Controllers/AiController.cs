@@ -26,13 +26,21 @@ namespace Voia.Api.Controllers
             Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(request));
 
             // 🔹 Lógica temporal hasta que actives los proveedores reales
+            // Simula la extracción de datos del `request.Question`
+            var extractedName = request.Question.Contains("cipress hill") ? "cipress hill" : "Nombre Simulado";
+            var extractedAddress = request.Question.Contains("suba") ? "cerca a suba" : null;
+
             var fakeResponse = new
             {
                 BotId = request.BotId,
                 UserId = request.UserId,
                 Question = request.Question,
                 Answer = $"🤖 (Respuesta simulada) El bot {request.BotId} recibió tu pregunta: '{request.Question}'",
-                CapturedFields = request.CapturedFields
+                CapturedFields = new List<object>
+                {
+                    new { FieldName = "Nombre", Value = extractedName },
+                    new { FieldName = "Direccion", Value = extractedAddress }
+                }
             };
 
             Console.WriteLine("📤 Respuesta de IA simulada:");

@@ -60,36 +60,57 @@ namespace Voia.Api.Controllers
                     UserMessage = c.UserMessage ?? string.Empty,
                     BotResponse = c.BotResponse ?? string.Empty,
                     IsWithAI = c.IsWithAI,
-                    User = c.User != null ? new { c.User.Name, c.User.Email } : null,
+                    Alias = $"Sesión {c.Id}",
                     Bot = c.Bot != null ? new { c.Bot.Name } : null
                 })
                 .ToListAsync();
 
             return Ok(conversations);
         }
-        [HttpPost("create-empty")]
-        public async Task<IActionResult> CreateEmptyConversation([FromBody] CreateEmptyConversationDto dto)
+
+        [HttpPost("get-or-create")]
+        public async Task<IActionResult> CreateOrGetConversation([FromBody] CreateConversationDto dto)
         {
             if (dto.UserId <= 0 || dto.BotId <= 0)
                 return BadRequest("UserId y BotId son requeridos.");
 
-            var conversation = new Conversation
-            {
-                UserId = dto.UserId,
-                BotId = dto.BotId,
-                Title = "Chat con bot",
-                CreatedAt = DateTime.UtcNow,
-                Status = "active",
-                IsWithAI = true
-            };
+            var conversation = await _context.Conversations
+                .FirstOrDefaultAsync(c => c.UserId == dto.UserId && c.BotId == dto.BotId);
 
-            _context.Conversations.Add(conversation);
-            await _context.SaveChangesAsync();
+            if (conversation == null)
+            {
+                conversation = new Conversation
+                {
+                    UserId = dto.UserId,
+                    BotId = dto.BotId,
+                    Title = "Chat con bot",
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "active",
+                    IsWithAI = true
+                };
+
+                _context.Conversations.Add(conversation);
+                await _context.SaveChangesAsync();
+
+                var conversationDto = new
+                {
+                    id = conversation.Id,
+                    alias = $"Sesión {conversation.Id}",
+                    lastMessage = "",
+                    updatedAt = conversation.UpdatedAt,
+                    status = conversation.Status,
+                    blocked = conversation.Blocked,
+                    isWithAI = conversation.IsWithAI,
+                    unreadCount = 0
+                };
+
+                await _hubContext.Clients.Group("admin").SendAsync("NewConversation", conversationDto);
+            }
 
             return Ok(new { conversationId = conversation.Id });
         }
 
-        public class CreateEmptyConversationDto
+        public class CreateConversationDto
         {
             public int UserId { get; set; }
             public int BotId { get; set; }
@@ -134,7 +155,7 @@ namespace Voia.Api.Controllers
                         BotResponse = c.BotResponse ?? string.Empty,
                         CreatedAt = c.CreatedAt,
                         IsWithAI = c.IsWithAI,
-                        User = c.User != null ? new { c.User.Name, c.User.Email } : null,
+                        Alias = $"Sesión {c.Id}",
                         Bot = c.Bot != null ? new { c.Bot.Name } : null
                     })
                     .ToListAsync();
@@ -222,90 +243,70 @@ namespace Voia.Api.Controllers
                 history = combinedHistory
             });
         }
-       
+
         [HttpGet("with-last-message")]
         public async Task<IActionResult> GetConversationsWithLastMessage()
         {
             var conversations = await _context.Conversations
-                .Include(c => c.User)
-                .Include(c => c.Bot)
+                .Include(c => c.Bot) // Make sure Bot is included
                 .Select(c => new
                 {
-                    c.Id,
-                    c.Status,
-                    Title = c.Title ?? string.Empty,
-                    IsWithAI = c.IsWithAI,
-                    User = c.User != null ? new { c.User.Name, c.User.Email } : null,
-                    Bot = c.Bot != null ? new { c.Bot.Name } : null,
-
-                    // Último mensaje de texto
-                    LastTextMessage = _context.Messages
-                        .Where(m => m.ConversationId == c.Id && m.MessageText != null)
-                        .OrderByDescending(m => m.CreatedAt)
-                        .Select(m => new
-                        {
-                            Type = "text",
-                            Content = m.MessageText,
-                            Url = (string)null,
-                            Timestamp = m.CreatedAt
-                        })
-                        .FirstOrDefault(),
-
-                    // Último archivo (imagen u otro)
-                    LastFile = _context.ChatUploadedFiles
-                        .Where(f => f.ConversationId == c.Id)
-                        .OrderByDescending(f => f.UploadedAt)
-                        .Select(f => new
-                        {
-                            Type = f.FileType.StartsWith("image") ? "image" : "file",
-                            Content = f.FileName,
-                            Url = f.FilePath,
-                            Timestamp = f.UploadedAt
-                        })
+                    Conversation = c,
+                    LastEvent = _context.Messages
+                        .Where(m => m.ConversationId == c.Id)
+                        .Select(m => new { RawContent = m.MessageText, Timestamp = (DateTime?)m.CreatedAt, Type = "text" })
+                        .Concat(_context.ChatUploadedFiles
+                            .Where(f => f.ConversationId == c.Id)
+                            .Select(f => new { RawContent = f.FileName, Timestamp = f.UploadedAt, Type = f.FileType.StartsWith("image") ? "image" : "file" })
+                        )
+                        .OrderByDescending(e => e.Timestamp)
                         .FirstOrDefault()
                 })
                 .ToListAsync();
 
-            // Seleccionar el mensaje más reciente
-            var withLastMessages = conversations.Select(c =>
+            var result = conversations.Select(c =>
             {
-                var lastText = c.LastTextMessage != null
-                    ? new
+                string finalContent = c.LastEvent?.RawContent;
+                if (c.LastEvent?.Type == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
+                {
+                    try
                     {
-                        Type = "text",
-                        Content = c.LastTextMessage.Content,
-                        Url = (string)null,
-                        Timestamp = (DateTime?)c.LastTextMessage.Timestamp
+                        using (var doc = System.Text.Json.JsonDocument.Parse(finalContent))
+                        {
+                            if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
+                            {
+                                finalContent = userQuestion.GetString();
+                            }
+                            else if (doc.RootElement.TryGetProperty("Content", out var content))
+                            {
+                                finalContent = content.GetString();
+                            }
+                        }
                     }
-                    : null;
-
-                var lastFile = c.LastFile != null
-                    ? new
+                    catch (System.Text.Json.JsonException)
                     {
-                        Type = c.LastFile.Type,
-                        Content = c.LastFile.Content,
-                        Url = c.LastFile.Url,
-                        Timestamp = c.LastFile.Timestamp
+                        // Not a valid JSON, so we'll just use the original RawContent
                     }
-                    : null;
-
-                var latest = lastText != null && (lastFile == null || lastText.Timestamp > lastFile.Timestamp)
-                    ? lastText
-                    : lastFile;
+                }
 
                 return new
                 {
-                    c.Id,
-                    c.Status,
-                    c.Title,
-                    c.IsWithAI,
-                    c.User,
-                    c.Bot,
-                    LastMessage = latest
+                    c.Conversation.Id,
+                    c.Conversation.Status,
+                    Title = c.Conversation.Title ?? string.Empty,
+                    c.Conversation.IsWithAI,
+                    Alias = $"Sesión {c.Conversation.Id}",
+                    Bot = c.Conversation.Bot != null ? new { c.Conversation.Bot.Name } : null,
+                    lastMessage = c.LastEvent == null ? null : new
+                    {
+                        c.LastEvent.Type,
+                        Content = finalContent,
+                        Timestamp = c.LastEvent.Timestamp ?? c.Conversation.UpdatedAt
+                    }
                 };
             });
 
-            return Ok(withLastMessages); // <-- ESTA LÍNEA ES LA CLAVE
+            return Ok(result);
         }
 
 
@@ -475,7 +476,7 @@ namespace Voia.Api.Controllers
             // 6. Retornar ok al POST original
             return Ok(new
             {
-                captured = newSubmissions.Select(s => new { FieldName = s.CaptureField?.FieldName, s.SubmissionValue }),
+                captured = newSubmissions.NewSubmissions.Select(s => new { FieldName = s.CaptureField?.FieldName, s.SubmissionValue }),
                 botResponse
             });
         }

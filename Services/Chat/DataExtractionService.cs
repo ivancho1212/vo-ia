@@ -35,20 +35,28 @@ namespace Voia.Api.Services.Chat
 
             // 1. Construir el prompt para la IA
             var fieldNames = string.Join(", ", pendingFields.Select(f => $"'{f.FieldName}'"));
+            var jsonStructureExample = string.Join(",\\n  ", pendingFields.Select(f => $"\\\"{f.FieldName}\\\": \\\"<valor extraído>\\\""));
+
             var extractionPrompt = $@"
-                SYSTEM: You are a data extraction expert. Your only task is to analyze the user's message and extract the requested fields.
-                - Fields to extract: {fieldNames}.
-                - Analyze the following user message: ""{userMessage}""
-                - Respond ONLY with a JSON object containing the fields you found.
-                - If a field is not found, do not include it in the JSON.
-                - Do not add any explanation or introductory text.
+                SYSTEM: You are a world-class data extraction expert. Your task is to meticulously analyze the user's message and extract values for specific fields.
+                - The user's message might contain one or more data points, sometimes with typos or in a conversational format.
+                - Be very careful to separate the values for each field. For example, if the user says 'My name is John and I live in New York', the value for 'Nombre' is 'John', not 'John and I live in New York'.
+                - Requested fields to extract: {fieldNames}.
+                - Analyze this user message: ""{userMessage}""
+                
+                Your response MUST be ONLY a valid JSON object.
+                - The JSON keys must exactly match the requested field names.
+                - If you find a value for a field, include it in the JSON.
+                - If you cannot find a value for a field, or if the value is ambiguous, DO NOT include that key in the JSON.
+                - Do not add explanations, apologies, or any text outside the JSON object.
+                - Do not invent data.
 
-                Example response for a message like 'Hi, my name is John Doe and my number is 555-1234':
+                Example for a message like 'Hola, mi nombre es Juan Pérez y vivo en Calle Falsa 123.':
                 {{
-                  ""Nombre"": ""John Doe"",
-                  ""Telefono"": ""555-1234""
+                  ""Nombre"": ""Juan Pérez"",
+                  ""Direccion"": ""Calle Falsa 123""
                 }}
-
+                
                 USER_MESSAGE:
                 {userMessage}
             ";
@@ -75,6 +83,11 @@ namespace Voia.Api.Services.Chat
                 }
 
                 return extractedData;
+            }
+            catch (JsonException jsonEx)
+            {
+                _logger.LogError(jsonEx, "Error de formato JSON al parsear la respuesta de la IA. La IA no devolvió un JSON válido. Prompt: {Prompt}", extractionPrompt);
+                return new Dictionary<string, string>(); // Devolver vacío para que el flujo pueda continuar (ej. a Regex)
             }
             catch (Exception ex)
             {

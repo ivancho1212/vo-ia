@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Api.Services;
 using Voia.Api.Models;
+using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
 
 namespace Voia.Api.Hubs
@@ -29,7 +30,6 @@ namespace Voia.Api.Hubs
         private readonly BotDataCaptureService _dataCaptureService;
         private readonly HttpClient _httpClient; // <--- HttpClient inyectado
         private const int TypingDelayMs = 1000; // 1 segundo
-        private static readonly Dictionary<int, bool> PausedConversations = new();
         private readonly PromptBuilderService _promptBuilderService;
 
 
@@ -58,14 +58,12 @@ namespace Voia.Api.Hubs
         {
             if (conversationId <= 0)
             {
-                _logger.LogWarning("⚠️ conversationId es inválido.");
                 throw new HubException("El ID de conversación debe ser un número positivo.");
             }
 
             try
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
-                _logger.LogInformation("✅ Usuario unido al grupo: {ConversationId}", conversationId);
             }
             catch (Exception ex)
             {
@@ -87,22 +85,73 @@ namespace Voia.Api.Hubs
 
         private async Task SendInitialConversations()
         {
-            // Usamos ToListAsync para no bloquear el hilo
-            var conversaciones = await _context.Conversations
-                .OrderByDescending(c => c.UpdatedAt)
+            var conversationsData = await _context.Conversations
+                .Include(c => c.Bot)
                 .Select(c => new
                 {
-                    id = c.Id,
-                    // ✅ SOLUCIÓN: Enviamos el UserId completo. Es más seguro.
-                    alias = $"Usuario {c.UserId}",
-                    lastMessage = c.UserMessage,
-                    updatedAt = c.UpdatedAt,
-                    status = c.Status,
-                    blocked = false // Este campo debe venir de la base de datos si existe
+                    Conversation = c,
+                    LastEvent = _context.Messages
+                        .Where(m => m.ConversationId == c.Id)
+                        .Select(m => new { RawContent = m.MessageText, Timestamp = (DateTime?)m.CreatedAt, Type = "text" })
+                        .Concat(_context.ChatUploadedFiles
+                            .Where(f => f.ConversationId == c.Id)
+                            .Select(f => new { RawContent = f.FileName, Timestamp = f.UploadedAt, Type = f.FileType.StartsWith("image") ? "image" : "file" })
+                        )
+                        .OrderByDescending(e => e.Timestamp)
+                        .FirstOrDefault()
                 })
                 .ToListAsync();
 
-            await Clients.Caller.SendAsync("InitialConversations", conversaciones);
+            var result = conversationsData.Select(c =>
+            {
+                string lastMessageString = "Conversación iniciada";
+                if (c.LastEvent != null)
+                {
+                    string finalContent = c.LastEvent.RawContent;
+                    if (c.LastEvent.Type == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
+                    {
+                        try
+                        {
+                            using (var doc = System.Text.Json.JsonDocument.Parse(finalContent))
+                            {
+                                if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
+                                {
+                                    finalContent = userQuestion.GetString();
+                                }
+                                else if (doc.RootElement.TryGetProperty("Content", out var content))
+                                {
+                                    finalContent = content.GetString();
+                                }
+                            }
+                        }
+                        catch (System.Text.Json.JsonException)
+                        {
+                            // Not a valid JSON, so we'll just use the original RawContent
+                        }
+                    }
+
+                    lastMessageString = c.LastEvent.Type switch
+                    {
+                        "text" => finalContent,
+                        "image" => "📷 Imagen",
+                        "file" => $"📎 Archivo: {finalContent}",
+                        _ => finalContent
+                    };
+                }
+
+                return new
+                {
+                    id = c.Conversation.Id,
+                    alias = $"Sesión {c.Conversation.Id}",
+                    status = c.Conversation.Status,
+                    isWithAI = c.Conversation.IsWithAI,
+                    blocked = c.Conversation.Blocked,
+                    lastMessage = lastMessageString,
+                    updatedAt = c.LastEvent?.Timestamp ?? c.Conversation.UpdatedAt
+                };
+            }).ToList();
+
+            await Clients.Caller.SendAsync("InitialConversations", result);
         }
         public async Task UserIsActive(int conversationId)
         {
@@ -142,7 +191,6 @@ namespace Voia.Api.Hubs
 
                 if (existing != null)
                 {
-                    _logger.LogInformation("🔄 Conversación ya existente.");
                     return existing.Id;
                 }
 
@@ -158,30 +206,37 @@ namespace Voia.Api.Hubs
                 _context.Conversations.Add(newConversation);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("✅ Conversación creada con ID: {ConversationId}", newConversation.Id);
+                // Notificar al grupo admin sobre la nueva conversación
+                _logger.LogInformation("📢 [ChatHub] Enviando NewConversation a grupo admin desde InitializeContext para ConversationId: {ConversationId}", newConversation.Id);
+                await Clients.Group("admin").SendAsync("NewConversation", new
+                {
+                    id = newConversation.Id,
+                    alias = $"Sesión {newConversation.Id}",
+                    lastMessage = newConversation.UserMessage, // UserMessage podría ser null aquí para una nueva conversación
+                    updatedAt = newConversation.UpdatedAt,
+                    status = newConversation.Status,
+                    blocked = newConversation.Blocked,
+                    isWithAI = newConversation.IsWithAI // Added IsWithAI
+                });
+
                 return newConversation.Id;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error en InitializeContext: {ex.Message}");
+                _logger.LogError(ex, "❌ Error en InitializeContext."); // Cambiado a _logger.LogError
                 throw new HubException("No se pudo inicializar la conversación.");
             }
         }
 
         // ✅ Método para pausar o activar la IA desde el admin
-        public Task SetIAPaused(int conversationId, bool paused)
-        {
-            _logger.LogInformation("Setting IA paused status for conversation {ConversationId} to {Paused}", conversationId, paused);
-            PausedConversations[conversationId] = paused;
-            Console.WriteLine($"🔁 IA {(paused ? "pausada" : "activada")} para conversación {conversationId}");
-            return Task.CompletedTask;
-        }
+
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
+            string botAnswer = "Lo siento, no pude generar una respuesta en este momento."; // Declaración e inicialización
+
             // Validación de usuario
             if (!_context.Users.Any(u => u.Id == request.UserId))
             {
-                _logger.LogWarning("Invalid user ID {UserId} attempted to send a message.", request.UserId);
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
@@ -225,6 +280,17 @@ namespace Voia.Api.Hubs
                 };
                 _context.Conversations.Add(conversation);
                 await _context.SaveChangesAsync();
+                // Notificar al grupo admin sobre la nueva conversación
+                await Clients.Group("admin").SendAsync("NewConversation", new
+                {
+                    id = conversation.Id,
+                    alias = $"Sesión {conversation.Id}", // O la lógica de alias que tengas
+                    lastMessage = request.Question,
+                    updatedAt = conversation.UpdatedAt,
+                    status = conversation.Status,
+                    blocked = conversation.Blocked, // Asumiendo que Blocked es una propiedad
+                    isWithAI = conversation.IsWithAI // Added IsWithAI
+                });
             }
 
             // Guardar mensaje del usuario
@@ -269,7 +335,7 @@ namespace Voia.Api.Hubs
                 .ToListAsync();
 
             // 🔹 PASO 2: Procesar el mensaje para capturar nuevos datos
-            var capturedData = await _dataCaptureService.ProcessMessageAsync(
+            var captureResult = await _dataCaptureService.ProcessMessageAsync(
                 request.BotId,
                 request.UserId,
                 conversationId.ToString(), // Usamos el ID de conversación como ID de sesión
@@ -277,10 +343,42 @@ namespace Voia.Api.Hubs
                 currentCapturedFields // ✅ FIX: Pasamos la lista de campos que obtuvimos
             );
 
-            if (capturedData.Any())
+            if (captureResult.RequiresAiClarification)
             {
-                _logger.LogInformation("📊 Datos capturados: {Data}",
-                    string.Join(", ", capturedData.Select(c => $"{c.CaptureFieldId}={c.SubmissionValue}")));
+                string clarificationQuestion = await _aiProviderService.GetBotResponseAsync(
+                    request.BotId,
+                    request.UserId,
+                    captureResult.AiClarificationPrompt,
+                    currentCapturedFields
+                );
+                // Console.WriteLine($"[ChatHub] Sending ReceiveMessage for grouped images. ConversationId: {conversationId}"); // Eliminado
+
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "bot",
+                    text = clarificationQuestion,
+                    timestamp = DateTime.UtcNow
+                });
+                return; // Detener el procesamiento para esperar la respuesta del usuario
+            }
+
+            // Si el servicio de captura generó un mensaje de confirmación, lo usamos como respuesta del bot.
+            if (!string.IsNullOrEmpty(captureResult.ConfirmationPrompt))
+            {
+                botAnswer = await _aiProviderService.GetBotResponseAsync(
+                    request.BotId,
+                    request.UserId,
+                    captureResult.ConfirmationPrompt,
+                    currentCapturedFields
+                );
+                goto SendBotResponse; // Saltamos directamente a la sección de envío de respuesta
+            }
+
+            if (captureResult.NewSubmissions.Any())
+            {
+                // Se eliminó la línea problemática: string.Join(...);
+                // Si se pretendía registrar esto, añade aquí la llamada a _logger.LogInformation.
             }
 
             // Actualizar conversación
@@ -320,25 +418,28 @@ namespace Voia.Api.Hubs
                 from = "user",
                 text = request.Question,
                 timestamp = userMessage.CreatedAt,
-                alias = $"Usuario {request.UserId}",
+                alias = $"Sesión {conversation.Id}",
                 lastMessage = request.Question,
                 replyToMessageId = request.ReplyToMessageId,
                 replyToText = repliedText,
                 id = userMessage.Id
             });
 
+            await StopTyping(conversationId, "user");
+
             // IA pausada
-            if (PausedConversations.TryGetValue(conversationId, out var paused) && paused)
+            // Retrieve the conversation again to get the latest IsWithAI status from the database
+            // Revisar si la IA está activa ANTES de mostrar typing
+            var conversationFromDb = await _context.Conversations.FindAsync(conversationId);
+            if (conversationFromDb != null && !conversationFromDb.IsWithAI)
             {
-                _logger.LogWarning("⏸️ IA pausada para conversación {ConversationId}", conversationId);
-                return;
+                _logger.LogInformation($"IA pausada para la conversación {conversationId}. No se generará respuesta.");
+                return; // No se envía typing ni se procesa IA
             }
 
-            // "Escribiendo..."
-            await Clients.Group(conversationId.ToString()).SendAsync("Typing", new { from = "bot" });
+            // Solo si la IA está activa, enviamos typing. Usamos "ReceiveTyping" que es el evento que el cliente escucha.
+            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveTyping", conversationId, "bot");
             await Task.Delay(TypingDelayMs);
-
-            string botAnswer;
 
             try
             {
@@ -356,24 +457,25 @@ namespace Voia.Api.Hubs
                             .Select(s => s.SubmissionValue)
                             .FirstOrDefault()
                     })
-            .ToListAsync();       
- 
-            string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
-                request.BotId,
-                request.UserId,
-                request.Question ?? "",
-                currentCapturedFields // ✅ FIX: Usamos la lista que ya fue actualizada por el servicio de captura.
-            );
+            .ToListAsync();
 
-            // 3️⃣ Llamar al AI provider con el prompt final que contiene todo el contexto.
-            botAnswer = await _aiProviderService.GetBotResponseAsync(
-                request.BotId,
-                request.UserId,
-                finalPrompt, // Pasamos el JSON completo
-                currentCapturedFields // ✅ FIX: Pasamos la lista actualizada.
-            ) ?? "Lo siento, no pude generar una respuesta en este momento.";
+                string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
+                    request.BotId,
+                    request.UserId,
+                    request.Question ?? "",
+                    currentCapturedFields // ✅ FIX: Usamos la lista que ya fue actualizada por el servicio de captura.
+                );
+
+                // 3️⃣ Llamar al AI provider con el prompt final que contiene todo el contexto.
+                botAnswer = await _aiProviderService.GetBotResponseAsync(
+                    request.BotId,
+                    request.UserId,
+                    finalPrompt, // Pasamos el JSON completo
+                    currentCapturedFields // ✅ FIX: Pasamos la lista actualizada.
+                ) ?? "Lo siento, no pude generar una respuesta en este momento.";
             }
             catch (NotSupportedException)
+
             {
                 botAnswer = "🤖 Este bot aún no está conectado a un proveedor de IA.";
             }
@@ -382,6 +484,8 @@ namespace Voia.Api.Hubs
                 botAnswer = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
                 _logger.LogError(ex, "❌ Error en IA.");
             }
+
+        SendBotResponse:
 
             // 4️⃣ Deserializar JSON (si es mock)
             string displayText = botAnswer;
@@ -397,6 +501,56 @@ namespace Voia.Api.Hubs
             {
                 // No es JSON, usamos tal cual
             }
+
+            // --- 🔹 INICIO: Procesar y guardar CapturedFields desde la respuesta de la IA ---
+            try
+            {
+                var jsonResponseForCapture = JsonDocument.Parse(botAnswer);
+                if (jsonResponseForCapture.RootElement.TryGetProperty("CapturedFields", out var capturedFieldsElement) && capturedFieldsElement.ValueKind == JsonValueKind.Array)
+                {
+                    var fieldsFromAi = capturedFieldsElement.Deserialize<List<DataField>>();
+                    if (fieldsFromAi != null && fieldsFromAi.Any(f => !string.IsNullOrEmpty(f.Value)))
+                    {
+
+                        var fieldNamesFromAi = fieldsFromAi.Select(f => f.FieldName).ToList();
+                        var fieldDefinitions = await _context.BotDataCaptureFields
+                            .Where(f => f.BotId == request.BotId && fieldNamesFromAi.Contains(f.FieldName))
+                            .ToDictionaryAsync(f => f.FieldName, f => f.Id, StringComparer.OrdinalIgnoreCase);
+
+                        var batchSubmissions = new List<BotDataSubmissionCreateDto>();
+                        // 👇 FILTRADO: Procesar solo los campos que tienen un valor no nulo/vacío.
+                        var validFieldsFromAi = fieldsFromAi.Where(f => !string.IsNullOrEmpty(f.Value));
+
+                        foreach (var field in validFieldsFromAi)
+                        {
+                            if (fieldDefinitions.TryGetValue(field.FieldName, out var captureFieldId))
+                            {
+                                batchSubmissions.Add(new BotDataSubmissionCreateDto
+                                {
+                                    BotId = request.BotId,
+                                    CaptureFieldId = captureFieldId,
+                                    SubmissionValue = field.Value,
+                                    UserId = request.UserId,
+                                    SubmissionSessionId = conversationId.ToString()
+                                });
+                            }
+
+                        }
+
+                        if (batchSubmissions.Any())
+                        {
+
+                            // Usar HttpClient para enviar al endpoint batch
+                            await _httpClient.PostAsJsonAsync("api/botdatasubmissions/batch", batchSubmissions);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error al procesar y guardar los CapturedFields de la respuesta de la IA.");
+            }
+            // --- 🔹 FIN: Procesar y guardar CapturedFields ---
 
             // Guardar mensaje del bot
             var botMessage = new Message
@@ -427,6 +581,7 @@ namespace Voia.Api.Hubs
             conversation.BotResponse = botAnswer;
             conversation.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            // Console.WriteLine($"[ChatHub] Sending ReceiveMessage for single file. ConversationId: {conversationId}"); // Eliminado
 
             // Enviar respuesta al grupo
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
@@ -437,6 +592,7 @@ namespace Voia.Api.Hubs
                 timestamp = botMessage.CreatedAt,
                 id = botMessage.Id
             });
+            await StopTyping(conversationId, "bot");
         }
 
         public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null, string? replyToText = null)
@@ -489,19 +645,22 @@ namespace Voia.Api.Hubs
                 from = "admin",
                 text,
                 timestamp = DateTime.UtcNow,
-                alias = "Administrador",
+                alias = $"Sesión {conversationId}",
                 lastMessage = text,
                 replyToMessageId = replyToMessageId,
                 replyToText = repliedText
             });
+
+            // Detener el indicador de "escribiendo" para el admin
+            await StopTyping(conversationId, "admin");
         }
 
         [HubMethodName("SendGroupedImages")]
         public async Task SendGroupedImages(int conversationId, int userId, List<ChatFileDto> multipleFiles)
         {
+            await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
             try
             {
-                _logger.LogInformation("📸 Recibiendo grupo de imágenes.");
                 var fileDtos = new List<object>();
 
                 foreach (var file in multipleFiles)
@@ -538,9 +697,24 @@ namespace Voia.Api.Hubs
                     _context.ChatUploadedFiles.Add(dbFile);
                     await _context.SaveChangesAsync();
 
+                    // Retrieve the conversation to get the correct BotId
+                    var convo = await _context.Conversations.FindAsync(conversationId);
+                    if (convo == null)
+                    {
+                        continue; // Skip saving this message if conversation not found
+                    }
+
+                    // Explicitly load the Bot to ensure it's in the DbContext's cache
+                    // This might help if EF Core is somehow not seeing the Bot with ID 4
+                    var bot = await _context.Bots.FindAsync(convo.BotId);
+                    if (bot == null)
+                    {
+                        continue; // Skip saving this message if bot not found
+                    }
+
                     var fileMessage = new Message
                     {
-                        BotId = 1, // 🔧 Usa un valor válido
+                        BotId = convo.BotId, // Use the BotId from the conversation
                         UserId = userId,
                         ConversationId = conversationId,
                         Sender = "user",
@@ -549,6 +723,7 @@ namespace Voia.Api.Hubs
                         CreatedAt = DateTime.UtcNow
                     };
 
+                    // Console.WriteLine($"[ChatHub] Saving file message with BotId: {fileMessage.BotId}"); // Eliminado
                     _context.Messages.Add(fileMessage);
                     await _context.SaveChangesAsync();
 
@@ -559,6 +734,7 @@ namespace Voia.Api.Hubs
                         fileUrl = dbFile.FilePath
                     });
                 }
+                Console.WriteLine($"[ChatHub] Sending ReceiveMessage for grouped images. ConversationId: {conversationId}");
 
                 await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
@@ -573,7 +749,7 @@ namespace Voia.Api.Hubs
                 {
                     conversationId,
                     from = "user",
-                    alias = $"Usuario {userId}",
+                    alias = $"Sesión {conversationId}", // Changed from Usuario {userId}
                     text = "Se enviaron múltiples imágenes.",
                     images = fileDtos,
                     timestamp = DateTime.UtcNow
@@ -581,24 +757,39 @@ namespace Voia.Api.Hubs
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error al enviar imágenes agrupadas: {Message}", ex.Message);
+                _logger.LogError(ex, "❌ Error al enviar imágenes agrupadas. Detalles: {ExceptionDetails}", ex.ToString());
                 throw new HubException("Ocurrió un error al enviar las imágenes.");
             }
         }
 
 
-        public async Task Typing(int conversationId, string sender)
+        // ✅ Renombrado para claridad y corregido para notificar solo a los OTROS clientes.
+        public async Task Typing(int conversationId, string userId)
         {
-            if (conversationId > 0 && !string.IsNullOrWhiteSpace(sender))
+            if (conversationId > 0 && !string.IsNullOrWhiteSpace(userId))
             {
-                await Clients.Group(conversationId.ToString()).SendAsync("Typing", sender);
-                await Clients.Group("admin").SendAsync("Typing", conversationId.ToString(), sender);
+                // Notifica a los otros miembros del grupo de la conversación
+                await Clients.OthersInGroup(conversationId.ToString()).SendAsync("ReceiveTyping", conversationId, userId);
+                // Notifica al grupo de administradores
+                await Clients.Group("admin").SendAsync("ReceiveTyping", conversationId, userId);
+            }
+        }
+
+        // ✅ Renombrado para claridad y corregido para notificar solo a los OTROS clientes.
+        public async Task StopTyping(int conversationId, string userId)
+        {
+            if (conversationId > 0 && !string.IsNullOrWhiteSpace(userId))
+            {
+                // Notifica a los otros miembros del grupo que un usuario dejó de escribir.
+                await Clients.OthersInGroup(conversationId.ToString()).SendAsync("ReceiveStopTyping", conversationId, userId);
+                // Notifica al grupo de administradores
+                await Clients.Group("admin").SendAsync("ReceiveStopTyping", conversationId, userId);
             }
         }
 
         public async Task SendFile(int conversationId, object payload)
         {
-            _logger.LogInformation("📥 Se llamó a SendFile");
+            await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
 
             var json = JsonSerializer.Serialize(payload);
             var fileObj = JsonSerializer.Deserialize<ChatFileDto>(json, new JsonSerializerOptions
@@ -658,17 +849,19 @@ namespace Voia.Api.Hubs
 
             _context.ChatUploadedFiles.Add(dbFile);
             await _context.SaveChangesAsync();
+            // Console.WriteLine($"[ChatHub] Sending ReceiveMessage for single file. ConversationId: {conversationId}"); // Eliminado
+            // System.Text.Json.JsonSerializer.Serialize(...) // Eliminado
 
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "user",
-                file = new
+                files = new[] { new
                 {
                     fileName = dbFile.FileName,
                     fileType = dbFile.FileType,
                     fileUrl = dbFile.FilePath
-                },
+                }},
                 timestamp = DateTime.UtcNow
             });
 
@@ -677,15 +870,15 @@ namespace Voia.Api.Hubs
                 conversationId,
                 from = "user",
                 text = "📎 Se envió un archivo.",
-                alias = $"Usuario {fileObj.UserId}",
+                alias = $"Sesión {conversationId}", // Changed from Usuario {fileObj.UserId}
                 lastMessage = "📎 Se envió un archivo.",
                 timestamp = DateTime.UtcNow,
-                file = new
+                files = new[] { new
                 {
                     fileName = dbFile.FileName,
                     fileType = dbFile.FileType,
                     fileUrl = dbFile.FilePath
-                }
+                }}
             });
         }
 

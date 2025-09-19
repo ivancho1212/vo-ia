@@ -168,6 +168,17 @@ builder.Services.AddHttpClient<GeminiClient>()
 // Registro de PromptBuilderService con HttpClient
 builder.Services.AddHttpClient<PromptBuilderService>();
 
+// 👇 INICIO: Configuración del HttpClient para ChatHub
+// Esto es necesario para que ChatHub pueda hacer llamadas a otros endpoints de la misma API.
+builder.Services.AddHttpClient<ChatHub>(client =>
+{
+    // Asigna la dirección base del servidor. En un entorno de producción,
+    // esta URL debería venir de appsettings.json.
+    // Para desarrollo, asumimos que la API corre en el mismo host y puerto.
+    client.BaseAddress = new Uri("http://localhost:5006"); // <-- AJUSTA EL PUERTO SI ES DIFERENTE
+});
+// 👆 FIN: Configuración del HttpClient para ChatHub
+
 // Vector search service
 builder.Services.AddHttpClient<VectorSearchService>();
 

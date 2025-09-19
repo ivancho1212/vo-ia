@@ -58,43 +58,32 @@ namespace Voia.Api.Controllers
         [HttpGet("by-bot/{botId}")]
         public async Task<ActionResult<IEnumerable<object>>> GetSubmissionsGroupedByBot(int botId)
         {
-            var fields = await _context.BotDataCaptureFields
-                .Where(f => f.BotId == botId)
-                .ToListAsync();
-
-            var fieldNames = fields.ToDictionary(f => f.Id, f => f.FieldName);
-
-            var submissions = await _context.BotDataSubmissions
+            // ✅ OPTIMIZACIÓN: Realizar el agrupamiento y la mayor parte del procesamiento en la base de datos.
+            var groupedSubmissions = await _context.BotDataSubmissions
                 .Where(s => s.BotId == botId)
+                .Include(s => s.CaptureField) // Incluir el campo para obtener el nombre
+                .GroupBy(s => s.SubmissionSessionId ?? s.UserId.ToString())
+                .Select(g => new
+                {
+                    SessionKey = g.Key,
+                    LastSubmissionDate = g.Max(s => s.SubmittedAt),
+                    Submissions = g.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue, s.UserId, s.SubmissionSessionId })
+                })
+                .OrderByDescending(g => g.LastSubmissionDate)
                 .ToListAsync();
 
-            var grouped = submissions
-                .GroupBy(s => s.SubmissionSessionId ?? $"user-{s.UserId}")
-                .Select(group =>
-                {
-                    string sessionId = group.Key.StartsWith("user-") ? null : group.Key;
-                    int? userId = group.Key.StartsWith("user-") ? int.Parse(group.Key.Replace("user-", "")) : (int?)null;
+            // Mapeo final en memoria
+            var result = groupedSubmissions.Select(g => new
+            {
+                sessionId = g.Submissions.FirstOrDefault()?.SubmissionSessionId,
+                userId = g.Submissions.FirstOrDefault()?.UserId,
+                values = g.Submissions
+                    .GroupBy(s => s.FieldName)
+                    .ToDictionary(grp => grp.Key, grp => grp.Select(s => s.SubmissionValue).ToList()),
+                createdAt = g.LastSubmissionDate
+            });
 
-                    var values = group
-                        .Where(g => fieldNames.ContainsKey(g.CaptureFieldId))
-                        .GroupBy(g => fieldNames[g.CaptureFieldId])
-                        .ToDictionary(
-                            gr => gr.Key,
-                            gr => gr.Select(x => x.SubmissionValue).ToList()
-                        );
-
-                    return new
-                    {
-                        sessionId,
-                        userId,
-                        values,
-                        createdAt = group.Max(x => x.SubmittedAt) // 👈 última fecha captada
-                    };
-                })
-                .ToList();
-
-
-            return Ok(grouped);
+            return Ok(result);
         }
 
         // GET: api/BotDataSubmissions/public/by-bot/{botId}
@@ -145,31 +134,79 @@ namespace Voia.Api.Controllers
         public async Task<ActionResult> CreateBatch([FromBody] List<BotDataSubmissionCreateDto> submissions)
         {
             if (submissions == null || !submissions.Any())
-                return BadRequest(new { Message = "No se enviaron datos." });
-
-            foreach (var dto in submissions)
             {
-                if (dto.UserId == null && string.IsNullOrWhiteSpace(dto.SubmissionSessionId))
-                {
-                    return BadRequest(new { Message = "Cada envío debe tener un userId o submissionSessionId." });
-                }
-
-                var submission = new BotDataSubmission
-                {
-                    BotId = dto.BotId,
-                    CaptureFieldId = dto.CaptureFieldId,
-                    SubmissionValue = dto.SubmissionValue,
-                    UserId = dto.UserId,
-                    SubmissionSessionId = dto.SubmissionSessionId,
-                    SubmittedAt = DateTime.UtcNow
-                };
-
-                _context.BotDataSubmissions.Add(submission);
+                Console.WriteLine("[BotDataSubmissions][CreateBatch] ❌ ERROR: La lista de submissions es nula o vacía.");
+                return BadRequest(new { Message = "La lista de submissions no puede ser nula o vacía." });
             }
 
-            await _context.SaveChangesAsync();
+            // Log del JSON crudo recibido (solo en modo DEBUG)
+#if DEBUG
+            try
+            {
+                Request.EnableBuffering();
+                using (var reader = new System.IO.StreamReader(Request.Body, leaveOpen: true))
+                {
+                    var rawBody = await reader.ReadToEndAsync();
+                    Console.WriteLine($"[BotDataSubmissions][CreateBatch] JSON recibido (DEBUG): {rawBody}");
+                    Request.Body.Position = 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BotDataSubmissions][CreateBatch] Error leyendo el body para logging: {ex.Message}");
+            }
+#endif
 
-            return Ok(new { Message = "Datos enviados correctamente." });
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var dto in submissions)
+                {
+                    if (dto.UserId == null && string.IsNullOrWhiteSpace(dto.SubmissionSessionId))
+                    {
+                        return BadRequest(new { Message = "Cada envío debe tener un userId o submissionSessionId." });
+                    }
+
+                    // 🔍 Validar que el CaptureFieldId corresponda al BotId
+                    var validField = await _context.BotDataCaptureFields
+                        .AnyAsync(f => f.Id == dto.CaptureFieldId && f.BotId == dto.BotId);
+
+                    if (!validField)
+                    {
+                        Console.WriteLine($"[BotDataSubmissions][CreateBatch] ❌ ERROR: CaptureFieldId={dto.CaptureFieldId} no pertenece al BotId={dto.BotId}");
+                        // No es necesario hacer rollback aquí, el catch lo hará si se lanza una excepción.
+                        return BadRequest(new { Message = $"El campo {dto.CaptureFieldId} no pertenece al bot {dto.BotId}." });
+                    }
+
+                    Console.WriteLine($"[BotDataSubmissions][CreateBatch] Procesando DTO: BotId={dto.BotId}, CaptureFieldId={dto.CaptureFieldId}, Value='{dto.SubmissionValue}', UserId={dto.UserId}, SessionId='{dto.SubmissionSessionId}'");
+
+                    var submission = new BotDataSubmission
+                    {
+                        BotId = dto.BotId,
+                        CaptureFieldId = dto.CaptureFieldId,
+                        SubmissionValue = dto.SubmissionValue,
+                        UserId = dto.UserId,
+                        SubmissionSessionId = dto.SubmissionSessionId,
+                        SubmittedAt = DateTime.UtcNow
+                    };
+
+                    _context.BotDataSubmissions.Add(submission);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                Console.WriteLine($"[BotDataSubmissions][CreateBatch] ✅ {submissions.Count} registros guardados exitosamente.");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                Console.WriteLine($"[BotDataSubmissions][CreateBatch] ❌ ERROR al guardar en DB: {ex.Message}");
+                Console.WriteLine($"[BotDataSubmissions][CreateBatch] StackTrace: {ex.StackTrace}");
+                return StatusCode(500, new { Message = "Error interno al guardar los datos.", Error = ex.Message });
+            }
+
+            return Ok(new { Message = $"{submissions.Count} registros creados correctamente." });
         }
 
         // POST: api/botdatasubmissions
@@ -180,12 +217,20 @@ namespace Voia.Api.Controllers
             Console.WriteLine("[BotDataSubmissions] Payload recibido:");
             try
             {
-                var rawBody = await new System.IO.StreamReader(Request.Body).ReadToEndAsync();
-                Console.WriteLine($"[BotDataSubmissions] JSON recibido: {rawBody}");
+                // Habilitar buffering para poder leer el body múltiples veces si es necesario
+                Request.EnableBuffering();
+                
+                using (var reader = new System.IO.StreamReader(Request.Body, leaveOpen: true))
+                {
+                    var rawBody = await reader.ReadToEndAsync();
+                    Console.WriteLine($"[BotDataSubmissions] JSON recibido: {rawBody}");
+                    // Rebobinar el stream para que el model binding pueda leerlo
+                    Request.Body.Position = 0;
+                }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[BotDataSubmissions] Error leyendo el body: {ex.Message}");
+                 Console.WriteLine($"[BotDataSubmissions] Error leyendo el body para logging: {ex.Message}");
             }
             Console.WriteLine($"BotId: {dto.BotId}, CaptureFieldId: {dto.CaptureFieldId}, SubmissionValue: {dto.SubmissionValue}, UserId: {dto.UserId}, SubmissionSessionId: {dto.SubmissionSessionId}");
 
@@ -217,6 +262,8 @@ namespace Voia.Api.Controllers
                 });
             }
 
+            Console.WriteLine($"[BotDataSubmissions][Create] Procesando DTO: BotId={dto.BotId}, CaptureFieldId={dto.CaptureFieldId}, Value='{dto.SubmissionValue}', UserId={dto.UserId}, SessionId='{dto.SubmissionSessionId}'");
+
             var submission = new BotDataSubmission
             {
                 BotId = dto.BotId,
@@ -228,7 +275,18 @@ namespace Voia.Api.Controllers
             };
 
             _context.BotDataSubmissions.Add(submission);
-            await _context.SaveChangesAsync();
+            
+            try
+            {
+                await _context.SaveChangesAsync();
+                Console.WriteLine("[BotDataSubmissions][Create] ✅ Datos guardados exitosamente.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BotDataSubmissions][Create] ❌ ERROR al guardar en DB: {ex.Message}");
+                Console.WriteLine($"[BotDataSubmissions][Create] StackTrace: {ex.StackTrace}");
+                return StatusCode(500, new { Message = "Error interno al guardar el dato.", Error = ex.Message });
+            }
 
             var response = new BotDataSubmissionResponseDto
             {
@@ -253,6 +311,15 @@ namespace Voia.Api.Controllers
 
             if (submission == null)
                 return NotFound();
+
+            // ✅ Validar integridad antes de actualizar
+            var validField = await _context.BotDataCaptureFields
+                .AnyAsync(f => f.Id == dto.CaptureFieldId && f.BotId == dto.BotId);
+
+            if (!validField)
+            {
+                return BadRequest(new { Message = $"El campo {dto.CaptureFieldId} no pertenece al bot {dto.BotId}." });
+            }
 
             submission.BotId = dto.BotId;
             submission.CaptureFieldId = dto.CaptureFieldId;
