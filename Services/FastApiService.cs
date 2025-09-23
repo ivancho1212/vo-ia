@@ -17,25 +17,25 @@ namespace Voia.Api.Services
         }
 
         // 🚀 Procesa documentos PDF pendientes
-        public async Task TriggerDocumentProcessingAsync()
+        public async Task TriggerDocumentProcessingAsync(int botId)
         {
-            await PostAsync("/process-documents/");
+            await GetAsync($"/process_documents?bot_id={botId}");
         }
 
         // 🚀 Procesa URLs pendientes
-        public async Task TriggerUrlProcessingAsync()
+        public async Task TriggerUrlProcessingAsync(int botId)
         {
-            await PostAsync("/process-urls/");
+            await GetAsync($"/process_urls?bot_id={botId}");
         }
 
         // 🚀 Procesa textos planos pendientes
-        public async Task TriggerCustomTextProcessingAsync()
+        public async Task TriggerCustomTextProcessingAsync(int botId)
         {
-            await PostAsync("/process-custom-texts/");
+            await GetAsync($"/process_texts?bot_id={botId}");
         }
 
-        // 🔗 Método genérico para llamadas POST
-        private async Task PostAsync(string endpoint)
+        // 🔗 Método genérico para llamadas GET
+        private async Task GetAsync(string endpoint)
         {
             try
             {
@@ -43,7 +43,7 @@ namespace Voia.Api.Services
 
                 Console.WriteLine($"[FASTAPI] ⏩ Llamando a {fullUrl}");
 
-                var response = await _httpClient.PostAsync(fullUrl, null);
+                var response = await _httpClient.GetAsync(fullUrl);
 
                 if (response.IsSuccessStatusCode)
                 {

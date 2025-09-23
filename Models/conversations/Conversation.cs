@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Voia.Api.Models.Users;
 
 namespace Voia.Api.Models.Conversations
 {
@@ -49,5 +50,11 @@ namespace Voia.Api.Models.Conversations
         // Relaciones de navegación
         public virtual User User { get; set; }
         public virtual Bot Bot { get; set; }
+        [Column("public_user_id")]
+        public int? PublicUserId { get; set; }
+
+        [ForeignKey("PublicUserId")]
+        public virtual PublicUser? PublicUser { get; set; }
+
     }
 }

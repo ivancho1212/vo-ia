@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using BCrypt.Net;
 using Voia.Api.Models.Subscriptions;
+using Voia.Api.Models.bot;
 
 
 namespace Voia.Api.Controllers
@@ -47,6 +48,8 @@ namespace Voia.Api.Controllers
                 Name = user.Name,
                 Email = user.Email,
                 Phone = user.Phone,
+                Country = user.Country,  // ✅ nuevo
+                City = user.City,        // ✅ nuevo
                 Address = user.Address,
                 DocumentNumber = user.DocumentNumber,
                 DocumentPhotoUrl = user.DocumentPhotoUrl,
@@ -79,12 +82,14 @@ namespace Voia.Api.Controllers
                 .Include(u => u.Role)
                 .Include(u => u.Subscriptions)
                     .ThenInclude(s => s.Plan)
+                .Include(u => u.Bots) // cargamos los bots
+                .AsSplitQuery() // Add this line
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
                 return NotFound(new { Message = "User not found" });
 
-            // Obtener la última suscripción activa (ajusta la lógica si es necesario)
+            // Tomar solo la última suscripción activa
             var activeSubscription = user.Subscriptions
                 .OrderByDescending(s => s.StartedAt)
                 .FirstOrDefault();
@@ -95,6 +100,8 @@ namespace Voia.Api.Controllers
                 Name = user.Name,
                 Email = user.Email,
                 Phone = user.Phone,
+                Country = user.Country,
+                City = user.City,
                 Address = user.Address,
                 DocumentNumber = user.DocumentNumber,
                 DocumentPhotoUrl = user.DocumentPhotoUrl,
@@ -120,15 +127,21 @@ namespace Voia.Api.Controllers
                         ExpiresAt = activeSubscription.ExpiresAt,
                         Status = activeSubscription.Status
                     }
-                    : null
-
-
+                    : null,
+                Bots = user.Bots
+                    .Where(b => b.IsActive) // solo activos
+                    .Select(b => new BotDto
+                    {
+                        Id = b.Id,
+                        Name = b.Name,
+                        Description = b.Description
+                    })
+                    .ToList()
             };
 
             return Ok(userDto);
         }
 
-        
         [HttpPut("me/avatar")]
         [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
         public async Task<IActionResult> UploadAvatar(IFormFile file)
@@ -155,8 +168,8 @@ namespace Voia.Api.Controllers
 
             return Ok(new { avatarUrl = user.AvatarUrl });
         }
-       
-       
+
+
         [HttpPut("me/document-photo")]
         [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
         public async Task<IActionResult> UploadDocumentPhoto(IFormFile file)
@@ -221,9 +234,12 @@ namespace Voia.Api.Controllers
             user.Name = updateDto.Name;
             user.Email = updateDto.Email;
             user.Phone = updateDto.Phone;
+            user.Country = updateDto.Country;  // ✅ nuevo
+            user.City = updateDto.City;        // ✅ nuevo
             user.Address = updateDto.Address;
             user.DocumentNumber = updateDto.DocumentNumber;
             user.UpdatedAt = DateTime.UtcNow;
+
 
             await _context.SaveChangesAsync();
 
@@ -255,6 +271,8 @@ namespace Voia.Api.Controllers
                 RoleId = createUserDto.RoleId,
                 DocumentTypeId = createUserDto.DocumentTypeId,
                 Phone = createUserDto.Phone,
+                Country = createUserDto.Country,  // ✅ nuevo
+                City = createUserDto.City,        // ✅ nuevo
                 Address = createUserDto.Address,
                 DocumentNumber = createUserDto.DocumentNumber,
                 DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
@@ -264,12 +282,13 @@ namespace Voia.Api.Controllers
                 UpdatedAt = DateTime.UtcNow
             };
 
+
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
             return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
-        
+
 
         [AllowAnonymous]
         [HttpPost("register")]
@@ -304,9 +323,11 @@ namespace Voia.Api.Controllers
                     Name = createUserDto.Name,
                     Email = createUserDto.Email,
                     Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                    RoleId = fixedRoleId, 
+                    RoleId = fixedRoleId,
                     DocumentTypeId = createUserDto.DocumentTypeId,
                     Phone = createUserDto.Phone,
+                    Country = createUserDto.Country,  // ✅ nuevo
+                    City = createUserDto.City,        // ✅ nuevo
                     Address = createUserDto.Address,
                     DocumentNumber = createUserDto.DocumentNumber,
                     DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
@@ -315,6 +336,7 @@ namespace Voia.Api.Controllers
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
+
 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
@@ -350,12 +372,15 @@ namespace Voia.Api.Controllers
             user.Name = updateUserDto.Name;
             user.Email = updateUserDto.Email;
             user.Phone = updateUserDto.Phone;
+            user.Country = updateUserDto.Country;  // ✅ nuevo
+            user.City = updateUserDto.City;        // ✅ nuevo
             user.Address = updateUserDto.Address;
             user.DocumentNumber = updateUserDto.DocumentNumber;
             user.DocumentPhotoUrl = updateUserDto.DocumentPhotoUrl;
             user.AvatarUrl = updateUserDto.AvatarUrl;
             user.IsVerified = updateUserDto.IsVerified;
             user.UpdatedAt = DateTime.UtcNow;
+
 
             try
             {
@@ -409,7 +434,8 @@ namespace Voia.Api.Controllers
             var user = await _context.Users
                 .Include(u => u.Role) // Cargando el rol del usuario
                 .Include(u => u.Subscriptions) // Incluir las suscripciones del usuario
-                .ThenInclude(s => s.Plan) // Incluir el plan asociado a la suscripción
+                                .ThenInclude(s => s.Plan) // Incluir el plan asociado a la suscripción
+                .AsSplitQuery() // Add this line
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))

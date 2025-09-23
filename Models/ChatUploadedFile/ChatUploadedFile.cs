@@ -1,7 +1,8 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Voia.Api.Models.Conversations; // ✅ Asegúrate de importar el namespace correcto
+using Voia.Api.Models.Conversations;
+using Voia.Api.Models.Users;
 
 namespace Voia.Api.Models.Chat
 {
@@ -15,7 +16,10 @@ namespace Voia.Api.Models.Chat
         public int ConversationId { get; set; }
 
         [Column("user_id")]
-        public int UserId { get; set; }
+        public int? UserId { get; set; }  // Admin (nullable porque no siempre aplica)
+
+        [Column("public_user_id")]
+        public int? PublicUserId { get; set; } // Público (nullable porque no siempre aplica)
 
         [Column("file_name")]
         [MaxLength(255)]
@@ -31,11 +35,15 @@ namespace Voia.Api.Models.Chat
         [Column("uploaded_at")]
         public DateTime? UploadedAt { get; set; } = DateTime.UtcNow;
 
-        // ✅ Relación con conversación
+        // 🔗 Relaciones
         [ForeignKey("ConversationId")]
         public virtual Conversation Conversation { get; set; }
-        
-        [ForeignKey("UserId")] // ✅ Esto faltaba
+
+        [ForeignKey("UserId")]
         public User? User { get; set; }
+
+        [ForeignKey("PublicUserId")]
+        public PublicUser? PublicUser { get; set; }
     }
+
 }

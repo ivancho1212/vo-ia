@@ -206,10 +206,33 @@ namespace Voia.Api.Controllers
             var document = await _context.UploadedDocuments.FindAsync(id);
             if (document == null) return NotFound();
 
-            _context.UploadedDocuments.Remove(document);
-            await _context.SaveChangesAsync();
+            try
+            {
+                // Intentar eliminar archivo físico si existe
+                if (!string.IsNullOrEmpty(document.FilePath) && System.IO.File.Exists(document.FilePath))
+                {
+                    System.IO.File.Delete(document.FilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Loguear el error, pero no bloquea la eliminación de la base de datos
+                Console.WriteLine($"⚠️ No se pudo eliminar el archivo físico: {ex.Message}");
+            }
+
+            try
+            {
+                _context.UploadedDocuments.Remove(document);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error eliminando registro en DB: {ex.Message}");
+                return StatusCode(500, new { message = "Error eliminando registro en la base de datos." });
+            }
 
             return NoContent();
         }
+
     }
 }

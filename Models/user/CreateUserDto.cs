@@ -21,6 +21,12 @@ namespace Voia.Api.Models.DTOs
         [Required(ErrorMessage = "El número de teléfono es obligatorio.")]
         [RegularExpression(@"^3\d{9}$", ErrorMessage = "Teléfono inválido. Debe comenzar con 3 y tener 10 dígitos.")]
         public string Phone { get; set; }
+        // 🔹 Nuevos campos
+        [Required]
+        public string Country { get; set; }
+
+        [Required]
+        public string City { get; set; }
 
         [Required(ErrorMessage = "La dirección es obligatoria.")]
         public string Address { get; set; }

@@ -7,5 +7,7 @@ namespace Voia.Api.Models.Conversations
         public string Title { get; set; }  // Asegúrate de que el título se incluya
         public string UserMessage { get; set; }
         public string BotResponse { get; set; }
+        public int? PublicUserId { get; set; }
+
     }
 }

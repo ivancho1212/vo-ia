@@ -197,13 +197,16 @@ namespace Voia.Api.Controllers
                     Text = m.MessageText,
                     Timestamp = m.CreatedAt,
                     FromRole = m.Sender,
-                    FromId = m.Sender == "user" ? m.UserId : m.BotId,
-                    FromName = m.Sender == "user" ? (m.User != null ? m.User.Name : "Usuario") : (m.Bot != null ? m.Bot.Name : "Bot"),
+                    FromId = m.Sender == "user" ? (m.UserId ?? m.PublicUserId) : m.BotId,
+                    FromName = m.Sender == "user"
+        ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
+        : (m.Bot != null ? m.Bot.Name : "Bot"),
                     FromAvatarUrl = m.Sender == "user"
-            ? (m.User != null ? m.User.AvatarUrl : null)
-            : "https://yourdomain.com/images/default-bot-avatar.png", // o la URL que prefieras
+        ? (m.User != null ? m.User.AvatarUrl : null)
+        : "https://yourdomain.com/images/default-bot-avatar.png",
                     ReplyToMessageId = m.ReplyToMessageId
                 })
+
                 .ToListAsync();
 
             // --- Mapeo de Archivos ---

@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Voia.Api.Models.Conversations;
+using Voia.Api.Models.Users;
 
 namespace Voia.Api.Models.Messages
 {
@@ -16,7 +17,7 @@ namespace Voia.Api.Models.Messages
 
         [Required]
         [Column("user_id")]
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
 
         [Required]
         [Column("conversation_id")]
@@ -54,5 +55,11 @@ namespace Voia.Api.Models.Messages
         public virtual Bot Bot { get; set; }
         public virtual User User { get; set; }
         public virtual Conversation Conversation { get; set; }
+        [Column("public_user_id")]
+        public int? PublicUserId { get; set; }
+
+        [ForeignKey("PublicUserId")]
+        public virtual PublicUser? PublicUser { get; set; }
+
     }
 }

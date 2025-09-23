@@ -74,12 +74,11 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("me")]
-        // [HasPermission("CanViewBots")]
         public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
         {
             try
             {
-                var userId = int.Parse(User.FindFirst("id")!.Value);
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
                 var bots = await _context.Bots
                     .Include(b => b.User)
@@ -93,6 +92,7 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { Message = "An error occurred", Details = ex.Message });
             }
         }
+
         /// <summary>
         /// Obtiene todos los bots de un usuario específico por su ID.
         /// </summary>
@@ -137,201 +137,181 @@ namespace Voia.Api.Controllers
             Console.WriteLine("[DEBUG] CreateBot iniciado.");
 
             if (!ModelState.IsValid)
-            {
                 return BadRequest(ModelState);
-            }
 
             var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            int userId = int.TryParse(userIdStr, out var parsedId) ? parsedId : 2;
-            Console.WriteLine($"[DEBUG] UserId autenticado: {userId}");
 
-            // Validar si ya existe un bot con ese nombre
-            var existingBot = await _context.Bots
-                .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
-
-            if (existingBot != null)
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
             {
-                return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
+                return Unauthorized(new { Message = "No se pudo identificar el usuario autenticado." });
             }
 
-            // Validar plantilla
-            var template = await _context.BotTemplates
-                .Include(t => t.DefaultStyle)
-                .FirstOrDefaultAsync(t => t.Id == botDto.BotTemplateId);
+            Console.WriteLine($"[DEBUG] UserId autenticado en CreateBot: {userId}");
 
-            if (template == null)
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
             {
-                return BadRequest(new { Message = "Plantilla no encontrada." });
-            }
-
-            if (template.IaProviderId == 0 || template.AiModelConfigId == 0)
-            {
-                return BadRequest(new { Message = "La plantilla no tiene configuración de IA válida." });
-            }
-
-            // Crear o reutilizar estilo
-            int? reusedOrClonedStyleId = null;
-
-            if (template.DefaultStyleId.HasValue)
-            {
-                var styleTemplate = await _context.StyleTemplates
+                // 1️⃣ Validar si ya existe un bot con ese nombre antes de crear
+                var existingBot = await _context.Bots
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(s => s.Id == template.DefaultStyleId.Value);
+                    .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
 
-                if (styleTemplate != null)
+                if (existingBot != null)
+                    return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
+
+                // 2️⃣ Validar plantilla
+                var template = await _context.BotTemplates
+                    .Include(t => t.DefaultStyle)
+                    .FirstOrDefaultAsync(t => t.Id == botDto.BotTemplateId);
+
+                if (template == null)
+                    return BadRequest(new { Message = "Plantilla no encontrada." });
+
+                if (template.IaProviderId == 0 || template.AiModelConfigId == 0)
+                    return BadRequest(new { Message = "La plantilla no tiene configuración de IA válida." });
+
+                // 3️⃣ Preparar o reutilizar estilo
+                int? reusedOrClonedStyleId = null;
+
+                if (template.DefaultStyleId.HasValue)
                 {
-                    string sanitizedPosition = (styleTemplate.Position ?? "bottom-right")
-                        .Trim()
-                        .Where(c => c >= 32 && c <= 126)
-                        .Aggregate("", (acc, c) => acc + c);
+                    var styleTemplate = await _context.StyleTemplates
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Id == template.DefaultStyleId.Value);
 
-                    var existingStyle = await _context.BotStyles
-                        .FirstOrDefaultAsync(s =>
-                            s.StyleTemplateId == styleTemplate.Id &&
-                            s.Theme == (styleTemplate.Theme ?? "light") &&
-                            s.PrimaryColor == (styleTemplate.PrimaryColor ?? "#000000") &&
-                            s.SecondaryColor == (styleTemplate.SecondaryColor ?? "#ffffff") &&
-                            s.FontFamily == (styleTemplate.FontFamily ?? "Arial") &&
-                            s.AvatarUrl == (styleTemplate.AvatarUrl ?? "") &&
-                            s.Position == sanitizedPosition &&
-                            s.CustomCss == (styleTemplate.CustomCss ?? "")
-                        );
+                    if (styleTemplate != null)
+                    {
+                        string sanitizedPosition = (styleTemplate.Position ?? "bottom-right")
+                            .Trim()
+                            .Where(c => c >= 32 && c <= 126)
+                            .Aggregate("", (acc, c) => acc + c);
 
-                    if (existingStyle != null)
-                    {
-                        reusedOrClonedStyleId = existingStyle.Id;
-                    }
-                    else
-                    {
-                        var newStyle = new BotStyle
+                        var existingStyle = await _context.BotStyles
+                            .FirstOrDefaultAsync(s =>
+                                s.StyleTemplateId == styleTemplate.Id &&
+                                s.Theme == (styleTemplate.Theme ?? "light") &&
+                                s.PrimaryColor == (styleTemplate.PrimaryColor ?? "#000000") &&
+                                s.SecondaryColor == (styleTemplate.SecondaryColor ?? "#ffffff") &&
+                                s.FontFamily == (styleTemplate.FontFamily ?? "Arial") &&
+                                s.AvatarUrl == (styleTemplate.AvatarUrl ?? "") &&
+                                s.Position == sanitizedPosition &&
+                                s.CustomCss == (styleTemplate.CustomCss ?? "")
+                            );
+
+                        if (existingStyle != null)
                         {
-                            StyleTemplateId = styleTemplate.Id,
-                            Theme = styleTemplate.Theme ?? "light",
-                            PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
-                            SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
-                            FontFamily = styleTemplate.FontFamily ?? "Arial",
-                            AvatarUrl = styleTemplate.AvatarUrl ?? "",
-                            Position = sanitizedPosition,
-                            CustomCss = styleTemplate.CustomCss ?? "",
-                            UpdatedAt = DateTime.UtcNow
-                        };
+                            reusedOrClonedStyleId = existingStyle.Id;
+                        }
+                        else
+                        {
+                            var newStyle = new BotStyle
+                            {
+                                StyleTemplateId = styleTemplate.Id,
+                                Theme = styleTemplate.Theme ?? "light",
+                                PrimaryColor = styleTemplate.PrimaryColor ?? "#000000",
+                                SecondaryColor = styleTemplate.SecondaryColor ?? "#ffffff",
+                                FontFamily = styleTemplate.FontFamily ?? "Arial",
+                                AvatarUrl = styleTemplate.AvatarUrl ?? "",
+                                Position = sanitizedPosition,
+                                CustomCss = styleTemplate.CustomCss ?? "",
+                                UpdatedAt = DateTime.UtcNow
+                            };
 
-                        _context.BotStyles.Add(newStyle);
-                        await _context.SaveChangesAsync();
-                        reusedOrClonedStyleId = newStyle.Id;
+                            _context.BotStyles.Add(newStyle);
+                            await _context.SaveChangesAsync();
+                            reusedOrClonedStyleId = newStyle.Id;
+                        }
                     }
                 }
-            }
 
-            // Crear bot
-            var bot = new Bot
-            {
-                Name = botDto.Name,
-                Description = botDto.Description,
-                ApiKey = botDto.ApiKey,
-                IsActive = botDto.IsActive,
-                UserId = userId,
-                BotTemplateId = template.Id,
-                IaProviderId = template.IaProviderId,
-                AiModelConfigId = template.AiModelConfigId,
-                StyleId = reusedOrClonedStyleId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.Bots.Add(bot);
-            await _context.SaveChangesAsync();
-            Console.WriteLine($"[DEBUG] Bot creado con Id: {bot.Id}");
-
-            // Crear sesión de entrenamiento
-            var trainingSession = new BotTrainingSession
-            {
-                BotId = bot.Id,
-                SessionName = $"Entrenamiento inicial para {botDto.Name}",
-                Description = $"Sesión creada automáticamente al crear el bot desde la plantilla '{template.Name}'",
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _context.BotTrainingSessions.Add(trainingSession);
-            await _context.SaveChangesAsync();
-
-            // ✅ Heredar documentos
-            var documentos = await _context.UploadedDocuments
-                .Where(d => d.BotTemplateId == template.Id && d.BotId == null)
-                .ToListAsync();
-
-            foreach (var doc in documentos)
-            {
-                doc.BotId = bot.Id;
-                // doc.TemplateTrainingSessionId = null;
-            }
-
-            // ✅ Heredar URLs
-            var urls = await _context.TrainingUrls
-                .Where(u => u.BotTemplateId == template.Id && u.BotId == null)
-                .ToListAsync();
-
-            foreach (var url in urls)
-            {
-                url.BotId = bot.Id;
-                // url.TemplateTrainingSessionId = null;
-            }
-
-            // ✅ Heredar textos planos
-            var textos = await _context.TrainingCustomTexts
-                .Where(t => t.BotTemplateId == template.Id && t.BotId == null)
-                .ToListAsync();
-
-            foreach (var texto in textos)
-            {
-                texto.BotId = bot.Id;
-                //texto.TemplateTrainingSessionId = null;
-            }
-
-            await _context.SaveChangesAsync();
-
-            // ✅ Agregar texto plano adicional si se envió desde el DTO
-            if (!string.IsNullOrWhiteSpace(botDto.CustomText))
-            {
-                var customText = new TrainingCustomText
+                // 4️⃣ Crear bot
+                var bot = new Bot
                 {
-                    BotId = bot.Id,
-                    BotTemplateId = template.Id,
-                    TemplateTrainingSessionId = trainingSession.Id,
+                    Name = botDto.Name,
+                    Description = botDto.Description,
+                    ApiKey = botDto.ApiKey,
+                    IsActive = botDto.IsActive,
                     UserId = userId,
-                    Content = botDto.CustomText,
+                    BotTemplateId = template.Id,
+                    IaProviderId = template.IaProviderId,
+                    AiModelConfigId = template.AiModelConfigId,
+                    StyleId = reusedOrClonedStyleId,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
 
-                _context.TrainingCustomTexts.Add(customText);
+                _context.Bots.Add(bot);
                 await _context.SaveChangesAsync();
+                Console.WriteLine($"[DEBUG] Bot creado con Id: {bot.Id}");
+
+                // 5️⃣ Crear sesión de entrenamiento
+                var trainingSession = new BotTrainingSession
+                {
+                    BotId = bot.Id,
+                    SessionName = $"Entrenamiento inicial para {botDto.Name}",
+                    Description = $"Sesión creada automáticamente al crear el bot desde la plantilla '{template.Name}'",
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _context.BotTrainingSessions.Add(trainingSession);
+
+                // 6️⃣ Heredar documentos, URLs y textos
+                var documentos = await _context.UploadedDocuments
+                    .Where(d => d.BotTemplateId == template.Id && d.BotId == null)
+                    .ToListAsync();
+                documentos.ForEach(d => d.BotId = bot.Id);
+
+                var urls = await _context.TrainingUrls
+                    .Where(u => u.BotTemplateId == template.Id && u.BotId == null)
+                    .ToListAsync();
+                urls.ForEach(u => u.BotId = bot.Id);
+
+                var textos = await _context.TrainingCustomTexts
+                    .Where(t => t.BotTemplateId == template.Id && t.BotId == null)
+                    .ToListAsync();
+                textos.ForEach(t => t.BotId = bot.Id);
+
+                // 7️⃣ Agregar texto plano adicional si se envió
+                if (!string.IsNullOrWhiteSpace(botDto.CustomText))
+                {
+                    var customText = new TrainingCustomText
+                    {
+                        BotId = bot.Id,
+                        BotTemplateId = template.Id,
+                        TemplateTrainingSessionId = trainingSession.Id,
+                        UserId = userId,
+                        Content = botDto.CustomText,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.TrainingCustomTexts.Add(customText);
+                }
+
+                // 8️⃣ Guardar todo de una vez
+                await _context.SaveChangesAsync();
+
+                // 9️⃣ Trigger a la API de vectorización (FastAPI)
+                if (documentos.Any())
+                    await _fastApiService.TriggerDocumentProcessingAsync(bot.Id);
+
+                if (urls.Any())
+                    await _fastApiService.TriggerUrlProcessingAsync(bot.Id);
+
+                if (textos.Any() || !string.IsNullOrWhiteSpace(botDto.CustomText))
+                    await _fastApiService.TriggerCustomTextProcessingAsync(bot.Id);
+
+                await transaction.CommitAsync();
+                Console.WriteLine("[DEBUG] Bot creado exitosamente con todos los datos heredados.");
+
+                return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
             }
-
-            // ✅ Trigger a la API de vectorización (FastAPI)
-            var hayDocumentos = documentos.Any() || await _context.UploadedDocuments.AnyAsync(d => d.BotId == bot.Id);
-            var hayUrls = urls.Any() || await _context.TrainingUrls.AnyAsync(u => u.BotId == bot.Id);
-            var hayTextos = textos.Any() || await _context.TrainingCustomTexts.AnyAsync(t => t.BotId == bot.Id);
-
-            if (hayDocumentos)
+            catch (Exception ex)
             {
-                await _fastApiService.TriggerDocumentProcessingAsync();
+                await transaction.RollbackAsync();
+                Console.WriteLine("[ERROR] CreateBot falló: " + ex.ToString());
+                return StatusCode(500, new { Message = "Error interno al crear el bot." });
             }
-
-            if (hayUrls)
-            {
-                await _fastApiService.TriggerUrlProcessingAsync();
-            }
-
-            if (hayTextos)
-            {
-                await _fastApiService.TriggerCustomTextProcessingAsync();
-            }
-
-            Console.WriteLine("[DEBUG] Bot creado exitosamente con todos los datos heredados.");
-
-            return CreatedAtAction(nameof(GetBotById), new { id = bot.Id }, bot);
         }
 
         /// <summary>

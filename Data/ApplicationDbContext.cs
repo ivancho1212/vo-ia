@@ -17,7 +17,8 @@ using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.UserPreferences;
 using Voia.Api.Models.Chat;
 using Voia.Api.Models.ConversationTag;
-
+using Voia.Api.Models.Users;
+using Voia.Api.Models.Bots;
 
 namespace Voia.Api.Data
 {
@@ -64,6 +65,8 @@ namespace Voia.Api.Data
         public DbSet<ChatUploadedFile> ChatUploadedFiles { get; set; }
         public DbSet<ConversationTag> ConversationTags { get; set; }
         public DbSet<UserConsent> UserConsents { get; set; }
+        public DbSet<PublicUser> PublicUsers { get; set; }
+        public DbSet<BotWelcomeMessage> BotWelcomeMessages { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -186,16 +189,10 @@ namespace Voia.Api.Data
             modelBuilder
                 .Entity<Bot>()
                 .HasOne(b => b.User)
-                .WithMany()
+                .WithMany(u => u.Bots) // Specify the navigation property on the User side
                 .HasForeignKey(b => b.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
-            // Configuración para Bot
-            modelBuilder
-                .Entity<Bot>()
-                .HasOne(b => b.User)
-                .WithMany()
-                .HasForeignKey(b => b.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+            
 
             modelBuilder.Entity<BotCustomPrompt>().Property(p => p.Role).HasConversion<string>();
             modelBuilder.Entity<BotTemplatePrompt>().Property(p => p.Role).HasConversion<string>();

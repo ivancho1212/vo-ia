@@ -28,7 +28,7 @@ namespace Voia.Api.Controllers
             var messages = await _context.Messages
                 .Include(m => m.User)
                 .Include(m => m.Bot)
-                .Include(m => m.Conversation)
+                .Include(m => m.PublicUser)
                 .ToListAsync();
 
             return Ok(messages);
@@ -79,22 +79,36 @@ namespace Voia.Api.Controllers
             return Ok(new { message = $"{messages.Count} message(s) marked as read." });
         }
 
-        // Crear un nuevo mensaje
         [HttpPost]
         public async Task<ActionResult<Message>> CreateMessage([FromBody] CreateMessageDto dto)
         {
-            var user = await _context.Users.FindAsync(dto.UserId);
-            if (user == null)
-                return NotFound(new { message = $"User with ID {dto.UserId} not found." });
+            // Validaciones
+            if (dto.UserId == null && dto.PublicUserId == null)
+                return BadRequest(new { message = "Se requiere UserId o PublicUserId." });
 
             var bot = await _context.Bots.FindAsync(dto.BotId);
             if (bot == null)
                 return NotFound(new { message = $"Bot with ID {dto.BotId} not found." });
 
+            if (dto.UserId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(dto.UserId.Value);
+                if (user == null)
+                    return NotFound(new { message = $"User with ID {dto.UserId} not found." });
+            }
+
+            if (dto.PublicUserId.HasValue)
+            {
+                var publicUser = await _context.PublicUsers.FindAsync(dto.PublicUserId.Value);
+                if (publicUser == null)
+                    return NotFound(new { message = $"PublicUser with ID {dto.PublicUserId} not found." });
+            }
+
             var message = new Message
             {
                 BotId = dto.BotId,
                 UserId = dto.UserId,
+                PublicUserId = dto.PublicUserId,
                 ConversationId = dto.ConversationId,
                 Sender = dto.Sender,
                 MessageText = dto.MessageText,
@@ -102,7 +116,7 @@ namespace Voia.Api.Controllers
                 Source = dto.Source ?? "widget",
                 CreatedAt = DateTime.UtcNow,
                 ReplyToMessageId = dto.ReplyToMessageId,
-                Read = dto.Sender != "user" // Marcar como leído si no es del usuario
+                Read = dto.Sender != "user"
             };
 
             _context.Messages.Add(message);
@@ -121,11 +135,13 @@ namespace Voia.Api.Controllers
 
             message.BotId = dto.BotId;
             message.UserId = dto.UserId;
+            message.PublicUserId = dto.PublicUserId;
             message.ConversationId = dto.ConversationId;
             message.Sender = dto.Sender;
             message.MessageText = dto.MessageText;
             message.TokensUsed = dto.TokensUsed ?? 0;
             message.Source = dto.Source;
+            message.ReplyToMessageId = dto.ReplyToMessageId;
 
             await _context.SaveChangesAsync();
             return Ok(message);

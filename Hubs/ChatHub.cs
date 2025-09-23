@@ -173,6 +173,7 @@ namespace Voia.Api.Hubs
                 {
                     await Clients.Group("admin").SendAsync("ConversationStatusChanged", conversation.Id, "activa");
                 }
+                await Clients.Group("admin").SendAsync("Heartbeat", conversationId);
             }
         }
         public async Task<int> InitializeContext(object data)
@@ -197,7 +198,7 @@ namespace Voia.Api.Hubs
                 var newConversation = new Conversation
                 {
                     BotId = botId,
-                    UserId = userId,
+                    PublicUserId = userId,
                     Title = "Nueva conversación",
                     CreatedAt = DateTime.UtcNow,
                     Status = "activa"
@@ -219,6 +220,8 @@ namespace Voia.Api.Hubs
                     isWithAI = newConversation.IsWithAI // Added IsWithAI
                 });
 
+                await Clients.Group("admin").SendAsync("Heartbeat", newConversation.Id);
+
                 return newConversation.Id;
             }
             catch (Exception ex)
@@ -235,7 +238,7 @@ namespace Voia.Api.Hubs
             string botAnswer = "Lo siento, no pude generar una respuesta en este momento."; // Declaración e inicialización
 
             // Validación de usuario
-            if (!_context.Users.Any(u => u.Id == request.UserId))
+            if (!_context.PublicUsers.Any(u => u.Id == request.UserId))
             {
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
@@ -291,13 +294,14 @@ namespace Voia.Api.Hubs
                     blocked = conversation.Blocked, // Asumiendo que Blocked es una propiedad
                     isWithAI = conversation.IsWithAI // Added IsWithAI
                 });
+                await Clients.Group("admin").SendAsync("Heartbeat", conversation.Id);
             }
 
             // Guardar mensaje del usuario
             var userMessage = new Message
             {
                 BotId = request.BotId,
-                UserId = request.UserId,
+                PublicUserId = request.UserId,
                 ConversationId = conversation.Id,
                 Sender = "user",
                 MessageText = request.Question ?? string.Empty,
@@ -401,7 +405,7 @@ namespace Voia.Api.Hubs
                 status = "sent"
             });
 
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+            await Clients.OthersInGroup(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "user",
@@ -518,7 +522,6 @@ namespace Voia.Api.Hubs
                             .ToDictionaryAsync(f => f.FieldName, f => f.Id, StringComparer.OrdinalIgnoreCase);
 
                         var batchSubmissions = new List<BotDataSubmissionCreateDto>();
-                        // 👇 FILTRADO: Procesar solo los campos que tienen un valor no nulo/vacío.
                         var validFieldsFromAi = fieldsFromAi.Where(f => !string.IsNullOrEmpty(f.Value));
 
                         foreach (var field in validFieldsFromAi)
@@ -581,7 +584,6 @@ namespace Voia.Api.Hubs
             conversation.BotResponse = botAnswer;
             conversation.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-            // Console.WriteLine($"[ChatHub] Sending ReceiveMessage for single file. ConversationId: {conversationId}"); // Eliminado
 
             // Enviar respuesta al grupo
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
@@ -627,7 +629,6 @@ namespace Voia.Api.Hubs
                 await _context.SaveChangesAsync();
             }
 
-            // ✅ Emitir hacia el grupo de conversación
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -638,7 +639,6 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
 
-            // ✅ Emitir hacia el grupo admin
             await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
             {
                 conversationId,
@@ -651,7 +651,6 @@ namespace Voia.Api.Hubs
                 replyToText = repliedText
             });
 
-            // Detener el indicador de "escribiendo" para el admin
             await StopTyping(conversationId, "admin");
         }
 
@@ -688,7 +687,7 @@ namespace Voia.Api.Hubs
                     var dbFile = new ChatUploadedFile
                     {
                         ConversationId = conversationId,
-                        UserId = userId,
+                        PublicUserId = userId,
                         FileName = file.FileName,
                         FileType = file.FileType,
                         FilePath = finalPath
@@ -697,15 +696,13 @@ namespace Voia.Api.Hubs
                     _context.ChatUploadedFiles.Add(dbFile);
                     await _context.SaveChangesAsync();
 
-                    // Retrieve the conversation to get the correct BotId
                     var convo = await _context.Conversations.FindAsync(conversationId);
                     if (convo == null)
                     {
                         continue; // Skip saving this message if conversation not found
                     }
 
-                    // Explicitly load the Bot to ensure it's in the DbContext's cache
-                    // This might help if EF Core is somehow not seeing the Bot with ID 4
+
                     var bot = await _context.Bots.FindAsync(convo.BotId);
                     if (bot == null)
                     {
@@ -723,7 +720,6 @@ namespace Voia.Api.Hubs
                         CreatedAt = DateTime.UtcNow
                     };
 
-                    // Console.WriteLine($"[ChatHub] Saving file message with BotId: {fileMessage.BotId}"); // Eliminado
                     _context.Messages.Add(fileMessage);
                     await _context.SaveChangesAsync();
 
@@ -849,8 +845,7 @@ namespace Voia.Api.Hubs
 
             _context.ChatUploadedFiles.Add(dbFile);
             await _context.SaveChangesAsync();
-            // Console.WriteLine($"[ChatHub] Sending ReceiveMessage for single file. ConversationId: {conversationId}"); // Eliminado
-            // System.Text.Json.JsonSerializer.Serialize(...) // Eliminado
+
 
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {

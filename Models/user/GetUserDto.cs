@@ -1,5 +1,6 @@
 using Voia.Api.Models.DTOs;
 using Voia.Api.Models.Subscriptions;
+using Voia.Api.Models.bot;
 
 public class GetUserDto
 {
@@ -7,22 +8,24 @@ public class GetUserDto
     public string Name { get; set; }
     public string Email { get; set; }
     public string Phone { get; set; }
+
+    // 🔹 Nuevos campos
+    public string Country { get; set; }
+    public string City { get; set; }
+
     public string Address { get; set; }
     public string DocumentNumber { get; set; }
     public string DocumentPhotoUrl { get; set; }
     public string AvatarUrl { get; set; }
-    public string PlanName { get; set; }  // O puedes incluir detalles más completos de 'Plan'
+    public string PlanName { get; set; }
     public SubscriptionDto? Subscription { get; set; }
-
     public bool IsVerified { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    // Role information (solo los detalles del rol)
     public RoleDto Role { get; set; }
-
-    // Si deseas incluir más detalles del plan en el DTO:
-    public PlanDto Plan { get; set; }  // Detalles completos del plan, no solo el nombre
+    public PlanDto Plan { get; set; }
+    public List<BotDto> Bots { get; set; } = new List<BotDto>();
 }
 
 public class PlanDto

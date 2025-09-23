@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using Voia.Api.Models.Plans;
-using Voia.Api.Models.Subscriptions; // ✅ Este using es necesario
-
+using Voia.Api.Models.Subscriptions;
+using Voia.Api.Models.Bots; // 👈 Asegúrate de tener el namespace correcto
 
 namespace Voia.Api.Models
 {
@@ -20,10 +20,15 @@ namespace Voia.Api.Models
 
         public int? DocumentTypeId { get; set; }
         public string Phone { get; set; }
-        public string Address { get; set; }
+
+        // 🔹 Nuevos campos
+        public string? Country { get; set; }
+        public string? City { get; set; }
+
+        public string? Address { get; set; }
         public string DocumentNumber { get; set; }
         public string DocumentPhotoUrl { get; set; }
-        public string AvatarUrl { get; set; }
+        public string? AvatarUrl { get; set; }
         public bool IsVerified { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
@@ -31,9 +36,9 @@ namespace Voia.Api.Models
         // 🔹 Relaciones
         public Role Role { get; set; }
         public ICollection<Subscription> Subscriptions { get; set; }
-
-        // 🔹 Agregar relación con consentimientos
         public ICollection<UserConsent> Consents { get; set; }
-    }
 
+        // 🚀 Nueva relación con Bots
+        public ICollection<Bot> Bots { get; set; } = new List<Bot>();
+    }
 }
