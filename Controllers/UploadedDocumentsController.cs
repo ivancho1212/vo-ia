@@ -91,6 +91,16 @@ namespace Voia.Api.Controllers
             if (dto.File == null || dto.File.Length == 0)
                 return BadRequest(new { message = "No se recibió un archivo válido." });
 
+            // Validar que existe el bot
+            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
+            if (!botExists)
+                return BadRequest($"El Bot con ID {dto.BotId} no existe.");
+
+            // Validar que existe el template
+            var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
+            if (!templateExists)
+                return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+
             var contentHash = HashHelper.ComputeFileHash(dto.File);
 
             var existing = await _context.UploadedDocuments
@@ -105,15 +115,28 @@ namespace Voia.Api.Controllers
                 });
             }
 
-            var uploadsFolder = Path.Combine("Uploads", "Documents");
+            var fileName = Path.GetFileName(dto.File.FileName);
+            var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+            
+            // Obtenemos la ruta base del proyecto
+            var basePath = AppDomain.CurrentDomain.BaseDirectory;
+            while (!System.IO.File.Exists(Path.Combine(basePath, "Voia.Api.csproj")))
+            {
+                basePath = Path.GetDirectoryName(basePath);
+                if (string.IsNullOrEmpty(basePath)) throw new Exception("No se pudo encontrar la raíz del proyecto");
+            }
+            
+            // Aseguramos que la carpeta existe
+            var uploadsFolder = Path.Combine(basePath, "Uploads", "Documents");
             if (!Directory.Exists(uploadsFolder))
                 Directory.CreateDirectory(uploadsFolder);
 
-            var fileName = Path.GetFileName(dto.File.FileName);
-            var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
-            var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+            // Ruta física completa para guardar el archivo
+            var physicalPath = Path.Combine(uploadsFolder, uniqueFileName);
+            // Ruta relativa para guardar en la base de datos (con forward slashes)
+            var filePath = $"Uploads/Documents/{uniqueFileName}";
 
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            using (var stream = new FileStream(physicalPath, FileMode.Create))
             {
                 await dto.File.CopyToAsync(stream);
             }
@@ -122,7 +145,7 @@ namespace Voia.Api.Controllers
             string extractedText;
             try
             {
-                extractedText = textExtractionService.ExtractText(filePath, dto.File.ContentType);
+                extractedText = textExtractionService.ExtractText(physicalPath, dto.File.ContentType);
             }
             catch (Exception ex)
             {
@@ -155,6 +178,7 @@ namespace Voia.Api.Controllers
 
             var document = new UploadedDocument
             {
+                BotId = dto.BotId,
                 BotTemplateId = dto.BotTemplateId,
                 TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
                 UserId = dto.UserId,
@@ -181,6 +205,30 @@ namespace Voia.Api.Controllers
 
             _context.KnowledgeChunks.AddRange(chunks);
             await _context.SaveChangesAsync();
+
+            // 🔄 Paso 3: Llamar al servicio de vectorización
+            try 
+            {
+                using (var httpClient = new HttpClient())
+                {
+                    var response = await httpClient.GetAsync($"http://localhost:8000/process_documents?bot_id={document.BotId}");
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"❌ Error al llamar al servicio de vectorización: {error}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"✅ Documento enviado a vectorización para el bot {document.BotId}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al contactar el servicio de vectorización: {ex.Message}");
+                // No lanzamos la excepción para no interrumpir el flujo principal
+            }
 
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, new UploadedDocumentResponseDto
             {

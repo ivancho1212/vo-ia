@@ -9,6 +9,9 @@ namespace Voia.Api.Models.Dtos
         public IFormFile File { get; set; }
 
         [Required]
+        public int BotId { get; set; }
+
+        [Required]
         public int BotTemplateId { get; set; }
 
         public int? TemplateTrainingSessionId { get; set; }

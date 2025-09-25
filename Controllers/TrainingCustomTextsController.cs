@@ -29,12 +29,17 @@ namespace Voia.Api.Controllers
                 .Select(t => new TrainingCustomTextResponseDto
                 {
                     Id = t.Id,
+                    BotId = t.BotId,
                     BotTemplateId = t.BotTemplateId,
                     TemplateTrainingSessionId = t.TemplateTrainingSessionId,
                     UserId = t.UserId,
                     Content = t.Content,
+                    Status = t.Status,
                     CreatedAt = t.CreatedAt,
-                    UpdatedAt = t.UpdatedAt
+                    UpdatedAt = t.UpdatedAt,
+                    Indexed = t.Indexed,
+                    QdrantId = t.QdrantId,
+                    ContentHash = t.ContentHash
                 }).ToListAsync();
 
             return Ok(texts);
@@ -51,12 +56,17 @@ namespace Voia.Api.Controllers
                 .Select(t => new TrainingCustomTextResponseDto
                 {
                     Id = t.Id,
+                    BotId = t.BotId,
                     BotTemplateId = t.BotTemplateId,
                     TemplateTrainingSessionId = t.TemplateTrainingSessionId,
                     UserId = t.UserId,
                     Content = t.Content,
+                    Status = t.Status,
                     CreatedAt = t.CreatedAt,
-                    UpdatedAt = t.UpdatedAt
+                    UpdatedAt = t.UpdatedAt,
+                    Indexed = t.Indexed,
+                    QdrantId = t.QdrantId,
+                    ContentHash = t.ContentHash
                 }).ToListAsync();
 
             return Ok(texts);
@@ -70,6 +80,7 @@ namespace Voia.Api.Controllers
                         .Select(x => new TrainingCustomTextResponseDto
                         {
                             Id = x.Id,
+                            BotId = x.BotId,
                             BotTemplateId = x.BotTemplateId,
                             TemplateTrainingSessionId = x.TemplateTrainingSessionId,
                             UserId = x.UserId,
@@ -95,26 +106,71 @@ namespace Voia.Api.Controllers
         {
             var text = new TrainingCustomText
             {
+                BotId = dto.BotId,
                 BotTemplateId = dto.BotTemplateId,
                 TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
                 UserId = dto.UserId,
                 Content = dto.Content,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                Status = "pending",
+                Indexed = 0
             };
+
+            // Calcular hash del contenido
+            text.ContentHash = HashHelper.ComputeStringHash(dto.Content);
+            
+            // Verificar si ya existe un texto idéntico
+            var existing = await _context.TrainingCustomTexts
+                .FirstOrDefaultAsync(t => t.ContentHash == text.ContentHash && t.BotTemplateId == dto.BotTemplateId);
+
+            if (existing != null)
+            {
+                return Conflict(new
+                {
+                    message = "⚠️ Este texto ya fue registrado anteriormente.",
+                    existingId = existing.Id
+                });
+            }
 
             _context.TrainingCustomTexts.Add(text);
             await _context.SaveChangesAsync();
 
+            // Llamar al servicio de vectorización
+            try 
+            {
+                using (var httpClient = new HttpClient())
+                {
+                    var response = await httpClient.GetAsync($"http://localhost:8000/process_texts?bot_id={dto.BotId}");
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"❌ Error al llamar al servicio de vectorización de textos: {error}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"✅ Texto enviado a vectorización para el bot {dto.BotId}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error al contactar el servicio de vectorización: {ex.Message}");
+            }
+
             return CreatedAtAction(nameof(GetAll), new { id = text.Id }, new TrainingCustomTextResponseDto
             {
                 Id = text.Id,
+                BotId = text.BotId,
                 BotTemplateId = text.BotTemplateId,
                 TemplateTrainingSessionId = text.TemplateTrainingSessionId,
                 UserId = text.UserId,
                 Content = text.Content,
+                Status = text.Status,
                 CreatedAt = text.CreatedAt,
-                UpdatedAt = text.UpdatedAt
+                UpdatedAt = text.UpdatedAt,
+                Indexed = text.Indexed,
+                QdrantId = text.QdrantId,
+                ContentHash = text.ContentHash
             });
         }
 

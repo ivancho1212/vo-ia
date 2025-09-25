@@ -97,34 +97,71 @@ namespace Voia.Api.Controllers
         {
             try
             {
-                var contentHash = HashHelper.ComputeStringHash(dto.Url);
+                // Normalizar la URL
+                var normalizedUrl = dto.Url.TrimEnd('/').ToLowerInvariant();
+                var contentHash = HashHelper.ComputeStringHash(normalizedUrl);
+
+                Console.WriteLine($"Debug - URL: {dto.Url}");
+                Console.WriteLine($"Debug - Normalized URL: {normalizedUrl}");
+                Console.WriteLine($"Debug - Content Hash: {contentHash}");
+                Console.WriteLine($"Debug - Bot ID: {dto.BotId}");
 
                 var existing = await _context.TrainingUrls
-                    .FirstOrDefaultAsync(u => u.ContentHash == contentHash && u.BotTemplateId == dto.BotTemplateId);
+                    .FirstOrDefaultAsync(u => (u.ContentHash == contentHash || u.Url.ToLower() == normalizedUrl) && u.BotId == dto.BotId);
 
                 if (existing != null)
                 {
+                    Console.WriteLine($"Debug - Found existing URL with ID: {existing.Id}, URL: {existing.Url}");
                     return Conflict(new
                     {
-                        message = "⚠️ Esta URL ya fue registrada anteriormente.",
-                        existingId = existing.Id
+                        message = "⚠️ Esta URL ya fue registrada anteriormente para este bot.",
+                        existingId = existing.Id,
+                        existingUrl = existing.Url
                     });
                 }
 
                 var url = new TrainingUrl
                 {
+                    BotId = dto.BotId,
                     BotTemplateId = dto.BotTemplateId,
                     TemplateTrainingSessionId = dto.TemplateTrainingSessionId,
                     UserId = dto.UserId,
                     Url = dto.Url,
                     ContentHash = contentHash,
                     Status = "pending",
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    Indexed = 0
                 };
 
                 _context.TrainingUrls.Add(url);
                 await _context.SaveChangesAsync();
+
+                // Llamar al servicio de vectorización
+                try 
+                {
+                    using (var httpClient = new HttpClient())
+                    {
+                        var response = await httpClient.GetAsync($"http://localhost:8000/process_urls?bot_id={dto.BotId}");
+                        
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var error = await response.Content.ReadAsStringAsync();
+                            Console.WriteLine($"❌ Error al llamar al servicio de vectorización de URLs: {error}");
+                            
+                            // No consideramos esto un error fatal, la URL se procesará más tarde
+                            Console.WriteLine("ℹ️ La URL se procesará en un intento posterior");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"✅ URL enviada a vectorización para el bot {dto.BotId}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"❌ Error al contactar el servicio de vectorización: {ex.Message}");
+                    // No consideramos esto un error fatal
+                    Console.WriteLine("ℹ️ La URL se procesará en un intento posterior");
+                }
 
                 return CreatedAtAction(nameof(GetAll), new { id = url.Id }, new TrainingUrlResponseDto
                 {

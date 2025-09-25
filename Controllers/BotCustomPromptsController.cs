@@ -23,6 +23,7 @@ namespace Voia.Api.Controllers
                 .Select(p => new BotCustomPromptResponseDto
                 {
                     Id = p.Id,
+                    BotId = p.BotId,
                     Role = p.Role,
                     Content = p.Content,
                     BotTemplateId = p.BotTemplateId,
@@ -46,6 +47,7 @@ namespace Voia.Api.Controllers
             var dto = new BotCustomPromptResponseDto
             {
                 Id = p.Id,
+                BotId = p.BotId,
                 Role = p.Role,
                 Content = p.Content,
                 BotTemplateId = p.BotTemplateId,
@@ -60,13 +62,22 @@ namespace Voia.Api.Controllers
         [HttpPost]
         public async Task<ActionResult<BotCustomPromptResponseDto>> Create(BotCustomPromptCreateDto dto)
         {
-            // Validación de existencia del template
-            var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
-            if (!templateExists)
-                return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+            // Validación de existencia del bot
+            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
+            if (!botExists)
+                return BadRequest($"El Bot con ID {dto.BotId} no existe.");
+
+            // Validación de existencia del template si se proporciona
+            if (dto.BotTemplateId.HasValue)
+            {
+                var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
+                if (!templateExists)
+                    return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+            }
 
             var prompt = new BotCustomPrompt
             {
+                BotId = dto.BotId,
                 Role = dto.Role,
                 Content = dto.Content,
                 BotTemplateId = dto.BotTemplateId,
@@ -81,6 +92,7 @@ namespace Voia.Api.Controllers
             var response = new BotCustomPromptResponseDto
             {
                 Id = prompt.Id,
+                BotId = prompt.BotId,
                 Role = prompt.Role,
                 Content = prompt.Content,
                 BotTemplateId = prompt.BotTemplateId,
@@ -99,9 +111,12 @@ namespace Voia.Api.Controllers
             if (prompt == null)
                 return NotFound();
 
-            var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
-            if (!templateExists)
-                return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+            if (dto.BotTemplateId.HasValue)
+            {
+                var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
+                if (!templateExists)
+                    return BadRequest($"El BotTemplate con ID {dto.BotTemplateId} no existe.");
+            }
 
             prompt.Role = dto.Role;
             prompt.Content = dto.Content;

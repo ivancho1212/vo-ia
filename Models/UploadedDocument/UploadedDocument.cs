@@ -10,6 +10,14 @@ namespace Voia.Api.Models
         [Key]
         public int Id { get; set; }
 
+        [Required]
+        [Column("bot_id")]
+        public int BotId { get; set; }
+
+        [ForeignKey("BotId")]
+        public Bot Bot { get; set; }
+
+        [Required]
         [Column("bot_template_id")]
         public int BotTemplateId { get; set; }
 
@@ -41,12 +49,6 @@ namespace Voia.Api.Models
 
         [Column("indexed")]
         public bool? Indexed { get; set; } = false;
-
-        [Column("bot_id")]
-        public int? BotId { get; set; }
-
-        [ForeignKey("BotId")]
-        public Bot? Bot { get; set; }
 
         [Column("content_hash")]
         public string? ContentHash { get; set; }
