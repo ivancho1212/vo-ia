@@ -313,6 +313,19 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { Message = "Error interno al crear el bot." });
             }
         }
+        [HttpPatch("{id}/style")]
+        public async Task<IActionResult> UpdateBotStyle(int id, [FromBody] UpdateBotStyleSimpleDto dto)
+        {
+            var bot = await _context.Bots.FindAsync(id);
+            if (bot == null) return NotFound(new { Message = "Bot not found" });
+
+            bot.StyleId = dto.StyleId;
+            bot.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(bot);
+        }
+
 
         /// <summary>
         /// Actualiza la información de un bot existente.
@@ -365,6 +378,84 @@ namespace Voia.Api.Controllers
 
             await _context.SaveChangesAsync();
             return Ok(new { Message = "Bot disabled (soft deleted)" });
+        }
+
+        /// <summary>
+        /// Elimina un bot y todos sus datos asociados de forma permanente (hard delete).
+        /// </summary>
+        /// <param name="id">ID del bot a eliminar.</param>
+        /// <returns>Mensaje de confirmación.</returns>
+        /// <response code="200">Bot eliminado permanentemente.</response>
+        /// <response code="404">Si el bot no se encuentra.</response>
+        /// <response code="500">Si ocurre un error durante la eliminación.</response>
+        [HttpDelete("{id}/force")]
+        public async Task<IActionResult> ForceDeleteBot(int id)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var bot = await _context.Bots.FindAsync(id);
+                if (bot == null)
+                {
+                    // Si el bot no existe, el estado deseado (sin bot) ya se cumple.
+                    return Ok(new { Message = "Bot no encontrado, se considera eliminado." });
+                }
+
+                // 1. Eliminar entidades relacionadas indirectamente (KnowledgeChunks)
+                var documentIds = await _context.UploadedDocuments
+                    .Where(d => d.BotId == id)
+                    .Select(d => d.Id)
+                    .ToListAsync();
+
+                if (documentIds.Any())
+                {
+                    var knowledgeChunks = await _context.KnowledgeChunks
+                        .Where(kc => documentIds.Contains(kc.UploadedDocumentId))
+                        .ToListAsync();
+                    if (knowledgeChunks.Any()) _context.KnowledgeChunks.RemoveRange(knowledgeChunks);
+                }
+
+                // 2. Eliminar entidades directamente relacionadas con el Bot
+                var conversations = await _context.Conversations.Where(c => c.BotId == id).ToListAsync();
+                if (conversations.Any()) _context.Conversations.RemoveRange(conversations);
+
+                var trainingSessions = await _context.BotTrainingSessions.Where(ts => ts.BotId == id).ToListAsync();
+                if (trainingSessions.Any()) _context.BotTrainingSessions.RemoveRange(trainingSessions);
+
+                var customPrompts = await _context.BotCustomPrompts.Where(cp => cp.BotId == id).ToListAsync();
+                if (customPrompts.Any()) _context.BotCustomPrompts.RemoveRange(customPrompts);
+
+                var uploadedDocuments = await _context.UploadedDocuments.Where(ud => ud.BotId == id).ToListAsync();
+                if (uploadedDocuments.Any()) _context.UploadedDocuments.RemoveRange(uploadedDocuments);
+
+                var trainingUrls = await _context.TrainingUrls.Where(tu => tu.BotId == id).ToListAsync();
+                if (trainingUrls.Any()) _context.TrainingUrls.RemoveRange(trainingUrls);
+
+                var customTexts = await _context.TrainingCustomTexts.Where(ct => ct.BotId == id).ToListAsync();
+                if (customTexts.Any()) _context.TrainingCustomTexts.RemoveRange(customTexts);
+
+                // (Añadir aquí cualquier otra entidad directamente relacionada que deba ser eliminada)
+
+                // 3. Eliminar el Bot principal
+                _context.Bots.Remove(bot);
+
+                // 4. Guardar todos los cambios en la base de datos
+                await _context.SaveChangesAsync();
+
+                // 5. Llamar a la API de FastAPI para eliminar la colección de vectores en Qdrant
+                await _fastApiService.DeleteVectorCollectionAsync(id);
+
+                // 6. Confirmar la transacción
+                await transaction.CommitAsync();
+
+                return Ok(new { Message = "Bot y todos sus datos asociados han sido eliminados permanentemente." });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                Console.Error.WriteLine($"[ERROR] ForceDeleteBot para el Bot ID {id} falló: {ex.ToString()}");
+                return StatusCode(500, new { Message = "Ocurrió un error interno durante la eliminación forzada del bot.", Details = ex.Message });
+            }
         }
 
         /// <summary>

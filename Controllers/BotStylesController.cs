@@ -141,6 +141,17 @@ namespace Voia.Api.Controllers
                 _context.BotStyles.Add(style);
                 await _context.SaveChangesAsync();
 
+                // ✅ Si viene un BotId, asociar el estilo al bot
+                if (dto.BotId.HasValue)
+                {
+                    var bot = await _context.Bots.FindAsync(dto.BotId.Value);
+                    if (bot != null)
+                    {
+                        bot.StyleId = style.Id;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
                 return Ok(style);
             }
             catch (Exception ex)
@@ -148,6 +159,7 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
             }
         }
+
 
         /// <summary>
         /// Elimina un estilo de bot.

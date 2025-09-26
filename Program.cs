@@ -14,7 +14,7 @@ using Voia.Api.Services.IAProviders;
 using Voia.Api.Services.Chat;
 using Api.Services;
 using Voia.Api.Services.Mocks;
-
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,6 +74,8 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles; // 👈 agrega esto
+        options.JsonSerializerOptions.WriteIndented = true; // opcional (para que salga más legible)
     });
 
 builder.Services.AddSignalR(options =>

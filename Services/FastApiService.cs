@@ -35,6 +35,38 @@ namespace Voia.Api.Services
         }
 
         // 🔗 Método genérico para llamadas GET
+        public async Task DeleteVectorCollectionAsync(int botId)
+        {
+            await DeleteAsync($"/delete_collection?bot_id={botId}");
+        }
+
+        private async Task DeleteAsync(string endpoint)
+        {
+            try
+            {
+                var fullUrl = new Uri(new Uri(_baseUrl), endpoint);
+                Console.WriteLine($"[FASTAPI] ⏩ Llamando a DELETE {fullUrl}");
+                var response = await _httpClient.DeleteAsync(fullUrl);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[FASTAPI] ✔️ Eliminación exitosa: {content}");
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[FASTAPI] ❌ Error en la eliminación: {error}");
+                    // No lanzamos excepción para no interrumpir el rollback si la colección ya no existía.
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[FASTAPI] 🔥 Error crítico en DELETE: {ex.Message}");
+                // No relanzar para asegurar que el resto del rollback continúe.
+            }
+        }
+
         private async Task GetAsync(string endpoint)
         {
             try

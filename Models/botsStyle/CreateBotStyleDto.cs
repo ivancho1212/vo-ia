@@ -1,7 +1,9 @@
 public class CreateBotStyleDto
 {
     public int? UserId { get; set; }
-    public string? Name { get; set; } // ← Nuevo
+    public int? BotId { get; set; } // ✅ Solo para asociar después del insert
+
+    public string? Name { get; set; }
     public int? StyleTemplateId { get; set; }
     public string Theme { get; set; } = "light";
     public string PrimaryColor { get; set; } = "#000000";
@@ -14,6 +16,4 @@ public class CreateBotStyleDto
     public string? Title { get; set; }
     public bool AllowImageUpload { get; set; } = true;
     public bool AllowFileUpload { get; set; } = true;
-
-
 }
