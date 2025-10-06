@@ -17,6 +17,7 @@ using Api.Services;
 using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
+using Voia.Api.Models.Users;
 
 namespace Voia.Api.Hubs
 {
@@ -235,88 +236,126 @@ namespace Voia.Api.Hubs
 
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
-            string botAnswer = "Lo siento, no pude generar una respuesta en este momento."; // Declaración e inicialización
-
-            // Validación de usuario
-            if (!_context.PublicUsers.Any(u => u.Id == request.UserId))
+            try
             {
-                await Clients.Caller.SendAsync("ReceiveMessage", new
+                _logger.LogInformation($"🔍 [SendMessage] Iniciando - ConversationId: {conversationId}, BotId: {request.BotId}, UserId: {request.UserId}, Question: {request.Question}");
+                
+                string botAnswer = "Lo siento, no pude generar una respuesta en este momento.";
+
+                // 1. Obtener la conversación existente
+                var conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+                if (conversation == null)
                 {
-                    conversationId,
-                    from = "bot",
-                    text = "⚠️ Error: usuario no válido.",
-                    status = "error",
-                    tempId = request.TempId
-                });
-                return;
-            }
+                    _logger.LogError($"❌ [SendMessage] Conversación {conversationId} no encontrada");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: conversación no encontrada.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
 
-            // 🔴 SOLUCIÓN: Asegurar que el cliente esté en el grupo de la conversación.
-            // Esto es idempotente y soluciona el problema de estado transitorio del Hub.
-            await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
+                _logger.LogInformation($"✅ [SendMessage] Conversación encontrada - PublicUserId: {conversation.PublicUserId}, UserId: {conversation.UserId}");
 
-            // Obtener mensaje al que se responde
-            string? repliedText = null;
-            if (request.ReplyToMessageId.HasValue)
-            {
-                repliedText = await _context.Messages
-                    .Where(m => m.Id == request.ReplyToMessageId.Value)
-                    .Select(m => m.MessageText)
-                    .FirstOrDefaultAsync();
-            }
+                // 2. Validar que el bot coincida
+                if (conversation.BotId != request.BotId)
+                {
+                    _logger.LogError($"❌ [SendMessage] BotId no coincide - Esperado: {conversation.BotId}, Recibido: {request.BotId}");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: bot no coincide con la conversación.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
 
-            // Buscar o crear conversación
-            var conversation = await _context.Conversations
-                .Where(c => c.UserId == request.UserId && c.BotId == request.BotId)
-                .OrderByDescending(c => c.CreatedAt)
-                .FirstOrDefaultAsync();
+                // 3. Asegurar que el cliente esté en el grupo de la conversación
+                await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
 
-            if (conversation == null)
-            {
-                conversation = new Conversation
+                // 4. Obtener mensaje al que se responde (si aplica)
+                string? repliedText = null;
+                if (request.ReplyToMessageId.HasValue)
+                {
+                    repliedText = await _context.Messages
+                        .Where(m => m.Id == request.ReplyToMessageId.Value)
+                        .Select(m => m.MessageText)
+                        .FirstOrDefaultAsync();
+                }
+
+                // 5. Determinar el PublicUserId apropiado para el mensaje
+                int? messagePublicUserId = null;
+                
+                if (conversation.PublicUserId.HasValue)
+                {
+                    // Es una conversación de widget anónimo
+                    messagePublicUserId = conversation.PublicUserId.Value;
+                    _logger.LogInformation($"🔍 [SendMessage] Usando PublicUserId para mensaje: {messagePublicUserId}");
+                }
+                else if (request.UserId.HasValue)
+                {
+                    // Es una conversación de usuario autenticado
+                    messagePublicUserId = request.UserId.Value;
+                    _logger.LogInformation($"🔍 [SendMessage] Usando UserId para mensaje: {messagePublicUserId}");
+                }
+                else
+                {
+                    _logger.LogError($"❌ [SendMessage] No se pudo determinar el usuario para el mensaje");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: no se pudo identificar el usuario.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
+
+                // 6. Guardar mensaje del usuario
+                var userMessage = new Message
                 {
                     BotId = request.BotId,
-                    UserId = request.UserId,
-                    Title = "Primera interacción",
+                    UserId = conversation.PublicUserId.HasValue ? null : request.UserId, // Solo para usuarios autenticados
+                    PublicUserId = conversation.PublicUserId, // Para usuarios anónimos de widget
+                    ConversationId = conversation.Id,
+                    Sender = "user",
+                    MessageText = request.Question ?? string.Empty,
+                    Source = "widget",
                     CreatedAt = DateTime.UtcNow,
-                    Status = "activa"
+                    ReplyToMessageId = request.ReplyToMessageId
                 };
-                _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync();
-                // Notificar al grupo admin sobre la nueva conversación
-                await Clients.Group("admin").SendAsync("NewConversation", new
+                _context.Messages.Add(userMessage);
+                await _context.SaveChangesAsync(); // Guardar para obtener el ID del mensaje
+
+                _logger.LogInformation($"✅ [SendMessage] Mensaje de usuario guardado - PublicUserId: {messagePublicUserId}");
+
+                // Enviar mensaje del usuario al grupo para mostrarlo en el chat
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
-                    id = conversation.Id,
-                    alias = $"Sesión {conversation.Id}", // O la lógica de alias que tengas
-                    lastMessage = request.Question,
-                    updatedAt = conversation.UpdatedAt,
-                    status = conversation.Status,
-                    blocked = conversation.Blocked, // Asumiendo que Blocked es una propiedad
-                    isWithAI = conversation.IsWithAI // Added IsWithAI
+                    conversationId,
+                    from = "user",
+                    text = request.Question ?? string.Empty,
+                    timestamp = userMessage.CreatedAt,
+                    id = userMessage.Id,
+                    tempId = request.TempId
                 });
-                await Clients.Group("admin").SendAsync("Heartbeat", conversation.Id);
-            }
 
-            // Guardar mensaje del usuario
-            var userMessage = new Message
-            {
-                BotId = request.BotId,
-                PublicUserId = request.UserId,
-                ConversationId = conversation.Id,
-                Sender = "user",
-                MessageText = request.Question ?? string.Empty,
-                Source = "widget",
-                CreatedAt = DateTime.UtcNow,
-                ReplyToMessageId = request.ReplyToMessageId
-            };
-            _context.Messages.Add(userMessage);
+                _logger.LogInformation($"📤 [SendMessage] Mensaje de usuario enviado al grupo: {conversationId}");
 
-            // Contar tokens de usuario
-            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request.Question))
-            {
-                _context.TokenUsageLogs.Add(new TokenUsageLog
+                // 7. Contar tokens de usuario (solo para usuarios autenticados)
+                if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request.Question) && request.UserId.HasValue)
                 {
-                    UserId = request.UserId,
+                    _context.TokenUsageLogs.Add(new TokenUsageLog
+                    {
+                    UserId = request.UserId.Value, // Solo para usuarios autenticados
                     BotId = request.BotId,
                     TokensUsed = _tokenCounter.CountTokens(request.Question),
                     UsageDate = DateTime.UtcNow
@@ -351,7 +390,7 @@ namespace Voia.Api.Hubs
             {
                 string clarificationQuestion = await _aiProviderService.GetBotResponseAsync(
                     request.BotId,
-                    request.UserId,
+                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
                     captureResult.AiClarificationPrompt,
                     currentCapturedFields
                 );
@@ -372,7 +411,7 @@ namespace Voia.Api.Hubs
             {
                 botAnswer = await _aiProviderService.GetBotResponseAsync(
                     request.BotId,
-                    request.UserId,
+                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
                     captureResult.ConfirmationPrompt,
                     currentCapturedFields
                 );
@@ -465,7 +504,7 @@ namespace Voia.Api.Hubs
 
                 string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
                     request.BotId,
-                    request.UserId,
+                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
                     request.Question ?? "",
                     currentCapturedFields // ✅ FIX: Usamos la lista que ya fue actualizada por el servicio de captura.
                 );
@@ -473,7 +512,7 @@ namespace Voia.Api.Hubs
                 // 3️⃣ Llamar al AI provider con el prompt final que contiene todo el contexto.
                 botAnswer = await _aiProviderService.GetBotResponseAsync(
                     request.BotId,
-                    request.UserId,
+                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
                     finalPrompt, // Pasamos el JSON completo
                     currentCapturedFields // ✅ FIX: Pasamos la lista actualizada.
                 ) ?? "Lo siento, no pude generar una respuesta en este momento.";
@@ -559,7 +598,8 @@ namespace Voia.Api.Hubs
             var botMessage = new Message
             {
                 BotId = request.BotId,
-                UserId = request.UserId,
+                UserId = conversation.PublicUserId.HasValue ? null : request.UserId, // Solo para usuarios autenticados
+                PublicUserId = conversation.PublicUserId, // Para usuarios anónimos de widget
                 ConversationId = conversation.Id,
                 Sender = "bot",
                 MessageText = displayText, // ✅ Guardar el texto limpio
@@ -568,12 +608,12 @@ namespace Voia.Api.Hubs
             };
             _context.Messages.Add(botMessage);
 
-            // Contar tokens de la respuesta
-            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer))
+            // Contar tokens de la respuesta (solo para usuarios autenticados)
+            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer) && request.UserId.HasValue)
             {
                 _context.TokenUsageLogs.Add(new TokenUsageLog
                 {
-                    UserId = request.UserId,
+                    UserId = request.UserId.Value, // Solo para usuarios autenticados
                     BotId = request.BotId,
                     TokensUsed = _tokenCounter.CountTokens(botAnswer),
                     UsageDate = DateTime.UtcNow
@@ -594,8 +634,26 @@ namespace Voia.Api.Hubs
                 timestamp = botMessage.CreatedAt,
                 id = botMessage.Id
             });
+
             await StopTyping(conversationId, "bot");
+
+            _logger.LogInformation($"✅ [SendMessage] Mensaje completado para conversación {conversationId}");
         }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"❌ [SendMessage] Error general en conversación {conversationId}: {ex.Message}");
+            _logger.LogError($"❌ [SendMessage] Stack trace: {ex.StackTrace}");
+            
+            await Clients.Caller.SendAsync("ReceiveMessage", new
+            {
+                conversationId,
+                from = "bot",
+                text = "⚠️ Error interno del servidor. Inténtalo más tarde.",
+                status = "error",
+                tempId = request.TempId
+            });
+        }
+    }
 
         public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null, string? replyToText = null)
         {

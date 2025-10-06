@@ -1,8 +1,8 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query; // Add this line
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Voia.Api.Data;
@@ -15,6 +15,7 @@ using Voia.Api.Services.Chat;
 using Api.Services;
 using Voia.Api.Services.Mocks;
 using System.Text.Json.Serialization;
+using Voia.Api.Models.BotIntegrations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,9 +26,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection")),
-        mySqlOptions => mySqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery) // ✅ Aquí dentro
+        mySqlOptions => mySqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)
     )
-    .EnableSensitiveDataLogging() // ⚠️ Solo en desarrollo
+    .EnableSensitiveDataLogging()
     .LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information)
 );
 
@@ -57,25 +58,40 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(
-        "AllowFrontend",
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:3000")
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        }
-    );
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5500",
+                "http://localhost:5500",
+                "https://voia-client.lat"
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .WithExposedHeaders("X-Widget-Token");
+    });
+
+    // Poltica especfica para widgets - permitir todos los orgenes por ahora
+    // TODO: Implementar validacin de dominios ms adelante con un servicio apropiado
+    options.AddPolicy("AllowWidgets", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
 });
+
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles; // 👈 agrega esto
-        options.JsonSerializerOptions.WriteIndented = true; // opcional (para que salga más legible)
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.WriteIndented = true;
     });
 
 builder.Services.AddSignalR(options =>
@@ -95,7 +111,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "Voia API",
         Version = "v1",
-        Description = "API para la gestión de usuarios, roles, permisos y chat.",
+        Description = "API para la gestin de usuarios, roles, permisos y chat.",
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -128,18 +144,19 @@ builder.Services.AddSwaggerGen(c =>
     c.IncludeXmlComments(xmlPath);
 });
 
-// Servicios de la aplicación
+// Servicios de la aplicacin
 builder.Services.AddHttpClient<FastApiService>();
 
 builder.Services.AddScoped<IAiProviderService, MockAiProviderService>();
 builder.Services.AddScoped<IChatFileService, ChatFileService>();
 builder.Services.AddScoped<IAClientFactory>();
 builder.Services.AddScoped<BotDataCaptureService>();
-builder.Services.AddScoped<DataExtractionService>(); // ✅ FIX: Registrar el nuevo servicio
+builder.Services.AddScoped<DataExtractionService>();
 
 builder.Services.AddScoped<TextExtractionService>();
 builder.Services.AddScoped<TextChunkingService>();
 builder.Services.AddSingleton<TokenCounterService>();
+builder.Services.AddScoped<JwtService>();
 
 // HttpClients para proveedores de IA
 builder.Services.AddHttpClient<OpenAIClient>();
@@ -173,26 +190,41 @@ builder.Services.AddHttpClient<GeminiClient>()
 // Registro de PromptBuilderService con HttpClient
 builder.Services.AddHttpClient<PromptBuilderService>();
 
-// 👇 INICIO: Configuración del HttpClient para ChatHub
+// Configuracin del HttpClient para ChatHub
 // Esto es necesario para que ChatHub pueda hacer llamadas a otros endpoints de la misma API.
 builder.Services.AddHttpClient<ChatHub>(client =>
 {
-    // Asigna la dirección base del servidor. En un entorno de producción,
-    // esta URL debería venir de appsettings.json.
+    // Asigna la direccin base del servidor. En un entorno de produccin,
+    // esta URL debera venir de appsettings.json.
     // Para desarrollo, asumimos que la API corre en el mismo host y puerto.
-    client.BaseAddress = new Uri("http://localhost:5006"); // <-- AJUSTA EL PUERTO SI ES DIFERENTE
+    client.BaseAddress = new Uri("http://localhost:5006");
 });
-// 👆 FIN: Configuración del HttpClient para ChatHub
 
 // Vector search service
-builder.Services.AddHttpClient<VectorSearchService>();
+builder.Services.AddHttpClient<VectorSearchService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5); // Timeout más corto para evitar bloqueos
+});
 
-// FIN CONFIGURACIÓN DE SERVICIOS
+// FIN CONFIGURACIN DE SERVICIOS
 
 var app = builder.Build();
 
-app.UseCors("AllowFrontend");
-app.UseStaticFiles();
+// Configure static files
+app.UseStaticFiles(); // For wwwroot folder
+
+// Configure static files for uploads
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "Uploads")),
+    RequestPath = "/uploads"
+});
+
+app.UseRouting();
+
+// CORS debe ir DESPUS de UseRouting pero ANTES de UseAuthentication
+app.UseCors("AllowFrontend"); // Default para el dashboard
 
 app.UseAuthentication();
 app.UseAuthorization();

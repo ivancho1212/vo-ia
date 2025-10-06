@@ -1,0 +1,48 @@
+// widget.js - Script embebido que carga directamente el ChatWidget
+(function () {
+  const scriptTag = document.currentScript;
+  const botId = scriptTag.getAttribute("data-bot");
+  const token = scriptTag.getAttribute("data-token");
+
+  if (!botId) {
+    console.error("❌ El atributo data-bot es requerido para el widget.");
+    return;
+  }
+
+  if (!token) {
+    console.error("❌ El atributo data-token es requerido para el widget.");
+    return;
+  }
+
+  function initWidget() {
+    // Crear iframe que carga directamente el ChatWidget (que ya tiene su propio ícono flotante)
+    const iframe = document.createElement("iframe");
+      iframe.src = `http://localhost:3000/widget-frame?bot=${botId}&token=${token}`;
+    iframe.style.cssText = `
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 100vw;
+      height: 100vh;
+      border: none;
+      z-index: 9999;
+      background: transparent;
+      pointer-events: none;
+    `;
+    iframe.setAttribute('allowtransparency', 'true');
+    
+    iframe.onload = function() {
+      this.style.pointerEvents = "auto";
+    };
+
+    document.body.appendChild(iframe);
+  }
+
+  // Esperar a que el DOM esté listo
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWidget);
+  } else {
+    // DOM ya está listo
+    initWidget();
+  }
+})();

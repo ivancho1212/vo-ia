@@ -7,11 +7,13 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
+using Voia.Api.Attributes;
 
 namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [BotTokenAuthorize]
     public class MessagesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

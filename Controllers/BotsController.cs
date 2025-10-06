@@ -3,11 +3,14 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
 using System.Security.Claims;
+using Voia.Api.Models.Bots;
+using Voia.Api.Attributes;
 using Voia.Api.Models.Bots;
 using Voia.Api.Models.BotTrainingSession;
 using Voia.Api.Services;
@@ -478,6 +481,63 @@ namespace Voia.Api.Controllers
 
             return Ok(bot);
         }
+        [HttpGet("{id}/widget-settings")]
+        [AllowAnonymous] // Permitir acceso sin autenticación
+        [EnableCors("AllowWidgets")] // 🔧 CORS para widgets
+        // Validación manual de token en el código, no con atributo
+        public async Task<ActionResult<WidgetSettingsDto>> GetWidgetSettings(int id, [FromQuery] string token)
+        {
+            try
+            {
+                var bot = await _context.Bots
+                    .Include(b => b.Style)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                if (bot == null)
+                    return NotFound(new { Message = "Bot not found" });
+
+                // Verificar que el token corresponde a una integración válida
+                var integration = await _context.BotIntegrations
+                    .FirstOrDefaultAsync(bi => bi.BotId == id && bi.ApiTokenHash == token);
+
+                if (integration == null)
+                    return Unauthorized(new { Message = "Invalid token for this bot" });
+
+                // Convertir el estilo del bot a configuración del widget (todos los campos)
+                var style = bot.Style;
+                var settings = new WidgetSettingsDto
+                {
+                    Styles = new StyleSettings
+                    {
+                        LauncherBackground = style?.PrimaryColor ?? "#000000",
+                        HeaderBackground = style?.PrimaryColor ?? "#000000",
+                        HeaderText = "#FFFFFF",
+                        UserMessageBackground = style?.SecondaryColor ?? "#0084ff",
+                        UserMessageText = "#FFFFFF",
+                        ResponseMessageBackground = "#f4f7f9",
+                        ResponseMessageText = "#000000",
+                        Title = style?.Title ?? bot.Name ?? "Asistente Virtual",
+                        Subtitle = "Powered by Voia",
+                        AvatarUrl = style?.AvatarUrl,
+                        Position = style?.Position ?? "bottom-right",
+                        FontFamily = style?.FontFamily ?? "Arial",
+                        Theme = style?.Theme ?? "light",
+                        CustomCss = style?.CustomCss,
+                        HeaderBackgroundColor = style?.HeaderBackgroundColor,
+                        AllowImageUpload = style?.AllowImageUpload ?? true,
+                        AllowFileUpload = style?.AllowFileUpload ?? true
+                    },
+                    WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
+                };
+
+                return Ok(settings);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "Error interno al obtener la configuración del widget", Details = ex.Message });
+            }
+        }
+
         [HttpGet("{id}/context")]
         public async Task<ActionResult<object>> GetBotContext(int id, string query = "")
         {

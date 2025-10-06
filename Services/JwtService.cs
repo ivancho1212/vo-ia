@@ -50,5 +50,28 @@ namespace Voia.Api.Services
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        public string GenerateWidgetToken(int botId, string allowedDomain)
+        {
+            var claims = new[]
+            {
+                new Claim("botId", botId.ToString()),
+                new Claim("allowedDomain", allowedDomain)
+            };
+
+            var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
+            var credentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: _config["Jwt:Issuer"],
+                audience: _config["Jwt:Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddYears(1),
+                signingCredentials: credentials
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
     }
 }

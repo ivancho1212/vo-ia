@@ -8,10 +8,11 @@ using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Data;
 using Microsoft.AspNetCore.Authorization;
+using Voia.Api.Attributes;
 
 namespace Voia.Api.Controllers
 {
-    // [Authorize(Roles = "Admin,User")]
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class BotStylesController : ControllerBase
@@ -82,32 +83,55 @@ namespace Voia.Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateStyle(int id, [FromBody] UpdateBotStyleDto dto)
         {
-            var style = await _context.BotStyles.FindAsync(id);
-
-            if (style == null)
+            try
             {
-                return NotFound(new { message = "Style not found" });
+                var style = await _context.BotStyles.FindAsync(id);
+
+                if (style == null)
+                {
+                    return NotFound(new { message = "Style not found" });
+                }
+
+                // Validaciones adicionales
+                if (string.IsNullOrEmpty(dto.Theme))
+                    dto.Theme = "light";
+                if (string.IsNullOrEmpty(dto.PrimaryColor))
+                    dto.PrimaryColor = "#000000";
+                if (string.IsNullOrEmpty(dto.SecondaryColor))
+                    dto.SecondaryColor = "#ffffff";
+                if (string.IsNullOrEmpty(dto.FontFamily))
+                    dto.FontFamily = "Arial";
+                if (string.IsNullOrEmpty(dto.Position))
+                    dto.Position = "bottom-right";
+
+                style.UserId = dto.UserId;
+                style.Name = dto.Name;
+                style.StyleTemplateId = dto.StyleTemplateId;
+                style.Theme = dto.Theme;
+                style.PrimaryColor = dto.PrimaryColor;
+                style.SecondaryColor = dto.SecondaryColor;
+                style.HeaderBackgroundColor = dto.HeaderBackgroundColor;
+                style.FontFamily = dto.FontFamily;
+                style.AvatarUrl = dto.AvatarUrl ?? "";
+                style.Position = dto.Position;
+                style.CustomCss = dto.CustomCss ?? "";
+                style.Title = dto.Title;
+                style.AllowImageUpload = dto.AllowImageUpload;
+                style.AllowFileUpload = dto.AllowFileUpload;
+                style.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(style);
             }
-
-            style.UserId = dto.UserId;
-            style.Name = dto.Name;
-            style.StyleTemplateId = dto.StyleTemplateId;
-            style.Theme = dto.Theme;
-            style.PrimaryColor = dto.PrimaryColor;
-            style.SecondaryColor = dto.SecondaryColor;
-            style.HeaderBackgroundColor = dto.HeaderBackgroundColor;
-            style.FontFamily = dto.FontFamily;
-            style.AvatarUrl = dto.AvatarUrl;
-            style.Position = dto.Position;
-            style.CustomCss = dto.CustomCss;
-            style.Title = dto.Title; // ✅ Nuevo campo
-            style.AllowImageUpload = dto.AllowImageUpload; // ✅ Nuevo campo
-            style.AllowFileUpload = dto.AllowFileUpload;   // ✅ Nuevo campo
-            style.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(style);
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { 
+                    message = ex.Message, 
+                    stackTrace = ex.StackTrace,
+                    innerException = ex.InnerException?.Message 
+                });
+            }
         }
 
 
@@ -178,6 +202,52 @@ namespace Voia.Api.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Style deleted successfully" });
+        }
+
+        /// <summary>
+        /// Obtiene el estilo de un bot para widgets (sin autenticación)
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("widget/{botId}")]
+        public async Task<ActionResult<object>> GetStyleForWidget(int botId)
+        {
+            try
+            {
+                var bot = await _context.Bots
+                    .Include(b => b.Style)
+                    .FirstOrDefaultAsync(b => b.Id == botId);
+
+                if (bot?.Style == null)
+                {
+                    return NotFound(new { message = "Bot or style not found" });
+                }
+
+                var response = new
+                {
+                    styles = new
+                    {
+                        name = bot.Style.Title ?? bot.Name ?? "Asistente Virtual",
+                        primaryColor = bot.Style.PrimaryColor ?? "#000000",
+                        secondaryColor = bot.Style.SecondaryColor ?? "#ffffff",
+                        headerBackgroundColor = bot.Style.HeaderBackgroundColor ?? "#000000",
+                        position = bot.Style.Position ?? "bottom-right",
+                        fontFamily = bot.Style.FontFamily ?? "Arial",
+                        avatarUrl = bot.Style.AvatarUrl ?? "",
+                        isEmojiAvatar = !string.IsNullOrEmpty(bot.Style.AvatarUrl) && 
+                                       System.Text.RegularExpressions.Regex.IsMatch(bot.Style.AvatarUrl, @"\p{So}|\p{Cn}"),
+                        allowImageUpload = bot.Style.AllowImageUpload,
+                        allowFileUpload = bot.Style.AllowFileUpload,
+                        theme = bot.Style.Theme ?? "light",
+                        title = bot.Style.Title ?? bot.Name ?? "Asistente Virtual"
+                    }
+                };
+
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
         }
     }
 }

@@ -13,12 +13,16 @@ using System.Linq;
 using Voia.Api.Services;
 using Voia.Api.Services.Chat;
 using Voia.Api.Services.Interfaces;
+using Voia.Api.Attributes;
+using Voia.Api.Models.Users;
+using Voia.Api.Models;
 
 
 namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [BotTokenAuthorize]
     public class ConversationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -69,50 +73,148 @@ namespace Voia.Api.Controllers
         }
 
         [HttpPost("get-or-create")]
+        [AllowAnonymous]
         public async Task<IActionResult> CreateOrGetConversation([FromBody] CreateConversationDto dto)
         {
-            if (dto.UserId <= 0 || dto.BotId <= 0)
-                return BadRequest("UserId y BotId son requeridos.");
-
-            var conversation = await _context.Conversations
-                .FirstOrDefaultAsync(c => c.UserId == dto.UserId && c.BotId == dto.BotId);
-
-            if (conversation == null)
+            try
             {
-                conversation = new Conversation
+                // Para usuarios anónimos del widget, usar botId del DTO directamente
+                // (en lugar de validar con token por compatibilidad temporal)
+                var validatedBotId = dto.BotId;
+
+                // Verificar que el bot existe
+                var botExists = await _context.Bots.AnyAsync(b => b.Id == validatedBotId);
+                if (!botExists)
                 {
-                    UserId = dto.UserId,
-                    BotId = dto.BotId,
-                    Title = "Chat con bot",
-                    CreatedAt = DateTime.UtcNow,
-                    Status = "active",
-                    IsWithAI = true
-                };
+                    return BadRequest("Bot no encontrado.");
+                }
 
-                _context.Conversations.Add(conversation);
-                await _context.SaveChangesAsync();
-
-                var conversationDto = new
+                // Para widgets, manejar usuarios públicos
+                int? effectiveUserId = null;
+                int? effectivePublicUserId = null;
+                
+                if (!dto.UserId.HasValue || dto.UserId <= 0)
                 {
-                    id = conversation.Id,
-                    alias = $"Sesión {conversation.Id}",
-                    lastMessage = "",
-                    updatedAt = conversation.UpdatedAt,
-                    status = conversation.Status,
-                    blocked = conversation.Blocked,
-                    isWithAI = conversation.IsWithAI,
-                    unreadCount = 0
-                };
+                    // Para usuarios del widget, buscar o crear en public_users
+                    var request = HttpContext.Request;
+                    var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
+                    var userAgent = request.Headers.UserAgent.ToString();
+                    
+                    var publicUser = await _context.PublicUsers.FirstOrDefaultAsync(pu => 
+                        pu.IpAddress == ipAddress && pu.BotId == dto.BotId);
+                    
+                    if (publicUser == null)
+                    {
+                        publicUser = new PublicUser
+                        {
+                            IpAddress = ipAddress,
+                            UserAgent = userAgent,
+                            Country = "Unknown",
+                            City = "Unknown",
+                            BotId = dto.BotId,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        _context.PublicUsers.Add(publicUser);
+                        await _context.SaveChangesAsync();
+                    }
+                    
+                    effectivePublicUserId = publicUser.Id;
+                    
+                    // Para usuarios públicos del widget, necesitamos un userId dummy válido para el FK
+                    // Buscar cualquier usuario existente para usar como referencia del FK
+                    var existingUser = await _context.Users.Select(u => new { u.Id }).FirstOrDefaultAsync();
+                    
+                    if (existingUser == null)
+                    {
+                        // Si no hay usuarios, crear uno básico
+                        var firstRole = await _context.Roles.FirstOrDefaultAsync();
+                        if (firstRole == null)
+                        {
+                            // Crear role default si no existe ninguno
+                            firstRole = new Role { Name = "Widget System" };
+                            _context.Roles.Add(firstRole);
+                            await _context.SaveChangesAsync();
+                        }
+                        
+                        var systemUser = new User
+                        {
+                            Name = "Sistema Widget",
+                            Email = "system@widget.local",
+                            Password = "no-password",
+                            Phone = "",
+                            DocumentNumber = "",
+                            DocumentPhotoUrl = "",
+                            RoleId = firstRole.Id,
+                            IsVerified = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _context.Users.Add(systemUser);
+                        await _context.SaveChangesAsync();
+                        effectiveUserId = systemUser.Id;
+                    }
+                    else
+                    {
+                        effectiveUserId = existingUser.Id;
+                    }
+                }
+                else
+                {
+                    effectiveUserId = dto.UserId.Value;
+                }
 
-                await _hubContext.Clients.Group("admin").SendAsync("NewConversation", conversationDto);
+                // Buscar conversación existente - para widgets usar PublicUserId, para usuarios regulares usar UserId
+                var conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => 
+                        (effectivePublicUserId.HasValue ? c.PublicUserId == effectivePublicUserId : c.UserId == effectiveUserId) && 
+                        c.BotId == dto.BotId);
+
+                if (conversation == null)
+                {
+                    conversation = new Conversation
+                    {
+                        UserId = effectiveUserId.Value,
+                        PublicUserId = effectivePublicUserId,
+                        BotId = dto.BotId,
+                        Title = effectivePublicUserId.HasValue ? "Widget Chat" : "Chat con bot",
+                        CreatedAt = DateTime.UtcNow,
+                        Status = "active",
+                        IsWithAI = true
+                    };
+
+                    _context.Conversations.Add(conversation);
+                    await _context.SaveChangesAsync();
+
+                    var conversationDto = new
+                    {
+                        id = conversation.Id,
+                        alias = $"Sesión {conversation.Id}",
+                        lastMessage = "",
+                        updatedAt = conversation.UpdatedAt,
+                        status = conversation.Status,
+                        blocked = conversation.Blocked,
+                        isWithAI = conversation.IsWithAI,
+                        unreadCount = 0
+                    };
+
+                    // Solo notificar a admin si no es un usuario del widget
+                    if (!effectivePublicUserId.HasValue)
+                    {
+                        await _hubContext.Clients.Group("admin").SendAsync("NewConversation", conversationDto);
+                    }
+                }
+
+                return Ok(new { conversationId = conversation.Id });
             }
-
-            return Ok(new { conversationId = conversation.Id });
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, stackTrace = ex.StackTrace });
+            }
         }
 
         public class CreateConversationDto
         {
-            public int UserId { get; set; }
+            public int? UserId { get; set; }
             public int BotId { get; set; }
         }
 
@@ -202,7 +304,7 @@ namespace Voia.Api.Controllers
         ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
         : (m.Bot != null ? m.Bot.Name : "Bot"),
                     FromAvatarUrl = m.Sender == "user"
-        ? (m.User != null ? m.User.AvatarUrl : null)
+        ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
         : "https://yourdomain.com/images/default-bot-avatar.png",
                     ReplyToMessageId = m.ReplyToMessageId
                 })
@@ -222,7 +324,7 @@ namespace Voia.Api.Controllers
                     FromRole = "user",
                     FromId = f.UserId,
                     FromName = f.User != null ? f.User.Name : "Usuario",
-                    FromAvatarUrl = f.User != null ? f.User.AvatarUrl : null,
+                    FromAvatarUrl = f.User != null ? (f.User.AvatarUrl ?? "") : "",
                     FileUrl = f.FilePath,
                     FileName = f.FileName,
                     FileType = f.FileType
@@ -269,7 +371,7 @@ namespace Voia.Api.Controllers
 
             var result = conversations.Select(c =>
             {
-                string finalContent = c.LastEvent?.RawContent;
+                string? finalContent = c.LastEvent?.RawContent;
                 if (c.LastEvent?.Type == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
                 {
                     try
@@ -278,11 +380,11 @@ namespace Voia.Api.Controllers
                         {
                             if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
                             {
-                                finalContent = userQuestion.GetString();
+                                finalContent = userQuestion.GetString() ?? finalContent;
                             }
                             else if (doc.RootElement.TryGetProperty("Content", out var content))
                             {
-                                finalContent = content.GetString();
+                                finalContent = content.GetString() ?? finalContent;
                             }
                         }
                     }

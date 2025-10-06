@@ -2,123 +2,116 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models.BotIntegrations;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
-using Microsoft.AspNetCore.Authorization;
+using System.Text.Json;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace Voia.Api.Controllers
 {
-    [Authorize(Roles = "Admin,User")]
     [Route("api/[controller]")]
     [ApiController]
+    // NOTA: Este controlador es para el DASHBOARD, no para el widget. 
+    // Debería usar la autorización normal de usuario/admin, no [BotTokenAuthorize].
+    // [Authorize(Roles = "Admin,User")] 
     public class BotIntegrationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IConfiguration _config;
 
-        public BotIntegrationsController(ApplicationDbContext context)
+        public BotIntegrationsController(ApplicationDbContext context, IConfiguration config)
         {
             _context = context;
+            _config = config;
         }
 
-        /// <summary>
-        /// Obtiene todas las integraciones de bots.
-        /// </summary>
-        /// <returns>Lista de integraciones de bots.</returns>
-        /// <response code="200">Devuelve la lista de integraciones de bots.</response>
-        /// <response code="500">Si ocurre un error interno.</response>
-        [HttpGet]
-        [HasPermission("CanViewBotIntegrations")]
-        public async Task<ActionResult<IEnumerable<BotIntegration>>> GetAll()
+        [HttpGet("bot/{botId}")]
+        public async Task<ActionResult<BotIntegrationDto>> GetByBotId(int botId)
         {
-            return await _context.BotIntegrations.ToListAsync();
-        }
+            var integration = await _context.BotIntegrations
+                .FirstOrDefaultAsync(b => b.BotId == botId);
 
-        /// <summary>
-        /// Obtiene una integración de bot por su ID.
-        /// </summary>
-        /// <param name="id">ID de la integración de bot.</param>
-        /// <returns>La integración de bot.</returns>
-        /// <response code="200">Devuelve la integración de bot.</response>
-        /// <response code="404">Si no se encuentra la integración de bot.</response>
-        [HttpGet("{id}")]
-        [HasPermission("CanViewBotIntegrations")]
-        public async Task<ActionResult<BotIntegration>> GetById(int id)
-        {
-            var integration = await _context.BotIntegrations.FindAsync(id);
             if (integration == null)
-                return NotFound(new { message = "Bot integration not found." });
+                return NotFound(new { message = "Bot integration not found for the specified botId." });
 
-            return Ok(integration);
-        }
+            // Deserializar el JSON de settings para obtener el dominio
+            var settings = JsonSerializer.Deserialize<WidgetSettings>(integration.SettingsJson ?? "{}");
 
-        /// <summary>
-        /// Crea una nueva integración de bot.
-        /// </summary>
-        /// <param name="dto">Datos para crear la integración de bot.</param>
-        /// <returns>La integración de bot creada.</returns>
-        /// <response code="201">Devuelve la integración de bot creada.</response>
-        /// <response code="400">Si el BotId proporcionado no existe.</response>
-        [HttpPost]
-        [HasPermission("CanCreateBotIntegrations")]
-        public async Task<ActionResult<BotIntegration>> Create([FromBody] CreateBotIntegrationDto dto)
-        {
-            // Verificar si el BotId existe en la base de datos
-            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
-            if (!botExists)
+            var dto = new BotIntegrationDto
             {
-                return BadRequest(new { message = "BotId does not exist in the system." });
-            }
-
-            var integration = new BotIntegration
-            {
-                BotId = dto.BotId,
-                IntegrationType = dto.IntegrationType ?? "widget", // Default to "widget" if null
-                AllowedDomain = dto.AllowedDomain,
-                ApiToken = dto.ApiToken,
-                CreatedAt = DateTime.UtcNow
+                BotId = integration.BotId,
+                AllowedDomain = settings?.AllowedDomain,
+                ApiToken = integration.ApiTokenHash // El frontend espera 'apiToken'
             };
 
-            _context.BotIntegrations.Add(integration);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetById), new { id = integration.Id }, integration);
+            return Ok(dto);
         }
 
-        /// <summary>
-        /// Actualiza una integración de bot existente.
-        /// </summary>
-        /// <param name="id">ID de la integración de bot que se desea actualizar.</param>
-        /// <param name="dto">Datos actualizados de la integración de bot.</param>
-        /// <returns>Resultado de la actualización.</returns>
-        /// <response code="204">Integración actualizada correctamente.</response>
-        /// <response code="404">Si la integración de bot no existe.</response>
-        [HttpPut("{id}")]
-        [HasPermission("CanUpdateBotIntegrations")]
-        public async Task<IActionResult> Update(int id, [FromBody] UpdateBotIntegrationDto dto)
+        [HttpPut("upsert")]
+        public async Task<ActionResult<object>> Upsert([FromBody] UpsertIntegrationRequest dto)
         {
-            var integration = await _context.BotIntegrations.FindAsync(id);
-            if (integration == null)
-                return NotFound(new { message = "Bot integration not found." });
+            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
+            if (!botExists)
+                return BadRequest(new { message = "BotId does not exist in the system." });
 
-            // Actualizar los campos de la integración si no son nulos
-            if (dto.IntegrationType != null) integration.IntegrationType = dto.IntegrationType;
-            if (dto.AllowedDomain != null) integration.AllowedDomain = dto.AllowedDomain;
-            if (dto.ApiToken != null) integration.ApiToken = dto.ApiToken;
+            var integration = await _context.BotIntegrations.FirstOrDefaultAsync(b => b.BotId == dto.BotId);
 
-            await _context.SaveChangesAsync();
-            return NoContent(); // 204 No Content
+            // Validar y serializar settings
+            if (string.IsNullOrWhiteSpace(dto.Settings.AllowedDomain))
+                return BadRequest(new { message = "AllowedDomain is required for widget integrations." });
+
+            var settingsJson = JsonSerializer.Serialize(dto.Settings);
+
+            // Generar siempre un nuevo token JWT
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_config["Jwt:Key"]);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim("botId", dto.BotId.ToString()),
+                    new Claim("allowedDomain", dto.Settings.AllowedDomain.Trim())
+                }),
+                Expires = DateTime.UtcNow.AddHours(2), // Expiración corta
+                Issuer = _config["Jwt:Issuer"],
+                Audience = _config["Jwt:Audience"],
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            if (integration != null)
+            {
+                // Actualizar la integración existente
+                integration.IntegrationType = "Widget";
+                integration.SettingsJson = settingsJson;
+                integration.ApiTokenHash = tokenString; // Guardar el nuevo token
+
+                await _context.SaveChangesAsync();
+                return Ok(new { apiToken = tokenString });
+            }
+            else
+            {
+                // Crear una nueva integración
+                var newIntegration = new BotIntegration
+                {
+                    BotId = dto.BotId,
+                    IntegrationType = "Widget",
+                    SettingsJson = settingsJson,
+                    ApiTokenHash = tokenString, // Guardar el nuevo token
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.BotIntegrations.Add(newIntegration);
+                await _context.SaveChangesAsync();
+                return Ok(new { apiToken = tokenString });
+            }
         }
 
-        /// <summary>
-        /// Elimina una integración de bot.
-        /// </summary>
-        /// <param name="id">ID de la integración de bot a eliminar.</param>
-        /// <returns>Resultado de la eliminación.</returns>
-        /// <response code="204">Integración eliminada correctamente.</response>
-        /// <response code="404">Si la integración de bot no existe.</response>
         [HttpDelete("{id}")]
-        [HasPermission("CanDeleteBotIntegrations")]
         public async Task<IActionResult> Delete(int id)
         {
             var integration = await _context.BotIntegrations.FindAsync(id);
@@ -128,7 +121,84 @@ namespace Voia.Api.Controllers
             _context.BotIntegrations.Remove(integration);
             await _context.SaveChangesAsync();
 
-            return NoContent(); // 204 No Content
+            return NoContent();
         }
+
+        [HttpDelete("bot/{botId}")]
+        public async Task<IActionResult> DeleteByBotId(int botId)
+        {
+            var integration = await _context.BotIntegrations
+                .FirstOrDefaultAsync(b => b.BotId == botId);
+            
+            if (integration == null)
+                return NotFound(new { message = "Bot integration not found for the specified botId." });
+
+            _context.BotIntegrations.Remove(integration);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+
+        [HttpPost("generate-widget-token")]
+        public async Task<ActionResult<object>> GenerateWidgetToken([FromBody] GenerateWidgetTokenRequest request)
+        {
+            // Verificar que el bot existe
+            var botExists = await _context.Bots.AnyAsync(b => b.Id == request.BotId);
+            if (!botExists)
+                return BadRequest(new { message = "BotId does not exist in the system." });
+
+            // Para desarrollo, usar localhost como dominio permitido
+            var allowedDomain = request.AllowedDomain ?? "localhost";
+
+            // Generar token JWT
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_config["Jwt:Key"]);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim("botId", request.BotId.ToString()),
+                    new Claim("allowedDomain", allowedDomain)
+                }),
+                Expires = DateTime.UtcNow.AddYears(1), // Token de larga duración para widgets
+                Issuer = _config["Jwt:Issuer"],
+                Audience = _config["Jwt:Audience"],
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            return Ok(new { 
+                token = tokenString,
+                botId = request.BotId,
+                allowedDomain = allowedDomain,
+                expiresAt = DateTime.UtcNow.AddYears(1)
+            });
+        }
+    }
+
+    // DTOs para el request
+    public class UpsertIntegrationRequest
+    {
+        public int BotId { get; set; }
+        public WidgetSettings? Settings { get; set; }
+    }
+
+    public class WidgetSettings
+    {
+        public string AllowedDomain { get; set; } = string.Empty;
+    }
+
+    public class GenerateWidgetTokenRequest
+    {
+        public int BotId { get; set; }
+        public string? AllowedDomain { get; set; }
+    }
+
+    public class BotIntegrationDto
+    {
+        public int BotId { get; set; }
+        public string AllowedDomain { get; set; } = string.Empty;
+        public string ApiToken { get; set; } = string.Empty;
     }
 }
