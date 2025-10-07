@@ -17,8 +17,9 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotIaProviderResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewBotIaProviders")]
+    public async Task<ActionResult<IEnumerable<BotIaProviderResponseDto>>> GetAll()
         {
             var items = await _context.BotIaProviders
                 .Select(x => new BotIaProviderResponseDto
@@ -36,8 +37,9 @@ namespace Voia.Api.Controllers
             return Ok(items);
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<BotIaProviderResponseDto>> GetById(int id)
+    [HttpGet("{id}")]
+    [HasPermission("CanViewBotIaProviders")]
+    public async Task<ActionResult<BotIaProviderResponseDto>> GetById(int id)
         {
             var item = await _context.BotIaProviders.FindAsync(id);
 
@@ -56,8 +58,9 @@ namespace Voia.Api.Controllers
             };
         }
 
-        [HttpPost]
-        public async Task<ActionResult<BotIaProviderResponseDto>> Create(BotIaProviderCreateDto dto)
+    [HttpPost]
+    [HasPermission("CanEditBotIaProviders")]
+    public async Task<ActionResult<BotIaProviderResponseDto>> Create(BotIaProviderCreateDto dto)
         {
             if (_context.BotIaProviders.Any(x => x.Name == dto.Name))
                 return Conflict("Ya existe un proveedor IA con este nombre.");

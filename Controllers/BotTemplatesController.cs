@@ -19,7 +19,8 @@ namespace Voia.Api.Controllers
 
         // GET: api/bottemplates
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotTemplateResponseDto>>> GetAll()
+    [HasPermission("CanViewBotTemplates")]
+    public async Task<ActionResult<IEnumerable<BotTemplateResponseDto>>> GetAll()
         {
             var templates = await _context
                 .BotTemplates.Select(t => new BotTemplateResponseDto
@@ -38,7 +39,8 @@ namespace Voia.Api.Controllers
         }
         // GET: /api/bottemplates/available
         [HttpGet("available")]
-        public async Task<ActionResult<IEnumerable<BotTemplate>>> GetAvailableTemplates()
+    [HasPermission("CanViewBotTemplates")]
+    public async Task<ActionResult<IEnumerable<BotTemplate>>> GetAvailableTemplates()
         {
             var templates = await _context.BotTemplates
                 .Include(t => t.Prompts)
@@ -63,7 +65,8 @@ namespace Voia.Api.Controllers
         // GET: api/bottemplates/{id}
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<BotTemplateResponseDto>> GetById(int id)
+    [HasPermission("CanViewBotTemplates")]
+    public async Task<ActionResult<BotTemplateResponseDto>> GetById(int id)
         {
             try
             {

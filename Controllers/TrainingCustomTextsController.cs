@@ -22,8 +22,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todos los textos personalizados de entrenamiento.
         /// </summary>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewTrainingCustomTexts")]
+    public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetAll()
         {
             var texts = await _context.TrainingCustomTexts
                 .Select(t => new TrainingCustomTextResponseDto
@@ -48,8 +49,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene los textos personalizados por sesión de entrenamiento.
         /// </summary>
-        [HttpGet("session/{sessionId}")]
-        public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetBySession(int sessionId)
+    [HttpGet("session/{sessionId}")]
+    [HasPermission("CanViewTrainingCustomTexts")]
+    public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetBySession(int sessionId)
         {
             var texts = await _context.TrainingCustomTexts
                 .Where(t => t.TemplateTrainingSessionId == sessionId)
@@ -72,8 +74,9 @@ namespace Voia.Api.Controllers
             return Ok(texts);
         }
 
-        [HttpGet("by-template/{templateId}")]
-        public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetByTemplate(int templateId)
+    [HttpGet("by-template/{templateId}")]
+    [HasPermission("CanViewTrainingCustomTexts")]
+    public async Task<ActionResult<IEnumerable<TrainingCustomTextResponseDto>>> GetByTemplate(int templateId)
         {
             var texts = await _context.TrainingCustomTexts
                         .Where(x => x.BotTemplateId == templateId)

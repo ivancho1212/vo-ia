@@ -42,8 +42,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve una lista de bots.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        // [HasPermission("CanViewBots")]
-        public async Task<ActionResult<IEnumerable<Bot>>> GetBots([FromQuery] bool? isActive, [FromQuery] string? name = null)
+    [HasPermission("CanViewBots")]
+    public async Task<ActionResult<IEnumerable<Bot>>> GetBots([FromQuery] bool? isActive, [FromQuery] string? name = null)
         {
             try
             {
@@ -77,7 +77,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("me")]
-        public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
+    [HasPermission("CanViewBots")]
+    public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
         {
             try
             {
@@ -104,7 +105,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve los bots encontrados.</response>
         /// <response code="404">Si no se encuentran bots.</response>
         [HttpGet("byUser/{userId}")]
-        public async Task<ActionResult<IEnumerable<Bot>>> GetBotsByUserId(int userId)
+    [HasPermission("CanViewBots")]
+    public async Task<ActionResult<IEnumerable<Bot>>> GetBotsByUserId(int userId)
         {
             try
             {
@@ -133,9 +135,9 @@ namespace Voia.Api.Controllers
         /// <returns>El bot creado.</returns>
         /// <response code="201">Devuelve el bot creado.</response>
         /// <response code="400">Si los datos son inválidos o el bot ya existe.</response>
-        // [HasPermission("CanCreateBot")]
-        [HttpPost]
-        public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
+    [HasPermission("CanEditBots")]
+    [HttpPost]
+    public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
         {
             Console.WriteLine("[DEBUG] CreateBot iniciado.");
 
@@ -339,8 +341,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve el bot actualizado.</response>
         /// <response code="404">Si el bot no se encuentra.</response>
         [HttpPut("{id}")]
-        // [HasPermission("CanUpdateBot")]
-        public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
+    [HasPermission("CanEditBots")]
+    public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -369,8 +371,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Bot desactivado correctamente.</response>
         /// <response code="404">Si el bot no se encuentra.</response>
         [HttpDelete("{id}")]
-        //  [HasPermission("CanDeleteBot")]
-        public async Task<IActionResult> DeleteBot(int id)
+    [HasPermission("CanDeleteBots")]
+    public async Task<IActionResult> DeleteBot(int id)
         {
             var bot = await _context.Bots.FindAsync(id);
             if (bot == null)

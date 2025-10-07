@@ -17,8 +17,9 @@ namespace Voia.Api.Controllers
             _vectorSearchService = vectorSearchService;
         }
 
-        [HttpPost("search")]
-        public async Task<IActionResult> Search([FromBody] SearchRequestDto request)
+    [HttpPost("search")]
+    [HasPermission("CanSearchVectors")]
+    public async Task<IActionResult> Search([FromBody] SearchRequestDto request)
         {
             if (request == null)
                 return BadRequest("La solicitud no puede ser nula.");

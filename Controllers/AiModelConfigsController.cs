@@ -28,7 +28,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la lista de configuraciones del modelo AI.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetAll()
+    [HasPermission("CanViewAiModelConfigs")]
+    public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetAll()
         {
             var configs = await _context
                 .AiModelConfigs.Include(c => c.IaProvider) // <- esto es clave
@@ -56,7 +57,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la lista de modelos relacionados al proveedor.</response>
         /// <response code="404">Si no se encuentran modelos para ese proveedor.</response>
         [HttpGet("by-provider/{providerId}")]
-        public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetByProviderId(int providerId)
+    [HasPermission("CanViewAiModelConfigs")]
+    public async Task<ActionResult<IEnumerable<AiModelConfigDto>>> GetByProviderId(int providerId)
         {
             var models = await _context
                 .AiModelConfigs
@@ -88,8 +90,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve la configuración del modelo AI.</response>
         /// <response code="404">Si no se encuentra la configuración del modelo AI.</response>
         [HttpGet("{id}")]
-        //[HasPermission("CanViewAiModelConfigs")]
-        public async Task<ActionResult<AiModelConfig>> GetById(int id)
+    [HasPermission("CanViewAiModelConfigs")]
+    public async Task<ActionResult<AiModelConfig>> GetById(int id)
         {
             var config = await _context.AiModelConfigs.FindAsync(id);
             if (config == null)
@@ -106,7 +108,8 @@ namespace Voia.Api.Controllers
         /// <response code="201">Devuelve la configuración del modelo AI creada.</response>
         /// <response code="400">Si el BotId proporcionado no existe.</response>
         [HttpPost]
-        public async Task<ActionResult<AiModelConfig>> Create([FromBody] AiModelConfigCreateDto dto)
+    [HasPermission("CanEditAiModelConfigs")]
+    public async Task<ActionResult<AiModelConfig>> Create([FromBody] AiModelConfigCreateDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -142,8 +145,8 @@ namespace Voia.Api.Controllers
         /// <response code="204">Configuración actualizada correctamente.</response>
         /// <response code="404">Si la configuración del modelo AI no existe.</response>
         [HttpPut("{id}")]
-        //[HasPermission("CanUpdateAiModelConfigs")]
-        public async Task<IActionResult> Update(int id, [FromBody] AiModelConfigUpdateDto dto)
+    [HasPermission("CanEditAiModelConfigs")]
+    public async Task<IActionResult> Update(int id, [FromBody] AiModelConfigUpdateDto dto)
         {
             if (id != dto.Id)
                 return BadRequest(new { message = "ID mismatch." });
@@ -171,8 +174,8 @@ namespace Voia.Api.Controllers
         /// <response code="204">Configuración eliminada correctamente.</response>
         /// <response code="404">Si la configuración del modelo AI no existe.</response>
         [HttpDelete("{id}")]
-        //[HasPermission("CanDeleteAiModelConfigs")]
-        public async Task<IActionResult> Delete(int id)
+    [HasPermission("CanDeleteAiModelConfigs")]
+    public async Task<IActionResult> Delete(int id)
         {
             var config = await _context.AiModelConfigs.FindAsync(id);
             if (config == null)

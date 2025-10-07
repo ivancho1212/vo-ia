@@ -17,9 +17,10 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        // GET: api/ConversationTags/conversation/5
-        [HttpGet("conversation/{conversationId}")]
-        public async Task<ActionResult<IEnumerable<ConversationTagDto>>> GetTagsByConversation(int conversationId)
+    // GET: api/ConversationTags/conversation/5
+    [HttpGet("conversation/{conversationId}")]
+    [HasPermission("CanViewConversationTags")]
+    public async Task<ActionResult<IEnumerable<ConversationTagDto>>> GetTagsByConversation(int conversationId)
         {
             var tags = await _context.ConversationTags
                 .Where(t => t.ConversationId == conversationId)
@@ -38,9 +39,10 @@ namespace Voia.Api.Controllers
             return Ok(tags);
         }
 
-        // POST: api/ConversationTags
-        [HttpPost]
-        public async Task<ActionResult<ConversationTagDto>> CreateTag([FromBody] ConversationTagCreateDto dto)
+    // POST: api/ConversationTags
+    [HttpPost]
+    [HasPermission("CanEditConversationTags")]
+    public async Task<ActionResult<ConversationTagDto>> CreateTag([FromBody] ConversationTagCreateDto dto)
         {
             var tag = new ConversationTag
             {
@@ -76,9 +78,10 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetTagsByConversation), new { conversationId = tag.ConversationId }, resultDto);
         }
 
-        // DELETE: api/ConversationTags/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteTag(int id)
+    // DELETE: api/ConversationTags/5
+    [HttpDelete("{id}")]
+    [HasPermission("CanDeleteConversationTags")]
+    public async Task<IActionResult> DeleteTag(int id)
         {
             var tag = await _context.ConversationTags.FindAsync(id);
             if (tag == null)

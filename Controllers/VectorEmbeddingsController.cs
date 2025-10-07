@@ -20,8 +20,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todos los vector embeddings (sin incluir el vector en sí).
         /// </summary>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<VectorEmbeddingResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewVectorEmbeddings")]
+    public async Task<ActionResult<IEnumerable<VectorEmbeddingResponseDto>>> GetAll()
         {
             var embeddings = await _context.VectorEmbeddings
                 .Select(e => new VectorEmbeddingResponseDto
@@ -38,8 +39,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene un vector embedding completo, incluyendo el vector binario.
         /// </summary>
-        [HttpGet("{id}")]
-        public async Task<ActionResult<VectorEmbedding>> GetById(int id)
+    [HttpGet("{id}")]
+    [HasPermission("CanViewVectorEmbeddings")]
+    public async Task<ActionResult<VectorEmbedding>> GetById(int id)
         {
             var embedding = await _context.VectorEmbeddings.FindAsync(id);
             if (embedding == null) return NotFound();
@@ -49,8 +51,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Genera embeddings para una plantilla específica.
         /// </summary>
-        [HttpPost("generate-for-template")]
-        public async Task<IActionResult> GenerateForTemplate([FromBody] GenerateVectorDto dto)
+    [HttpPost("generate-for-template")]
+    [HasPermission("CanEditVectorEmbeddings")]
+    public async Task<IActionResult> GenerateForTemplate([FromBody] GenerateVectorDto dto)
         {
             if (dto.BotTemplateId <= 0)
                 return BadRequest("El ID de plantilla es inválido.");
@@ -66,8 +69,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Crea un nuevo vector embedding.
         /// </summary>
-        [HttpPost]
-        public async Task<ActionResult<VectorEmbeddingResponseDto>> Create(VectorEmbeddingCreateDto dto)
+    [HttpPost]
+    [HasPermission("CanEditVectorEmbeddings")]
+    public async Task<ActionResult<VectorEmbeddingResponseDto>> Create(VectorEmbeddingCreateDto dto)
         {
             var embedding = new VectorEmbedding
             {

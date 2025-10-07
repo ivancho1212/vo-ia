@@ -19,7 +19,8 @@ namespace Voia.Api.Controllers
 
         // GET: api/botdatacapturefields
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotDataCaptureFieldResponseDto>>> GetAll()
+    [HasPermission("CanViewBotDataCaptureFields")]
+    public async Task<ActionResult<IEnumerable<BotDataCaptureFieldResponseDto>>> GetAll()
         {
             var fields = await _context.BotDataCaptureFields
                 .Select(f => new BotDataCaptureFieldResponseDto
@@ -39,7 +40,8 @@ namespace Voia.Api.Controllers
 
         // GET: api/botdatacapturefields/{id}
         [HttpGet("{id}")]
-        public async Task<ActionResult<BotDataCaptureFieldResponseDto>> GetById(int id)
+    [HasPermission("CanViewBotDataCaptureFields")]
+    public async Task<ActionResult<BotDataCaptureFieldResponseDto>> GetById(int id)
         {
             var field = await _context.BotDataCaptureFields.FindAsync(id);
 
@@ -59,7 +61,8 @@ namespace Voia.Api.Controllers
         }
         // GET: api/botdatacapturefields/by-bot/23
         [HttpGet("by-bot/{botId}")]
-        public async Task<ActionResult<IEnumerable<BotDataCaptureFieldResponseDto>>> GetByBot(int botId)
+    [HasPermission("CanViewBotDataCaptureFields")]
+    public async Task<ActionResult<IEnumerable<BotDataCaptureFieldResponseDto>>> GetByBot(int botId)
         {
             var fields = await _context.BotDataCaptureFields
                 .Where(f => f.BotId == botId)
@@ -81,7 +84,8 @@ namespace Voia.Api.Controllers
 
         // POST: api/botdatacapturefields
         [HttpPost]
-        public async Task<ActionResult<BotDataCaptureFieldResponseDto>> Create(BotDataCaptureFieldCreateDto dto)
+    [HasPermission("CanEditBotDataCaptureFields")]
+    public async Task<ActionResult<BotDataCaptureFieldResponseDto>> Create(BotDataCaptureFieldCreateDto dto)
         {
             var field = new BotDataCaptureField
             {

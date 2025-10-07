@@ -22,8 +22,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Crea una nueva sesión de entrenamiento para una plantilla.
         /// </summary>
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] TemplateTrainingSession session)
+    [HttpPost]
+    [HasPermission("CanEditTemplateTrainingSessions")]
+    public async Task<IActionResult> Create([FromBody] TemplateTrainingSession session)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -41,8 +42,9 @@ namespace Voia.Api.Controllers
 
             return Ok(session);
         }
-        [HttpPost("with-prompts")]
-        public async Task<IActionResult> CreateWithPrompts([FromBody] TemplateTrainingSessionWithPromptsDto dto)
+    [HttpPost("with-prompts")]
+    [HasPermission("CanEditTemplateTrainingSessions")]
+    public async Task<IActionResult> CreateWithPrompts([FromBody] TemplateTrainingSessionWithPromptsDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);

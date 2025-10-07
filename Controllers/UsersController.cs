@@ -432,10 +432,10 @@ namespace Voia.Api.Controllers
         public async Task<IActionResult> Login(LoginDto loginDto)
         {
             var user = await _context.Users
-                .Include(u => u.Role) // Cargando el rol del usuario
-                .Include(u => u.Subscriptions) // Incluir las suscripciones del usuario
-                                .ThenInclude(s => s.Plan) // Incluir el plan asociado a la suscripción
-                .AsSplitQuery() // Add this line
+                .Include(u => u.Role)
+                .Include(u => u.Subscriptions)
+                    .ThenInclude(s => s.Plan)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
@@ -443,12 +443,24 @@ namespace Voia.Api.Controllers
                 return Unauthorized(new { Message = "Invalid credentials" });
             }
 
+            // Obtener permisos del rol
+            var permissions = await _context.RolePermissions
+                .Where(rp => rp.RoleId == user.RoleId)
+                .Include(rp => rp.Permission)
+                .Select(rp => rp.Permission.Name)
+                .ToListAsync();
+
+            // Protección: Si el usuario no tiene rol o no tiene permisos, denegar acceso
+            if (user.Role == null || permissions == null || permissions.Count == 0)
+            {
+                return Unauthorized(new { Message = "El usuario no tiene un rol válido o no tiene permisos asignados." });
+            }
+
             // Verificar que el usuario tenga al menos una suscripción activa
             var activeSubscription = user.Subscriptions?.FirstOrDefault(s => s.Status == "active");
             if (activeSubscription != null)
             {
-                var plan = activeSubscription.Plan; // Obtener el plan del usuario
-                // Aquí también podrías agregar cualquier validación de plan
+                var plan = activeSubscription.Plan;
             }
 
             var token = _jwtService.GenerateToken(user);
@@ -461,8 +473,9 @@ namespace Voia.Api.Controllers
                     user.Id,
                     user.Name,
                     user.Email,
-                    Role = new { user.Role.Id, user.Role.Name },
-                    Plan = activeSubscription?.Plan != null ? new { activeSubscription.Plan.Id, activeSubscription.Plan.Name } : null // Incluir el plan si existe
+                    Role = user.Role != null ? new { user.Role.Id, user.Role.Name } : null,
+                    Permissions = permissions,
+                    Plan = activeSubscription?.Plan != null ? new { activeSubscription.Plan.Id, activeSubscription.Plan.Name } : null
                 }
             });
         }

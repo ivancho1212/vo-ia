@@ -19,6 +19,7 @@ public class BotTrainingConfigsController : ControllerBase
     /// Obtiene todos los registros de entrenamiento de bots.
     /// </summary>
     [HttpGet]
+    [HasPermission("CanViewBotTrainingConfigs")]
     public async Task<ActionResult<IEnumerable<BotTrainingConfigResponseDto>>> GetAll()
     {
         var configs = await _context.BotTrainingConfigs
@@ -35,6 +36,7 @@ public class BotTrainingConfigsController : ControllerBase
     }
     
     [HttpGet("bot/{botId}/training-data")]
+    [HasPermission("CanViewBotTrainingConfigs")]
     public async Task<ActionResult<IEnumerable<BotTrainingConfigResponseDto>>> GetByBot(int botId)
     {
         var configs = await _context.BotTrainingConfigs
@@ -55,6 +57,7 @@ public class BotTrainingConfigsController : ControllerBase
     /// Obtiene un registro específico por ID.
     /// </summary>
     [HttpGet("{id}")]
+    [HasPermission("CanViewBotTrainingConfigs")]
     public async Task<ActionResult<BotTrainingConfigResponseDto>> GetById(int id)
     {
         var config = await _context.BotTrainingConfigs.FindAsync(id);
@@ -76,6 +79,7 @@ public class BotTrainingConfigsController : ControllerBase
     /// Crea una nueva configuración de entrenamiento para un bot.
     /// </summary>
     [HttpPost]
+    [HasPermission("CanEditBotTrainingConfigs")]
     public async Task<ActionResult<BotTrainingConfigResponseDto>> Create(BotTrainingConfigCreateDto dto)
     {
         var config = new BotTrainingConfig

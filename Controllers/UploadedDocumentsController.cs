@@ -22,8 +22,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todos los documentos subidos.
         /// </summary>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewUploadedDocuments")]
+    public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetAll()
         {
             var documents = await _context.UploadedDocuments
                 .Select(d => new UploadedDocumentResponseDto
@@ -45,8 +46,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene un documento subido por ID.
         /// </summary>
-        [HttpGet("{id}")]
-        public async Task<ActionResult<UploadedDocumentResponseDto>> GetById(int id)
+    [HttpGet("{id}")]
+    [HasPermission("CanViewUploadedDocuments")]
+    public async Task<ActionResult<UploadedDocumentResponseDto>> GetById(int id)
         {
             var document = await _context.UploadedDocuments.FindAsync(id);
             if (document == null) return NotFound();
@@ -68,8 +70,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene documentos por ID de plantilla.
         /// </summary>
-        [HttpGet("by-template/{templateId}")]
-        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
+    [HttpGet("by-template/{templateId}")]
+    [HasPermission("CanViewUploadedDocuments")]
+    public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
         {
             var docs = await _context.UploadedDocuments
                         .Where(x => x.BotTemplateId == templateId)

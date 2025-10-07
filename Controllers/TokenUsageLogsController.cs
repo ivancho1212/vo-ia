@@ -17,8 +17,9 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<TokenUsageLogResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewTokenUsageLogs")]
+    public async Task<ActionResult<IEnumerable<TokenUsageLogResponseDto>>> GetAll()
         {
             var logs = await _context.TokenUsageLogs
                 .Select(x => new TokenUsageLogResponseDto
@@ -34,8 +35,9 @@ namespace Voia.Api.Controllers
             return Ok(logs);
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<TokenUsageLogResponseDto>> GetById(int id)
+    [HttpGet("{id}")]
+    [HasPermission("CanViewTokenUsageLogs")]
+    public async Task<ActionResult<TokenUsageLogResponseDto>> GetById(int id)
         {
             var log = await _context.TokenUsageLogs.FindAsync(id);
 
@@ -52,8 +54,9 @@ namespace Voia.Api.Controllers
             };
         }
 
-        [HttpPost]
-        public async Task<ActionResult<TokenUsageLogResponseDto>> Create(TokenUsageLogCreateDto dto)
+    [HttpPost]
+    [HasPermission("CanEditTokenUsageLogs")]
+    public async Task<ActionResult<TokenUsageLogResponseDto>> Create(TokenUsageLogCreateDto dto)
         {
             var entity = new TokenUsageLog
             {
@@ -78,8 +81,9 @@ namespace Voia.Api.Controllers
             return CreatedAtAction(nameof(GetById), new { id = entity.Id }, response);
         }
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+    [HttpDelete("{id}")]
+    [HasPermission("CanDeleteTokenUsageLogs")]
+    public async Task<IActionResult> Delete(int id)
         {
             var entity = await _context.TokenUsageLogs.FindAsync(id);
 

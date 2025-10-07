@@ -21,8 +21,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todas las URLs de entrenamiento.
         /// </summary>
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewTrainingUrls")]
+    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetAll()
         {
             var urls = await _context.TrainingUrls
                 .Select(t => new TrainingUrlResponseDto
@@ -43,8 +44,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene URLs por sesión de entrenamiento.
         /// </summary>
-        [HttpGet("session/{sessionId}")]
-        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetBySession(int sessionId)
+    [HttpGet("session/{sessionId}")]
+    [HasPermission("CanViewTrainingUrls")]
+    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetBySession(int sessionId)
         {
             var urls = await _context.TrainingUrls
                 .Where(t => t.TemplateTrainingSessionId == sessionId)
@@ -63,8 +65,9 @@ namespace Voia.Api.Controllers
             return Ok(urls);
         }
 
-        [HttpGet("by-template/{templateId}")]
-        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByTemplate(int templateId)
+    [HttpGet("by-template/{templateId}")]
+    [HasPermission("CanViewTrainingUrls")]
+    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByTemplate(int templateId)
         {
             var urls = await _context.TrainingUrls
                         .Where(x => x.BotTemplateId == templateId)

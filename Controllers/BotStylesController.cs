@@ -28,7 +28,8 @@ namespace Voia.Api.Controllers
         /// Obtiene todos los estilos de los bots.
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotStyle>>> GetAllStyles()
+    [HasPermission("CanViewBotStyles")]
+    public async Task<ActionResult<IEnumerable<BotStyle>>> GetAllStyles()
         {
             try
             {
@@ -45,7 +46,8 @@ namespace Voia.Api.Controllers
         /// Obtiene el estilo de un bot por su ID.
         /// </summary>
         [HttpGet("{id}")]
-        public async Task<ActionResult<BotStyle>> GetStyleById(int id)
+    [HasPermission("CanViewBotStyles")]
+    public async Task<ActionResult<BotStyle>> GetStyleById(int id)
         {
             var style = await _context.BotStyles.FindAsync(id);
 
@@ -60,7 +62,8 @@ namespace Voia.Api.Controllers
         /// Obtiene todos los estilos de un usuario específico.
         /// </summary>
         [HttpGet("byUser/{userId}")]
-        public async Task<ActionResult<IEnumerable<BotStyle>>> GetStylesByUser(int userId)
+    [HasPermission("CanViewBotStyles")]
+    public async Task<ActionResult<IEnumerable<BotStyle>>> GetStylesByUser(int userId)
         {
             try
             {
@@ -81,7 +84,8 @@ namespace Voia.Api.Controllers
         /// Actualiza el estilo de un bot existente.
         /// </summary>
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateStyle(int id, [FromBody] UpdateBotStyleDto dto)
+    [HasPermission("CanEditBotStyles")]
+    public async Task<IActionResult> UpdateStyle(int id, [FromBody] UpdateBotStyleDto dto)
         {
             try
             {

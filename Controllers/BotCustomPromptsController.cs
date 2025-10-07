@@ -17,7 +17,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotCustomPromptResponseDto>>> GetAll()
+    [HasPermission("CanViewBotCustomPrompts")]
+    public async Task<ActionResult<IEnumerable<BotCustomPromptResponseDto>>> GetAll()
         {
             var prompts = await _context.BotCustomPrompts
                 .Select(p => new BotCustomPromptResponseDto
@@ -37,7 +38,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<BotCustomPromptResponseDto>> GetById(int id)
+    [HasPermission("CanViewBotCustomPrompts")]
+    public async Task<ActionResult<BotCustomPromptResponseDto>> GetById(int id)
         {
             var p = await _context.BotCustomPrompts.FindAsync(id);
 
@@ -60,7 +62,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<BotCustomPromptResponseDto>> Create(BotCustomPromptCreateDto dto)
+    [HasPermission("CanEditBotCustomPrompts")]
+    public async Task<ActionResult<BotCustomPromptResponseDto>> Create(BotCustomPromptCreateDto dto)
         {
             // Validación de existencia del bot
             var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
@@ -105,7 +108,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, BotCustomPromptUpdateDto dto)
+    [HasPermission("CanEditBotCustomPrompts")]
+    public async Task<IActionResult> Update(int id, BotCustomPromptUpdateDto dto)
         {
             var prompt = await _context.BotCustomPrompts.FindAsync(id);
             if (prompt == null)
@@ -130,7 +134,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+    [HasPermission("CanDeleteBotCustomPrompts")]
+    public async Task<IActionResult> Delete(int id)
         {
             var prompt = await _context.BotCustomPrompts.FindAsync(id);
             if (prompt == null)

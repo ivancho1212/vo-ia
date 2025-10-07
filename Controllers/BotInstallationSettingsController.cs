@@ -17,9 +17,10 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        // GET: api/botinstallationsettings
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotInstallationSettingResponseDto>>> GetAll()
+    // GET: api/botinstallationsettings
+    [HttpGet]
+    [HasPermission("CanViewBotInstallationSettings")]
+    public async Task<ActionResult<IEnumerable<BotInstallationSettingResponseDto>>> GetAll()
         {
             var items = await _context.BotInstallationSettings
                 .Select(x => new BotInstallationSettingResponseDto
@@ -36,9 +37,10 @@ namespace Voia.Api.Controllers
             return Ok(items);
         }
 
-        // GET: api/botinstallationsettings/{id}
-        [HttpGet("{id}")]
-        public async Task<ActionResult<BotInstallationSettingResponseDto>> GetById(int id)
+    // GET: api/botinstallationsettings/{id}
+    [HttpGet("{id}")]
+    [HasPermission("CanViewBotInstallationSettings")]
+    public async Task<ActionResult<BotInstallationSettingResponseDto>> GetById(int id)
         {
             var setting = await _context.BotInstallationSettings.FindAsync(id);
 
@@ -56,9 +58,10 @@ namespace Voia.Api.Controllers
             };
         }
 
-        // POST: api/botinstallationsettings
-        [HttpPost]
-        public async Task<ActionResult<BotInstallationSettingResponseDto>> Create(BotInstallationSettingCreateDto dto)
+    // POST: api/botinstallationsettings
+    [HttpPost]
+    [HasPermission("CanEditBotInstallationSettings")]
+    public async Task<ActionResult<BotInstallationSettingResponseDto>> Create(BotInstallationSettingCreateDto dto)
         {
             var setting = new BotInstallationSetting
             {

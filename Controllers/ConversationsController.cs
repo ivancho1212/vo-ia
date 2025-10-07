@@ -22,7 +22,7 @@ namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [BotTokenAuthorize]
+    [Authorize(Roles = "Admin")]
     public class ConversationsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -50,8 +50,8 @@ namespace Voia.Api.Controllers
         /// Obtiene todas las conversaciones con los datos relacionados de usuario y bot.
         /// </summary>
         [HttpGet]
-        // [HasPermission("CanViewConversations")]
-        public async Task<ActionResult<IEnumerable<Conversation>>> GetConversations()
+    [HasPermission("CanViewConversations")]
+    public async Task<ActionResult<IEnumerable<Conversation>>> GetConversations()
         {
             var conversations = await _context.Conversations
                 .Include(c => c.User)
@@ -233,7 +233,8 @@ namespace Voia.Api.Controllers
         /// Devuelve las conversaciones asociadas a los bots de un usuario específico.
         /// </summary>
         [HttpGet("by-user/{userId}")]
-        public async Task<IActionResult> GetConversationsByUser(int userId, int page = 1, int limit = 10)
+    [HasPermission("CanViewConversations")]
+    public async Task<IActionResult> GetConversationsByUser(int userId, int page = 1, int limit = 10)
         {
             try
             {
@@ -277,7 +278,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("history/{conversationId}")]
-        public async Task<IActionResult> GetConversationHistory(int conversationId)
+    [HasPermission("CanViewConversations")]
+    public async Task<IActionResult> GetConversationHistory(int conversationId)
         {
             var conversation = await _context.Conversations
                 .AsNoTracking()
@@ -350,7 +352,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("with-last-message")]
-        public async Task<IActionResult> GetConversationsWithLastMessage()
+    [HasPermission("CanViewConversations")]
+    public async Task<IActionResult> GetConversationsWithLastMessage()
         {
             var conversations = await _context.Conversations
                 .Include(c => c.Bot) // Make sure Bot is included
@@ -419,8 +422,8 @@ namespace Voia.Api.Controllers
         /// Actualiza el estado de una conversación específica.
         /// </summary>
         [HttpPatch("{id}/status")]
-        // [HasPermission("CanUpdateConversationStatus")]
-        public async Task<IActionResult> UpdateConversationStatus(int id, [FromBody] UpdateStatusDto dto)
+    [HasPermission("CanEditConversations")]
+    public async Task<IActionResult> UpdateConversationStatus(int id, [FromBody] UpdateStatusDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
             {
@@ -444,8 +447,8 @@ namespace Voia.Api.Controllers
         /// Actualiza una conversación existente.
         /// </summary>
         [HttpPut("{id}")]
-        //[HasPermission("CanUpdateConversations")] // Esta anotación no existe, se comenta
-        public async Task<IActionResult> UpdateConversation(int id, [FromBody] Conversation dto)
+    [HasPermission("CanEditConversations")]
+    public async Task<IActionResult> UpdateConversation(int id, [FromBody] Conversation dto)
         {
             var conversation = await _context.Conversations.FindAsync(id);
 
@@ -469,8 +472,8 @@ namespace Voia.Api.Controllers
         /// Elimina una conversación por su ID.
         /// </summary>
         [HttpDelete("{id}")]
-        //[HasPermission("CanDeleteConversations")] // Esta anotación no existe, se comenta
-        public async Task<IActionResult> DeleteConversation(int id)
+    [HasPermission("CanDeleteConversations")]
+    public async Task<IActionResult> DeleteConversation(int id)
         {
             var conversation = await _context.Conversations.FindAsync(id);
             if (conversation == null)

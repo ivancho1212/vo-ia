@@ -28,8 +28,9 @@ namespace Voia.Api.Controllers
             _config = config;
         }
 
-        [HttpGet("bot/{botId}")]
-        public async Task<ActionResult<BotIntegrationDto>> GetByBotId(int botId)
+    [HttpGet("bot/{botId}")]
+    [HasPermission("CanViewBotIntegrations")]
+    public async Task<ActionResult<BotIntegrationDto>> GetByBotId(int botId)
         {
             var integration = await _context.BotIntegrations
                 .FirstOrDefaultAsync(b => b.BotId == botId);
@@ -50,8 +51,9 @@ namespace Voia.Api.Controllers
             return Ok(dto);
         }
 
-        [HttpPut("upsert")]
-        public async Task<ActionResult<object>> Upsert([FromBody] UpsertIntegrationRequest dto)
+    [HttpPut("upsert")]
+    [HasPermission("CanEditBotIntegrations")]
+    public async Task<ActionResult<object>> Upsert([FromBody] UpsertIntegrationRequest dto)
         {
             var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
             if (!botExists)

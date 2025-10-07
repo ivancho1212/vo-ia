@@ -132,32 +132,29 @@ namespace Voia.Api.Data
             // Configuración de la tabla y columnas en snake_case para la tabla 'permissions'
             modelBuilder.Entity<Permission>().ToTable("permissions");
 
-            // Configuración de la tabla y columnas en snake_case para la tabla 'rolepermissions'
+            // Configuración de la tabla y columnas para 'rolepermissions' (camel case)
             modelBuilder.Entity<RolePermission>().ToTable("rolepermissions");
-
             modelBuilder.Entity<RolePermission>().HasKey(rp => new { rp.RoleId, rp.PermissionId });
-
-            modelBuilder
-                .Entity<RolePermission>()
-                .Property(rp => rp.RoleId)
-                .HasColumnName("role_id");
-
-            modelBuilder
-                .Entity<RolePermission>()
-                .Property(rp => rp.PermissionId)
-                .HasColumnName("permission_id");
-
-            modelBuilder
-                .Entity<RolePermission>()
+            modelBuilder.Entity<RolePermission>().Property(rp => rp.RoleId).HasColumnName("RoleId");
+            modelBuilder.Entity<RolePermission>().Property(rp => rp.PermissionId).HasColumnName("PermissionId");
+            modelBuilder.Entity<RolePermission>()
                 .HasOne(rp => rp.Role)
                 .WithMany(r => r.RolePermissions)
                 .HasForeignKey(rp => rp.RoleId);
-
-            modelBuilder
-                .Entity<RolePermission>()
+            modelBuilder.Entity<RolePermission>()
                 .HasOne(rp => rp.Permission)
                 .WithMany(p => p.RolePermissions)
                 .HasForeignKey(rp => rp.PermissionId);
+
+            // Configuración de la relación User - Role (users.role_id -> roles.id)
+            modelBuilder.Entity<User>()
+                .Property(u => u.RoleId)
+                .HasColumnName("role_id");
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Role)
+                .WithMany(r => r.Users)
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Bot>().Property(b => b.UserId).HasColumnName("user_id");
 

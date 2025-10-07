@@ -19,9 +19,10 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Sube un archivo de avatar o imagen de estilo
         /// </summary>
-        [HttpPost("avatar")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UploadAvatar(IFormFile file, string type = "avatar")
+    [HttpPost("avatar")]
+    [Consumes("multipart/form-data")]
+    [HasPermission("CanUploadFiles")]
+    public async Task<IActionResult> UploadAvatar(IFormFile file, string type = "avatar")
         {
             try
             {
@@ -93,8 +94,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Elimina un archivo de upload
         /// </summary>
-        [HttpDelete]
-        public IActionResult DeleteFile([FromBody] DeleteFileRequest request)
+    [HttpDelete]
+    [HasPermission("CanDeleteUploads")]
+    public IActionResult DeleteFile([FromBody] DeleteFileRequest request)
         {
             try
             {

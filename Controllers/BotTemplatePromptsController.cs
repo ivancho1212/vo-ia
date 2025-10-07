@@ -17,8 +17,9 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<BotTemplatePromptResponseDto>>> GetAll()
+    [HttpGet]
+    [HasPermission("CanViewBotTemplatePrompts")]
+    public async Task<ActionResult<IEnumerable<BotTemplatePromptResponseDto>>> GetAll()
         {
             var prompts = await _context.BotTemplatePrompts
                 .Select(p => new BotTemplatePromptResponseDto
@@ -35,8 +36,9 @@ namespace Voia.Api.Controllers
             return Ok(prompts);
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<BotTemplatePromptResponseDto>> GetById(int id)
+    [HttpGet("{id}")]
+    [HasPermission("CanViewBotTemplatePrompts")]
+    public async Task<ActionResult<BotTemplatePromptResponseDto>> GetById(int id)
         {
             var p = await _context.BotTemplatePrompts.FindAsync(id);
 
@@ -53,8 +55,9 @@ namespace Voia.Api.Controllers
             };
         }
 
-        [HttpPost]
-        public async Task<ActionResult<BotTemplatePromptResponseDto>> Create(BotTemplatePromptCreateDto dto)
+    [HttpPost]
+    [HasPermission("CanEditBotTemplatePrompts")]
+    public async Task<ActionResult<BotTemplatePromptResponseDto>> Create(BotTemplatePromptCreateDto dto)
         {
             if (!Enum.TryParse<PromptRole>(dto.Role, out var role))
                 return BadRequest("Invalid role. Must be 'system', 'user', or 'assistant'.");

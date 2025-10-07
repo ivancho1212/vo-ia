@@ -21,6 +21,7 @@ namespace Voia.Api.Controllers
         /// Obtiene todos los knowledge chunks con paginación.
         /// </summary>
         [HttpGet]
+        [HasPermission("CanViewKnowledgeChunks")]
         public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetAll(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
@@ -47,8 +48,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene los knowledge chunks por ID de documento.
         /// </summary>
-        [HttpGet("document/{uploadedDocumentId}")]
-        public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetByDocument(int uploadedDocumentId)
+    [HttpGet("document/{uploadedDocumentId}")]
+    [HasPermission("CanViewKnowledgeChunks")]
+    public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetByDocument(int uploadedDocumentId)
         {
             var chunks = await _context.KnowledgeChunks
                 .Where(k => k.UploadedDocumentId == uploadedDocumentId)
@@ -68,8 +70,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene los knowledge chunks por ID de sesión de entrenamiento.
         /// </summary>
-        [HttpGet("session/{sessionId}")]
-        public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetBySession(int sessionId)
+    [HttpGet("session/{sessionId}")]
+    [HasPermission("CanViewKnowledgeChunks")]
+    public async Task<ActionResult<IEnumerable<KnowledgeChunkResponseDto>>> GetBySession(int sessionId)
         {
             var chunks = await _context.KnowledgeChunks
                 .Where(k => k.TemplateTrainingSessionId == sessionId)
