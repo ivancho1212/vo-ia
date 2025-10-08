@@ -10,6 +10,7 @@ namespace Voia.Api.Models
     [Table("users")]
     public class User
     {
+        public string? Status { get; set; } // "active", "blocked", "inactive"
         public int Id { get; set; }
         public string Name { get; set; }
         public string Email { get; set; }
@@ -19,6 +20,7 @@ namespace Voia.Api.Models
         public int RoleId { get; set; }
 
         public int? DocumentTypeId { get; set; }
+        public DocumentType? DocumentType { get; set; }
         public string Phone { get; set; }
 
         // 🔹 Nuevos campos
@@ -30,6 +32,8 @@ namespace Voia.Api.Models
         public string DocumentPhotoUrl { get; set; }
         public string? AvatarUrl { get; set; }
         public bool IsVerified { get; set; }
+        [Column("is_active")]
+        public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
 

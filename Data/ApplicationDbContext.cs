@@ -24,6 +24,7 @@ namespace Voia.Api.Data
 {
     public class ApplicationDbContext : DbContext
     {
+        public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<Conversation> Conversations { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<Bot> Bots { get; set; }
@@ -78,6 +79,12 @@ namespace Voia.Api.Data
             // Mapeo de la entidad User a la tabla "users"
             modelBuilder.Entity<User>().ToTable("users");
 
+            // Relación User - DocumentType
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.DocumentType)
+                .WithMany()
+                .HasForeignKey(u => u.DocumentTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
             // --- MAPEO CAMPOS User ---
             modelBuilder
                 .Entity<User>()

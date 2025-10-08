@@ -36,10 +36,31 @@ namespace Voia.Api.Controllers
         // GET: api/Users
         [HttpGet]
         [HasPermission("CanViewUsers")]
-        public async Task<IActionResult> GetUsers()
+        public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
         {
-            var users = await _context.Users
-                .Include(u => u.Role) // Incluye la información de Role
+
+            var query = _context.Users
+                .Include(u => u.Role)
+                .Include(u => u.Bots)
+                .Include(u => u.Subscriptions)
+                .Include(u => u.DocumentType)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                query = query.Where(u =>
+                    u.Name.Contains(search) ||
+                    u.Email.Contains(search) ||
+                    u.Phone.Contains(search) ||
+                    u.DocumentNumber.Contains(search)
+                );
+            }
+
+            var total = await query.CountAsync();
+            var users = await query
+                .OrderByDescending(u => u.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             var userDtos = users.Select(user => new GetUserDto
@@ -48,23 +69,54 @@ namespace Voia.Api.Controllers
                 Name = user.Name,
                 Email = user.Email,
                 Phone = user.Phone,
-                Country = user.Country,  // ✅ nuevo
-                City = user.City,        // ✅ nuevo
+                Country = user.Country,
+                City = user.City,
                 Address = user.Address,
                 DocumentNumber = user.DocumentNumber,
                 DocumentPhotoUrl = user.DocumentPhotoUrl,
                 AvatarUrl = user.AvatarUrl,
                 IsVerified = user.IsVerified,
+                IsActive = user.IsActive,
+                Status = string.IsNullOrEmpty(user.Status) ? (user.IsActive ? "active" : "inactive") : user.Status,
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
+                DocumentTypeName = user.DocumentType != null ? user.DocumentType.Name : null,
                 Role = new RoleDto
                 {
                     Id = user.Role.Id,
                     Name = user.Role.Name
-                }
+                },
+                // Plan asociado (última suscripción activa)
+                Plan = user.Subscriptions?.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan != null
+                    ? new PlanDto
+                    {
+                        Id = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Id,
+                        Name = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Name,
+                        Description = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Description,
+                        Price = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Price,
+                        MaxTokens = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.MaxTokens,
+                        BotsLimit = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.BotsLimit
+                    }
+                    : null,
+                // Lista de bots activos
+                Bots = user.Bots?.Where(b => b.IsActive).Select(b => new BotDto
+                {
+                    Id = b.Id,
+                    Name = b.Name,
+                    Description = b.Description
+                }).ToList() ?? new List<BotDto>(),
+                // Cantidad de bots asociados
+                // Puedes agregar un campo BotsCount en el DTO si lo deseas
+                // Tokens consumidos (requiere consulta a TokenUsageLog)
+                // Este campo lo puedes agregar en el DTO si lo necesitas
             }).ToList();
 
-            return Ok(userDtos);
+            return Ok(new {
+                total,
+                page,
+                pageSize,
+                users = userDtos
+            });
         }
         /// <summary>
         /// Obtiene el perfil del usuario autenticado.
@@ -372,14 +424,33 @@ namespace Voia.Api.Controllers
             user.Name = updateUserDto.Name;
             user.Email = updateUserDto.Email;
             user.Phone = updateUserDto.Phone;
-            user.Country = updateUserDto.Country;  // ✅ nuevo
-            user.City = updateUserDto.City;        // ✅ nuevo
+            user.Country = updateUserDto.Country;
+            user.City = updateUserDto.City;
             user.Address = updateUserDto.Address;
             user.DocumentNumber = updateUserDto.DocumentNumber;
             user.DocumentPhotoUrl = updateUserDto.DocumentPhotoUrl;
             user.AvatarUrl = updateUserDto.AvatarUrl;
             user.IsVerified = updateUserDto.IsVerified;
+            user.RoleId = updateUserDto.RoleId;
+            user.DocumentTypeId = updateUserDto.DocumentTypeId;
             user.UpdatedAt = DateTime.UtcNow;
+            // Lógica de status
+            if (!string.IsNullOrEmpty(updateUserDto.Status))
+            {
+                user.Status = updateUserDto.Status;
+                if (updateUserDto.Status == "blocked")
+                {
+                    user.IsActive = false;
+                }
+                else if (updateUserDto.Status == "inactive")
+                {
+                    user.IsActive = false;
+                }
+                else if (updateUserDto.Status == "active")
+                {
+                    user.IsActive = true;
+                }
+            }
 
 
             try
