@@ -133,11 +133,19 @@ namespace Voia.Api.Controllers
             if (existingPlan == null)
                 return NotFound(new { message = "Plan no encontrado." });
 
+
             existingPlan.Name = plan.Name;
             existingPlan.Description = plan.Description;
             existingPlan.Price = plan.Price;
             existingPlan.MaxTokens = plan.MaxTokens;
             existingPlan.BotsLimit = plan.BotsLimit;
+            existingPlan.FileUploadLimit = plan.FileUploadLimit;
+            existingPlan.AiProviders = plan.AiProviders;
+            existingPlan.CustomStyles = plan.CustomStyles;
+            existingPlan.DataCaptureLimit = plan.DataCaptureLimit;
+            existingPlan.AnalyticsDashboard = plan.AnalyticsDashboard;
+            existingPlan.PrioritySupport = plan.PrioritySupport;
+            existingPlan.IntegrationApi = plan.IntegrationApi;
             existingPlan.IsActive = plan.IsActive;
 
             await _context.SaveChangesAsync();
@@ -162,7 +170,7 @@ namespace Voia.Api.Controllers
                 return NotFound(new { message = "Plan no encontrado." });
 
             // ✅ Validación: por ejemplo, verificar si el plan está activo
-            if (plan.IsActive ?? false)
+            if (plan.IsActive)
             {
                 return BadRequest(new { message = "No se puede eliminar un plan activo. Desactívelo primero." });
             }

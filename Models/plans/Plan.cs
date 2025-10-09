@@ -25,7 +25,34 @@ namespace Voia.Api.Models.Plans
         [Column("bots_limit")]
         public int? BotsLimit { get; set; }
 
+        [Column("file_upload_limit")]
+        public int? FileUploadLimit { get; set; }
+
+        [Column("ai_providers", TypeName = "json")]
+        public string? AiProviders { get; set; } // Serializado como JSON
+
+        [Column("custom_styles")]
+        public bool CustomStyles { get; set; }
+
+        [Column("data_capture_limit")]
+        public int? DataCaptureLimit { get; set; }
+
+        [Column("analytics_dashboard")]
+        public bool AnalyticsDashboard { get; set; }
+
+        [Column("priority_support")]
+        public bool PrioritySupport { get; set; }
+
+        [Column("integration_api")]
+        public bool IntegrationApi { get; set; }
+
         [Column("is_active")]
-        public bool? IsActive { get; set; }
+        public bool IsActive { get; set; }
+
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; }
     }
 }

@@ -90,16 +90,16 @@ namespace Voia.Api.Controllers
                     {
                         Id = s.Id,
                         UserId = s.UserId,
-                        UserName = s.User.Name,
-                        UserEmail = s.User.Email,
+                        UserName = s.User.Name ?? string.Empty,
+                        UserEmail = s.User.Email ?? string.Empty,
 
                         PlanId = s.PlanId,
-                        PlanName = s.Plan.Name,
-                        PlanDescription = s.Plan.Description,
+                        PlanName = s.Plan.Name ?? string.Empty,
+                        PlanDescription = s.Plan.Description ?? string.Empty,
                         PlanPrice = s.Plan.Price,
                         PlanMaxTokens = s.Plan.MaxTokens,
-                        PlanBotsLimit = s.Plan.BotsLimit.Value,
-                        PlanIsActive = s.Plan.IsActive.Value,
+                        PlanBotsLimit = s.Plan.BotsLimit ?? 0,
+                        PlanIsActive = s.Plan.IsActive,
 
                         StartedAt = s.StartedAt,
                         ExpiresAt = s.ExpiresAt,
@@ -126,7 +126,9 @@ namespace Voia.Api.Controllers
         [HttpPut("change")]
         public async Task<ActionResult> ChangeSubscription([FromBody] ChangePlanDto dto)
         {
-            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdStr, out var userId))
+                return BadRequest("No se pudo obtener el ID de usuario.");
 
             var existing = await _context.Subscriptions
                 .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active");
