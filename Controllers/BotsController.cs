@@ -34,6 +34,66 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
+        /// Elimina completamente un bot y todos sus datos asociados (rollback total).
+        /// </summary>
+        /// <param name="id">ID del bot a eliminar completamente.</param>
+        /// <returns>Mensaje de confirmación.</returns>
+        [HttpPost("{id}/full-rollback")]
+        [HasPermission("CanEditBots")]
+        public async Task<IActionResult> FullRollbackBot(int id)
+        {
+            // Obtener el ID del usuario autenticado
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                return Unauthorized(new { message = "Usuario no autenticado." });
+
+            // Buscar el bot y validar que pertenezca al usuario
+            var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == id && b.UserId == userId);
+            if (bot == null)
+                return NotFound(new { message = "Bot no encontrado o no autorizado." });
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Eliminar SOLO los documentos asociados a este bot
+                var docs = _context.UploadedDocuments.Where(d => d.BotId == id).ToList();
+                // Si tienes archivos físicos, aquí podrías eliminarlos del disco SOLO si no están asociados a otro bot
+                // foreach (var doc in docs) { /* Eliminar archivo físico si aplica */ }
+                _context.UploadedDocuments.RemoveRange(docs);
+
+                // Eliminar SOLO los textos asociados a este bot
+                var texts = _context.TrainingCustomTexts.Where(t => t.BotId == id).ToList();
+                _context.TrainingCustomTexts.RemoveRange(texts);
+
+                // Eliminar SOLO las urls asociadas a este bot
+                var urls = _context.TrainingUrls.Where(u => u.BotId == id).ToList();
+                _context.TrainingUrls.RemoveRange(urls);
+
+                // Eliminar SOLO las sesiones de entrenamiento de este bot
+                var sessions = _context.BotTrainingSessions.Where(s => s.BotId == id).ToList();
+                _context.BotTrainingSessions.RemoveRange(sessions);
+
+                // Eliminar SOLO los prompts custom de este bot
+                var prompts = _context.BotCustomPrompts.Where(p => p.BotId == id).ToList();
+                _context.BotCustomPrompts.RemoveRange(prompts);
+
+                // Eliminar el bot
+                _context.Bots.Remove(bot);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { success = true, message = "Bot y todos sus datos asociados eliminados completamente.", botId = id });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return StatusCode(500, new { success = false, message = "Error al eliminar completamente el bot.", error = ex.Message });
+            }
+        }
+
+
+        /// <summary>
         /// Obtiene todos los bots filtrados por nombre o estado.
         /// </summary>
         /// <param name="isActive">Filtra por estado activo o no activo.</param>
@@ -42,8 +102,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve una lista de bots.</response>
         /// <response code="500">Si ocurre un error interno.</response>
         [HttpGet]
-    [HasPermission("CanViewBots")]
-    public async Task<ActionResult<IEnumerable<Bot>>> GetBots([FromQuery] bool? isActive, [FromQuery] string? name = null)
+        [HasPermission("CanViewBots")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetBots([FromQuery] bool? isActive, [FromQuery] string? name = null)
         {
             try
             {
@@ -77,8 +137,8 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("me")]
-    [HasPermission("CanViewBots")]
-    public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
+        [HasPermission("CanViewBots")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetMyBots()
         {
             try
             {
@@ -105,8 +165,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve los bots encontrados.</response>
         /// <response code="404">Si no se encuentran bots.</response>
         [HttpGet("byUser/{userId}")]
-    [HasPermission("CanViewBots")]
-    public async Task<ActionResult<IEnumerable<Bot>>> GetBotsByUserId(int userId)
+        [HasPermission("CanViewBots")]
+        public async Task<ActionResult<IEnumerable<Bot>>> GetBotsByUserId(int userId)
         {
             try
             {
@@ -135,9 +195,9 @@ namespace Voia.Api.Controllers
         /// <returns>El bot creado.</returns>
         /// <response code="201">Devuelve el bot creado.</response>
         /// <response code="400">Si los datos son inválidos o el bot ya existe.</response>
-    [HasPermission("CanEditBots")]
-    [HttpPost]
-    public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
+        [HasPermission("CanEditBots")]
+        [HttpPost]
+        public async Task<ActionResult<Bot>> CreateBot([FromBody] CreateBotDto botDto)
         {
             Console.WriteLine("[DEBUG] CreateBot iniciado.");
 
@@ -160,7 +220,7 @@ namespace Voia.Api.Controllers
                 // 1️⃣ Validar si ya existe un bot con ese nombre antes de crear
                 var existingBot = await _context.Bots
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId);
+                    .FirstOrDefaultAsync(b => b.Name == botDto.Name && b.UserId == userId && !b.IsDeleted);
 
                 if (existingBot != null)
                     return BadRequest(new { Message = "Ya existe un bot con el mismo nombre." });
@@ -263,17 +323,17 @@ namespace Voia.Api.Controllers
 
                 // 6️⃣ Heredar documentos, URLs y textos
                 var documentos = await _context.UploadedDocuments
-                    .Where(d => d.BotTemplateId == template.Id && d.BotId == null)
+                    .Where(d => d.BotTemplateId == template.Id && d.BotId == 0)
                     .ToListAsync();
                 documentos.ForEach(d => d.BotId = bot.Id);
 
                 var urls = await _context.TrainingUrls
-                    .Where(u => u.BotTemplateId == template.Id && u.BotId == null)
+                    .Where(u => u.BotTemplateId == template.Id && (u.BotId == null || u.BotId == 0))
                     .ToListAsync();
                 urls.ForEach(u => u.BotId = bot.Id);
 
                 var textos = await _context.TrainingCustomTexts
-                    .Where(t => t.BotTemplateId == template.Id && t.BotId == null)
+                    .Where(t => t.BotTemplateId == template.Id && t.BotId == 0)
                     .ToListAsync();
                 textos.ForEach(t => t.BotId = bot.Id);
 
@@ -341,8 +401,8 @@ namespace Voia.Api.Controllers
         /// <response code="200">Devuelve el bot actualizado.</response>
         /// <response code="404">Si el bot no se encuentra.</response>
         [HttpPut("{id}")]
-    [HasPermission("CanEditBots")]
-    public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
+        [HasPermission("CanEditBots")]
+        public async Task<IActionResult> UpdateBot(int id, [FromBody] UpdateBotDto botDto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -371,95 +431,40 @@ namespace Voia.Api.Controllers
         /// <response code="200">Bot desactivado correctamente.</response>
         /// <response code="404">Si el bot no se encuentra.</response>
         [HttpDelete("{id}")]
-    [HasPermission("CanDeleteBots")]
-    public async Task<IActionResult> DeleteBot(int id)
+        [HasPermission("CanDeleteBots")]
+        public async Task<IActionResult> DeleteBot(int id)
         {
-            var bot = await _context.Bots.FindAsync(id);
+            // Obtener el ID del usuario autenticado
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
+                return Unauthorized(new { message = "Usuario no autenticado." });
+
+            // Buscar el bot y validar que pertenezca al usuario
+            var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == id && b.UserId == userId);
             if (bot == null)
-                return NotFound(new { Message = "Bot not found" });
+                return NotFound(new { message = "Bot no encontrado o no autorizado." });
 
-            bot.IsActive = false;
-            bot.UpdatedAt = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync();
-            return Ok(new { Message = "Bot disabled (soft deleted)" });
-        }
-
-        /// <summary>
-        /// Elimina un bot y todos sus datos asociados de forma permanente (hard delete).
-        /// </summary>
-        /// <param name="id">ID del bot a eliminar.</param>
-        /// <returns>Mensaje de confirmación.</returns>
-        /// <response code="200">Bot eliminado permanentemente.</response>
-        /// <response code="404">Si el bot no se encuentra.</response>
-        /// <response code="500">Si ocurre un error durante la eliminación.</response>
-        [HttpDelete("{id}/force")]
-        public async Task<IActionResult> ForceDeleteBot(int id)
-        {
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var bot = await _context.Bots.FindAsync(id);
-                if (bot == null)
-                {
-                    // Si el bot no existe, el estado deseado (sin bot) ya se cumple.
-                    return Ok(new { Message = "Bot no encontrado, se considera eliminado." });
-                }
-
-                // 1. Eliminar entidades relacionadas indirectamente (KnowledgeChunks)
-                var documentIds = await _context.UploadedDocuments
-                    .Where(d => d.BotId == id)
-                    .Select(d => d.Id)
-                    .ToListAsync();
-
-                if (documentIds.Any())
-                {
-                    var knowledgeChunks = await _context.KnowledgeChunks
-                        .Where(kc => documentIds.Contains(kc.UploadedDocumentId))
-                        .ToListAsync();
-                    if (knowledgeChunks.Any()) _context.KnowledgeChunks.RemoveRange(knowledgeChunks);
-                }
-
-                // 2. Eliminar entidades directamente relacionadas con el Bot
-                var conversations = await _context.Conversations.Where(c => c.BotId == id).ToListAsync();
-                if (conversations.Any()) _context.Conversations.RemoveRange(conversations);
-
-                var trainingSessions = await _context.BotTrainingSessions.Where(ts => ts.BotId == id).ToListAsync();
-                if (trainingSessions.Any()) _context.BotTrainingSessions.RemoveRange(trainingSessions);
-
-                var customPrompts = await _context.BotCustomPrompts.Where(cp => cp.BotId == id).ToListAsync();
-                if (customPrompts.Any()) _context.BotCustomPrompts.RemoveRange(customPrompts);
-
-                var uploadedDocuments = await _context.UploadedDocuments.Where(ud => ud.BotId == id).ToListAsync();
-                if (uploadedDocuments.Any()) _context.UploadedDocuments.RemoveRange(uploadedDocuments);
-
-                var trainingUrls = await _context.TrainingUrls.Where(tu => tu.BotId == id).ToListAsync();
-                if (trainingUrls.Any()) _context.TrainingUrls.RemoveRange(trainingUrls);
-
-                var customTexts = await _context.TrainingCustomTexts.Where(ct => ct.BotId == id).ToListAsync();
-                if (customTexts.Any()) _context.TrainingCustomTexts.RemoveRange(customTexts);
-
-                // (Añadir aquí cualquier otra entidad directamente relacionada que deba ser eliminada)
-
-                // 3. Eliminar el Bot principal
-                _context.Bots.Remove(bot);
-
-                // 4. Guardar todos los cambios en la base de datos
+                bot.IsDeleted = true;
+                bot.IsActive = false;
+                bot.UpdatedAt = DateTime.UtcNow;
+                _context.Bots.Update(bot);
                 await _context.SaveChangesAsync();
-
-                // 5. Llamar a la API de FastAPI para eliminar la colección de vectores en Qdrant
-                await _fastApiService.DeleteVectorCollectionAsync(id);
-
-                // 6. Confirmar la transacción
                 await transaction.CommitAsync();
 
-                return Ok(new { Message = "Bot y todos sus datos asociados han sido eliminados permanentemente." });
+                return Ok(new
+                {
+                    success = true,
+                    message = "Bot eliminado correctamente (soft delete).",
+                    botId = id
+                });
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                Console.Error.WriteLine($"[ERROR] ForceDeleteBot para el Bot ID {id} falló: {ex.ToString()}");
-                return StatusCode(500, new { Message = "Ocurrió un error interno durante la eliminación forzada del bot.", Details = ex.Message });
+                return StatusCode(500, new { success = false, message = "Error al eliminar el bot.", error = ex.Message });
             }
         }
 
@@ -472,16 +477,33 @@ namespace Voia.Api.Controllers
         /// <response code="404">Si el bot no se encuentra.</response>
         [HttpGet("{id}")]
         // [HasPermission("CanViewBot")]
-        public async Task<ActionResult<Bot>> GetBotById(int id)
+        public async Task<ActionResult<object>> GetBotById(int id)
         {
             var bot = await _context.Bots
                 .Include(b => b.User)
+                .Include(b => b.TrainingSessions)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (bot == null)
                 return NotFound(new { Message = "Bot not found" });
 
-            return Ok(bot);
+            // Obtener la última sesión de entrenamiento (si existe)
+            var lastSession = bot.TrainingSessions?.OrderByDescending(s => s.CreatedAt).FirstOrDefault();
+
+            return Ok(new {
+                id = bot.Id,
+                name = bot.Name,
+                description = bot.Description,
+                apiKey = bot.ApiKey,
+                isActive = bot.IsActive,
+                createdAt = bot.CreatedAt,
+                updatedAt = bot.UpdatedAt,
+                isDeleted = bot.IsDeleted,
+                isReady = bot.IsReady,
+                userId = bot.UserId,
+                botTemplateId = bot.BotTemplateId,
+                templateTrainingSessionId = lastSession?.Id
+            });
         }
         [HttpGet("{id}/widget-settings")]
         [AllowAnonymous] // Permitir acceso sin autenticación
@@ -572,7 +594,7 @@ namespace Voia.Api.Controllers
                 })
                 .ToListAsync();
 
-            string captureInstruction = null;
+            string? captureInstruction = null;
             if (captureFields.Any())
             {
                 var requiredFields = string.Join(", ",
@@ -601,7 +623,7 @@ namespace Voia.Api.Controllers
                 : $"{systemPrompt}\n\n{captureInstruction}";
 
             var customPrompts = await _context.BotCustomPrompts
-                .Where(p => p.BotTemplateId == bot.BotTemplateId)
+                .Where(p => p.BotId == bot.Id)
                 .OrderBy(p => p.Id)
                 .ToListAsync();
 

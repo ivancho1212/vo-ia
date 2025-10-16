@@ -186,7 +186,8 @@ namespace Voia.Api.Controllers
                     {
                         Id = b.Id,
                         Name = b.Name,
-                        Description = b.Description
+                        Description = b.Description,
+                        IsReady = b.IsReady // Nuevo: exponer estado de entrenamiento
                     })
                     .ToList()
             };

@@ -16,6 +16,27 @@ namespace Voia.Api.Controllers
             _context = context;
         }
 
+                [HttpGet("by-bot/{botId}")]
+                [HasPermission("CanViewBotCustomPrompts")]
+                public async Task<ActionResult<IEnumerable<BotCustomPromptResponseDto>>> GetByBotId(int botId)
+                {
+                    var prompts = await _context.BotCustomPrompts
+                        .Where(p => p.BotId == botId)
+                        .Select(p => new BotCustomPromptResponseDto
+                        {
+                            Id = p.Id,
+                            BotId = p.BotId,
+                            Role = p.Role,
+                            Content = p.Content,
+                            BotTemplateId = p.BotTemplateId,
+                            TemplateTrainingSessionId = p.TemplateTrainingSessionId,
+                            CreatedAt = p.CreatedAt,
+                            UpdatedAt = p.UpdatedAt
+                        })
+                        .ToListAsync();
+                    return Ok(prompts);
+                }
+
         [HttpGet]
     [HasPermission("CanViewBotCustomPrompts")]
     public async Task<ActionResult<IEnumerable<BotCustomPromptResponseDto>>> GetAll()

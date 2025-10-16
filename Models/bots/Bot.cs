@@ -37,6 +37,11 @@ namespace Voia.Api.Models
         [Column("updated_at")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+        [Column("is_deleted")]
+        public bool IsDeleted { get; set; } = false;
+
+        [Column("is_ready")]
+        public bool IsReady { get; set; } = false;
 
         // Usuario (requerido)
         [Column("user_id")]
@@ -65,6 +70,6 @@ namespace Voia.Api.Models
 
         // RELACIÓN UNO-A-MUCHOS: un Bot tiene varias BotTrainingSession
         public List<BotTrainingSession.BotTrainingSession> TrainingSessions { get; set; } = new List<BotTrainingSession.BotTrainingSession>();
-
     }
+
 }

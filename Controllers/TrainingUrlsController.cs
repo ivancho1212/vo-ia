@@ -1,3 +1,4 @@
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
@@ -21,9 +22,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todas las URLs de entrenamiento.
         /// </summary>
-    [HttpGet]
-    [HasPermission("CanViewTrainingUrls")]
-    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetAll()
+        [HttpGet]
+        [HasPermission("CanViewTrainingUrls")]
+        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetAll()
         {
             var urls = await _context.TrainingUrls
                 .Select(t => new TrainingUrlResponseDto
@@ -40,13 +41,40 @@ namespace Voia.Api.Controllers
 
             return Ok(urls);
         }
+        /// <summary>
+        /// Obtiene URLs por ID de bot.
+        /// </summary>
+        [HttpGet("by-bot/{botId}")]
+        [HasPermission("CanViewTrainingUrls")]
+        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByBot(int botId)
+        {
+            var urls = await _context.TrainingUrls
+                        .Where(x => x.BotId == botId)
+                        .Select(x => new TrainingUrlResponseDto
+                        {
+                            Id = x.Id,
+                            BotId = x.BotId,
+                            BotTemplateId = x.BotTemplateId,
+                            TemplateTrainingSessionId = x.TemplateTrainingSessionId,
+                            UserId = x.UserId,
+                            Url = x.Url,
+                            Status = x.Status,
+                            CreatedAt = x.CreatedAt,
+                            UpdatedAt = x.UpdatedAt,
+                            QdrantId = x.QdrantId,
+                            ContentHash = x.ContentHash,
+                            Indexed = x.Indexed,
+                            ExtractedText = x.ExtractedText
+                        }).ToListAsync();
+            return Ok(urls);
+        }
 
         /// <summary>
         /// Obtiene URLs por sesión de entrenamiento.
         /// </summary>
-    [HttpGet("session/{sessionId}")]
-    [HasPermission("CanViewTrainingUrls")]
-    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetBySession(int sessionId)
+        [HttpGet("session/{sessionId}")]
+        [HasPermission("CanViewTrainingUrls")]
+        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetBySession(int sessionId)
         {
             var urls = await _context.TrainingUrls
                 .Where(t => t.TemplateTrainingSessionId == sessionId)
@@ -65,9 +93,9 @@ namespace Voia.Api.Controllers
             return Ok(urls);
         }
 
-    [HttpGet("by-template/{templateId}")]
-    [HasPermission("CanViewTrainingUrls")]
-    public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByTemplate(int templateId)
+        [HttpGet("by-template/{templateId}")]
+        [HasPermission("CanViewTrainingUrls")]
+        public async Task<ActionResult<IEnumerable<TrainingUrlResponseDto>>> GetByTemplate(int templateId)
         {
             var urls = await _context.TrainingUrls
                         .Where(x => x.BotTemplateId == templateId)
@@ -100,6 +128,17 @@ namespace Voia.Api.Controllers
         {
             try
             {
+                // Validar que el templateTrainingSessionId (si viene) exista y pertenezca al mismo bot_template_id
+                if (dto.TemplateTrainingSessionId.HasValue)
+                {
+                    var session = await _context.TemplateTrainingSessions
+                        .FirstOrDefaultAsync(s => s.Id == dto.TemplateTrainingSessionId.Value && s.BotTemplateId == dto.BotTemplateId);
+                    if (session == null)
+                    {
+                        return BadRequest(new { message = "El ID de sesión de entrenamiento no es válido para la plantilla seleccionada." });
+                    }
+                }
+
                 // Normalizar la URL
                 var normalizedUrl = dto.Url.TrimEnd('/').ToLowerInvariant();
                 var contentHash = HashHelper.ComputeStringHash(normalizedUrl);
@@ -139,17 +178,17 @@ namespace Voia.Api.Controllers
                 await _context.SaveChangesAsync();
 
                 // Llamar al servicio de vectorización
-                try 
+                try
                 {
                     using (var httpClient = new HttpClient())
                     {
                         var response = await httpClient.GetAsync($"http://localhost:8000/process_urls?bot_id={dto.BotId}");
-                        
+
                         if (!response.IsSuccessStatusCode)
                         {
                             var error = await response.Content.ReadAsStringAsync();
                             Console.WriteLine($"❌ Error al llamar al servicio de vectorización de URLs: {error}");
-                            
+
                             // No consideramos esto un error fatal, la URL se procesará más tarde
                             Console.WriteLine("ℹ️ La URL se procesará en un intento posterior");
                         }
@@ -190,6 +229,7 @@ namespace Voia.Api.Controllers
         /// Elimina una URL de entrenamiento.
         /// </summary>
         [HttpDelete("{id}")]
+        [HasPermission("CanDeleteTrainingUrls")]
         public async Task<IActionResult> Delete(int id)
         {
             var url = await _context.TrainingUrls.FindAsync(id);

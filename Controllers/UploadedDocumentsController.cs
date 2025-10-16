@@ -1,3 +1,4 @@
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
@@ -22,9 +23,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene todos los documentos subidos.
         /// </summary>
-    [HttpGet]
-    [HasPermission("CanViewUploadedDocuments")]
-    public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetAll()
+        [HttpGet]
+        [HasPermission("CanViewUploadedDocuments")]
+        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetAll()
         {
             var documents = await _context.UploadedDocuments
                 .Select(d => new UploadedDocumentResponseDto
@@ -42,13 +43,36 @@ namespace Voia.Api.Controllers
 
             return Ok(documents);
         }
+        /// <summary>
+        /// Obtiene documentos por ID de bot.
+        /// </summary>
+        [HttpGet("by-bot/{botId}")]
+        [HasPermission("CanViewUploadedDocuments")]
+        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByBot(int botId)
+        {
+            var docs = await _context.UploadedDocuments
+                        .Where(x => x.BotId == botId)
+                        .Select(d => new UploadedDocumentResponseDto
+                        {
+                            Id = d.Id,
+                            BotTemplateId = d.BotTemplateId,
+                            TemplateTrainingSessionId = d.TemplateTrainingSessionId,
+                            UserId = d.UserId,
+                            FileName = d.FileName,
+                            FileType = d.FileType,
+                            FilePath = d.FilePath,
+                            UploadedAt = d.UploadedAt,
+                            Indexed = d.Indexed
+                        }).ToListAsync();
+            return Ok(docs);
+        }
 
         /// <summary>
         /// Obtiene un documento subido por ID.
         /// </summary>
-    [HttpGet("{id}")]
-    [HasPermission("CanViewUploadedDocuments")]
-    public async Task<ActionResult<UploadedDocumentResponseDto>> GetById(int id)
+        [HttpGet("{id}")]
+        [HasPermission("CanViewUploadedDocuments")]
+        public async Task<ActionResult<UploadedDocumentResponseDto>> GetById(int id)
         {
             var document = await _context.UploadedDocuments.FindAsync(id);
             if (document == null) return NotFound();
@@ -70,9 +94,9 @@ namespace Voia.Api.Controllers
         /// <summary>
         /// Obtiene documentos por ID de plantilla.
         /// </summary>
-    [HttpGet("by-template/{templateId}")]
-    [HasPermission("CanViewUploadedDocuments")]
-    public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
+        [HttpGet("by-template/{templateId}")]
+        [HasPermission("CanViewUploadedDocuments")]
+        public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByTemplate(int templateId)
         {
             var docs = await _context.UploadedDocuments
                         .Where(x => x.BotTemplateId == templateId)
@@ -120,7 +144,7 @@ namespace Voia.Api.Controllers
 
             var fileName = Path.GetFileName(dto.File.FileName);
             var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
-            
+
             // Obtenemos la ruta base del proyecto
             var basePath = AppDomain.CurrentDomain.BaseDirectory;
             while (!System.IO.File.Exists(Path.Combine(basePath, "Voia.Api.csproj")))
@@ -128,7 +152,7 @@ namespace Voia.Api.Controllers
                 basePath = Path.GetDirectoryName(basePath);
                 if (string.IsNullOrEmpty(basePath)) throw new Exception("No se pudo encontrar la raíz del proyecto");
             }
-            
+
             // Aseguramos que la carpeta existe
             var uploadsFolder = Path.Combine(basePath, "Uploads", "Documents");
             if (!Directory.Exists(uploadsFolder))
@@ -210,12 +234,12 @@ namespace Voia.Api.Controllers
             await _context.SaveChangesAsync();
 
             // 🔄 Paso 3: Llamar al servicio de vectorización
-            try 
+            try
             {
                 using (var httpClient = new HttpClient())
                 {
                     var response = await httpClient.GetAsync($"http://localhost:8000/process_documents?bot_id={document.BotId}");
-                    
+
                     if (!response.IsSuccessStatusCode)
                     {
                         var error = await response.Content.ReadAsStringAsync();
