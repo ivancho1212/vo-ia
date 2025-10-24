@@ -44,5 +44,10 @@ namespace Voia.Api.Models
 
         // 🚀 Nueva relación con Bots
         public ICollection<Bot> Bots { get; set; } = new List<Bot>();
+
+        // Token público opcional para permitir a sistemas externos obtener los datos del usuario
+        // Ejemplo: la URL pública podrá aceptar ?token=<PublicDataToken>
+        [Column("public_data_token")]
+        public string? PublicDataToken { get; set; }
     }
 }

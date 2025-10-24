@@ -15,6 +15,9 @@ namespace Voia.Api.Models.BotIntegrations
         [Column("integration_type")]
         public string IntegrationType { get; set; } = "widget";
 
+        [Column("framework")]
+        public string? Framework { get; set; }
+
         // Columna añadida para configuraciones flexibles en formato JSON.
         [Column("settings_json")]
         public string SettingsJson { get; set; }

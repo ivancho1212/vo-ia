@@ -8,6 +8,7 @@ using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Data;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Voia.Api.Attributes;
 
 namespace Voia.Api.Controllers
@@ -62,11 +63,36 @@ namespace Voia.Api.Controllers
         /// Obtiene todos los estilos de un usuario específico.
         /// </summary>
         [HttpGet("byUser/{userId}")]
-    [HasPermission("CanViewBotStyles")]
-    public async Task<ActionResult<IEnumerable<BotStyle>>> GetStylesByUser(int userId)
+        public async Task<ActionResult<IEnumerable<BotStyle>>> GetStylesByUser(int userId)
         {
             try
             {
+                // Allow if the caller is the same user (owner) or has the CanViewBotStyles permission
+                // Try several common claim names (NameIdentifier, sub, id) to support different JWT issuers
+                var userIdClaim = HttpContext.User.FindFirst(ClaimTypes.NameIdentifier)
+                                  ?? HttpContext.User.FindFirst("sub")
+                                  ?? HttpContext.User.FindFirst("id");
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int callerId))
+                {
+                    return Forbid();
+                }
+
+                if (callerId != userId)
+                {
+                    // Caller is requesting someone else's styles: require permission
+                    var caller = await _context.Users
+                        .Include(u => u.Role)
+                            .ThenInclude(r => r.RolePermissions)
+                                .ThenInclude(rp => rp.Permission)
+                        .FirstOrDefaultAsync(u => u.Id == callerId);
+
+                    var hasPermission = caller != null && caller.Role != null && caller.Role.RolePermissions != null &&
+                        caller.Role.RolePermissions.Any(rp => rp.Permission != null && rp.Permission.Name == "CanViewBotStyles");
+
+                    if (!hasPermission)
+                        return Forbid();
+                }
+
                 var styles = await _context.BotStyles
                     .Where(s => s.UserId == userId)
                     .ToListAsync();
@@ -84,7 +110,6 @@ namespace Voia.Api.Controllers
         /// Actualiza el estilo de un bot existente.
         /// </summary>
         [HttpPut("{id}")]
-    [HasPermission("CanEditBotStyles")]
     public async Task<IActionResult> UpdateStyle(int id, [FromBody] UpdateBotStyleDto dto)
         {
             try
@@ -96,6 +121,30 @@ namespace Voia.Api.Controllers
                     return NotFound(new { message = "Style not found" });
                 }
 
+                // Authorization: allow if caller is the owner of the style, otherwise require CanEditBotStyles permission
+                var userIdClaim = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)
+                                  ?? HttpContext.User.FindFirst("sub")
+                                  ?? HttpContext.User.FindFirst("id");
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int callerId))
+                {
+                    return Forbid();
+                }
+
+                if (callerId != style.UserId)
+                {
+                    // Caller is not the owner: require permission
+                    var caller = await _context.Users
+                        .Include(u => u.Role)
+                            .ThenInclude(r => r.RolePermissions)
+                                .ThenInclude(rp => rp.Permission)
+                        .FirstOrDefaultAsync(u => u.Id == callerId);
+
+                    var hasPermission = caller != null && caller.Role != null && caller.Role.RolePermissions != null &&
+                        caller.Role.RolePermissions.Any(rp => rp.Permission != null && rp.Permission.Name == "CanUpdateBotStyles");
+
+                    if (!hasPermission)
+                        return Forbid();
+                }
                 // Validaciones adicionales
                 if (string.IsNullOrEmpty(dto.Theme))
                     dto.Theme = "light";
@@ -177,6 +226,22 @@ namespace Voia.Api.Controllers
                     {
                         bot.StyleId = style.Id;
                         await _context.SaveChangesAsync();
+                        // Marcar fase 'styles' como completada
+                        try
+                        {
+                            var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == bot.Id && p.Phase == "styles");
+                            if (phase == null)
+                            {
+                                _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = bot.Id, Phase = "styles", CompletedAt = DateTime.UtcNow, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                            }
+                            else
+                            {
+                                phase.CompletedAt = DateTime.UtcNow;
+                                phase.UpdatedAt = DateTime.UtcNow;
+                            }
+                            await _context.SaveChangesAsync();
+                        }
+                        catch { }
                     }
                 }
 

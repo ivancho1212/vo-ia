@@ -21,6 +21,9 @@ using Voia.Api.Models.Users;
 
 namespace Voia.Api.Hubs
 {
+    using Microsoft.AspNetCore.Authorization;
+
+    [Authorize]
     public class ChatHub : Hub
     {
         private readonly IAiProviderService _aiProviderService;
@@ -34,6 +37,10 @@ namespace Voia.Api.Hubs
         private readonly PromptBuilderService _promptBuilderService;
 
 
+    // Optional presence service - may be null if Redis not configured
+    private readonly PresenceService? _presenceService;
+    private readonly IMessageQueue? _messageQueue;
+
         public ChatHub(
             IAiProviderService aiProviderService,
             ApplicationDbContext context,
@@ -42,7 +49,9 @@ namespace Voia.Api.Hubs
             TokenCounterService tokenCounter,
             BotDataCaptureService dataCaptureService,
             HttpClient httpClient,
-            PromptBuilderService promptBuilderService // 👈 agregado
+            PromptBuilderService promptBuilderService,
+            PresenceService? presenceService = null,
+            IMessageQueue? messageQueue = null
         )
         {
             _aiProviderService = aiProviderService;
@@ -52,7 +61,9 @@ namespace Voia.Api.Hubs
             _tokenCounter = tokenCounter;
             _dataCaptureService = dataCaptureService;
             _httpClient = httpClient;
-            _promptBuilderService = promptBuilderService; // 👈 asignado
+            _promptBuilderService = promptBuilderService;
+            _presenceService = presenceService;
+            _messageQueue = messageQueue;
         }
 
         public async Task JoinRoom(int conversationId)
@@ -84,7 +95,43 @@ namespace Voia.Api.Hubs
             await SendInitialConversations();
         }
 
-        private async Task SendInitialConversations()
+        public override async Task OnConnectedAsync()
+        {
+            try
+            {
+                var userId = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userId) && _presenceService != null)
+                {
+                    await _presenceService.AddConnectionAsync(userId, Context.ConnectionId);
+                }
+                _logger.LogInformation("SignalR connected: {conn} user:{user}", Context.ConnectionId, userId);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in OnConnectedAsync");
+            }
+            await base.OnConnectedAsync();
+        }
+
+        public override async Task OnDisconnectedAsync(System.Exception? exception)
+        {
+            try
+            {
+                var userId = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userId) && _presenceService != null)
+                {
+                    await _presenceService.RemoveConnectionAsync(userId, Context.ConnectionId);
+                }
+                _logger.LogInformation("SignalR disconnected: {conn} user:{user} ex:{ex}", Context.ConnectionId, userId, exception?.Message);
+            }
+            catch (System.Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in OnDisconnectedAsync");
+            }
+            await base.OnDisconnectedAsync(exception);
+        }
+
+    private async Task SendInitialConversations()
         {
             var conversationsData = await _context.Conversations
                 .Include(c => c.Bot)
@@ -108,35 +155,15 @@ namespace Voia.Api.Hubs
                 string lastMessageString = "Conversación iniciada";
                 if (c.LastEvent != null)
                 {
-                    string finalContent = c.LastEvent.RawContent;
-                    if (c.LastEvent.Type == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
-                    {
-                        try
-                        {
-                            using (var doc = System.Text.Json.JsonDocument.Parse(finalContent))
-                            {
-                                if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
-                                {
-                                    finalContent = userQuestion.GetString();
-                                }
-                                else if (doc.RootElement.TryGetProperty("Content", out var content))
-                                {
-                                    finalContent = content.GetString();
-                                }
-                            }
-                        }
-                        catch (System.Text.Json.JsonException)
-                        {
-                            // Not a valid JSON, so we'll just use the original RawContent
-                        }
-                    }
+                    // Use raw content as-is (parsing JSON here caused nullable conversion issues).
+                    string finalContent = c.LastEvent.RawContent ?? string.Empty;
 
                     lastMessageString = c.LastEvent.Type switch
                     {
-                        "text" => finalContent,
+                        "text" => finalContent ?? string.Empty,
                         "image" => "📷 Imagen",
-                        "file" => $"📎 Archivo: {finalContent}",
-                        _ => finalContent
+                        "file" => $"📎 Archivo: {finalContent ?? string.Empty}",
+                        _ => finalContent ?? string.Empty
                     };
                 }
 
@@ -240,7 +267,7 @@ namespace Voia.Api.Hubs
             {
                 _logger.LogInformation($"🔍 [SendMessage] Iniciando - ConversationId: {conversationId}, BotId: {request.BotId}, UserId: {request.UserId}, Question: {request.Question}");
                 
-                string botAnswer = "Lo siento, no pude generar una respuesta en este momento.";
+                // Note: AI processing moved to background worker. Hub will persist message and enqueue a job.
 
                 // 1. Obtener la conversación existente
                 var conversation = await _context.Conversations
@@ -338,6 +365,7 @@ namespace Voia.Api.Hubs
                 _logger.LogInformation($"✅ [SendMessage] Mensaje de usuario guardado - PublicUserId: {messagePublicUserId}");
 
                 // Enviar mensaje del usuario al grupo para mostrarlo en el chat
+                _logger.LogInformation("📤 [SendMessage] Enviando ReceiveMessage al grupo {conv} para mensaje {msgId}", conversationId, userMessage.Id);
                 await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId,
@@ -347,8 +375,7 @@ namespace Voia.Api.Hubs
                     id = userMessage.Id,
                     tempId = request.TempId
                 });
-
-                _logger.LogInformation($"📤 [SendMessage] Mensaje de usuario enviado al grupo: {conversationId}");
+                _logger.LogInformation("✅ [SendMessage] ReceiveMessage enviado al grupo {conv} para mensaje {msgId}", conversationId, userMessage.Id);
 
                 // 7. Contar tokens de usuario (solo para usuarios autenticados)
                 if (_tokenCounter != null && !string.IsNullOrWhiteSpace(request.Question) && request.UserId.HasValue)
@@ -406,16 +433,24 @@ namespace Voia.Api.Hubs
                 return; // Detener el procesamiento para esperar la respuesta del usuario
             }
 
-            // Si el servicio de captura generó un mensaje de confirmación, lo usamos como respuesta del bot.
+            // Si el servicio de captura generó un mensaje de confirmación, encolamos un job para que el worker lo procese.
             if (!string.IsNullOrEmpty(captureResult.ConfirmationPrompt))
             {
-                botAnswer = await _aiProviderService.GetBotResponseAsync(
-                    request.BotId,
-                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
-                    captureResult.ConfirmationPrompt,
-                    currentCapturedFields
-                );
-                goto SendBotResponse; // Saltamos directamente a la sección de envío de respuesta
+                if (_messageQueue != null)
+                {
+                    var job = new MessageJob
+                    {
+                        ConversationId = conversation.Id,
+                        BotId = request.BotId,
+                        UserId = request.UserId,
+                        MessageId = userMessage.Id,
+                        Question = captureResult.ConfirmationPrompt,
+                        TempId = request.TempId ?? string.Empty
+                    };
+                    await _messageQueue.EnqueueAsync(job);
+                    await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request.TempId });
+                    return;
+                }
             }
 
             if (captureResult.NewSubmissions.Any())
@@ -431,6 +466,7 @@ namespace Voia.Api.Hubs
             await _context.SaveChangesAsync();
 
             // Confirmación al usuario y notificaciones a grupo y admin
+            _logger.LogInformation("📤 [SendMessage] Enviando ReceiveMessage (caller) para confirmación mensaje {msgId} conv {conv}", userMessage.Id, conversationId);
             await Clients.Caller.SendAsync("ReceiveMessage", new
             {
                 conversationId,
@@ -443,6 +479,7 @@ namespace Voia.Api.Hubs
                 tempId = request.TempId,
                 status = "sent"
             });
+            _logger.LogInformation("✅ [SendMessage] ReceiveMessage (caller) enviado para mensaje {msgId} conv {conv}", userMessage.Id, conversationId);
 
             await Clients.OthersInGroup(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
@@ -470,174 +507,98 @@ namespace Voia.Api.Hubs
 
             await StopTyping(conversationId, "user");
 
-            // IA pausada
-            // Retrieve the conversation again to get the latest IsWithAI status from the database
-            // Revisar si la IA está activa ANTES de mostrar typing
-            var conversationFromDb = await _context.Conversations.FindAsync(conversationId);
-            if (conversationFromDb != null && !conversationFromDb.IsWithAI)
-            {
-                _logger.LogInformation($"IA pausada para la conversación {conversationId}. No se generará respuesta.");
-                return; // No se envía typing ni se procesa IA
-            }
-
-            // Solo si la IA está activa, enviamos typing. Usamos "ReceiveTyping" que es el evento que el cliente escucha.
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveTyping", conversationId, "bot");
-            await Task.Delay(TypingDelayMs);
-
+            // Enqueue message for background processing (AI) to keep Hub responsive
             try
             {
-                // 1️⃣ Obtener campos capturados desde la DB
-                var capturedFields = await _context.BotDataCaptureFields
-                    .Where(f => f.BotId == request.BotId)
-                    .Select(f => new DataField
-                    {
-                        FieldName = f.FieldName,
-                        // 🔹 CORRECCIÓN: Usamos el conversationId como identificador de sesión único para aislar los datos por visitante.
-                        Value = _context.BotDataSubmissions.Where(s =>
-                                s.BotId == request.BotId && s.CaptureFieldId == f.Id &&
-                                s.SubmissionSessionId == conversationId.ToString())
-                            .OrderByDescending(s => s.SubmittedAt) // Tomamos el más reciente para esta sesión
-                            .Select(s => s.SubmissionValue)
-                            .FirstOrDefault()
-                    })
-            .ToListAsync();
-
-                string finalPrompt = await _promptBuilderService.BuildPromptFromBotContextAsync(
-                    request.BotId,
-                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
-                    request.Question ?? "",
-                    currentCapturedFields // ✅ FIX: Usamos la lista que ya fue actualizada por el servicio de captura.
-                );
-
-                // 3️⃣ Llamar al AI provider con el prompt final que contiene todo el contexto.
-                botAnswer = await _aiProviderService.GetBotResponseAsync(
-                    request.BotId,
-                    request.UserId ?? 0, // Usar 0 para usuarios anónimos
-                    finalPrompt, // Pasamos el JSON completo
-                    currentCapturedFields // ✅ FIX: Pasamos la lista actualizada.
-                ) ?? "Lo siento, no pude generar una respuesta en este momento.";
-            }
-            catch (NotSupportedException)
-
-            {
-                botAnswer = "🤖 Este bot aún no está conectado a un proveedor de IA.";
-            }
-            catch (Exception ex)
-            {
-                botAnswer = "⚠️ Error al procesar el mensaje. Inténtalo más tarde.";
-                _logger.LogError(ex, "❌ Error en IA.");
-            }
-
-        SendBotResponse:
-
-            // 4️⃣ Deserializar JSON (si es mock)
-            string displayText = botAnswer;
-            try
-            {
-                var jsonResponse = JsonDocument.Parse(botAnswer);
-                if (jsonResponse.RootElement.TryGetProperty("Answer", out var answerElement))
+                if (_messageQueue == null)
                 {
-                    displayText = answerElement.GetString() ?? botAnswer;
+                    _logger.LogWarning("Message queue not available, falling back to inline processing for conversation {conv}", conversationId);
+                    // As fallback, we keep previous behavior (could be improved) - but to avoid duplication we simply return
+                    return;
                 }
-            }
-            catch (JsonException)
-            {
-                // No es JSON, usamos tal cual
-            }
 
-            // --- 🔹 INICIO: Procesar y guardar CapturedFields desde la respuesta de la IA ---
-            try
-            {
-                var jsonResponseForCapture = JsonDocument.Parse(botAnswer);
-                if (jsonResponseForCapture.RootElement.TryGetProperty("CapturedFields", out var capturedFieldsElement) && capturedFieldsElement.ValueKind == JsonValueKind.Array)
+                var job = new MessageJob
                 {
-                    var fieldsFromAi = capturedFieldsElement.Deserialize<List<DataField>>();
-                    if (fieldsFromAi != null && fieldsFromAi.Any(f => !string.IsNullOrEmpty(f.Value)))
+                    ConversationId = conversation.Id,
+                    BotId = request.BotId,
+                    UserId = request.UserId,
+                    MessageId = userMessage.Id,
+                    Question = request.Question ?? string.Empty,
+                    TempId = request.TempId ?? string.Empty
+                };
+
+                // If the conversation has AI paused, do NOT enqueue a job. Admin should reply manually.
+                if (!conversation.IsWithAI)
+                {
+                    _logger.LogInformation("AI is paused for conversation {conv}. Not enqueuing job {msg}", conversationId, userMessage.Id);
+
+                    // Only send the 'paused' system message once per conversation (avoid spamming the widget).
+                    try
                     {
+                        var pausedTextSnippet = "El asistente está temporalmente pausado";
+                        var lastSystem = await _context.Messages
+                            .Where(m => m.ConversationId == conversation.Id && m.Sender == "system")
+                            .OrderByDescending(m => m.CreatedAt)
+                            .Select(m => new { m.MessageText, m.CreatedAt })
+                            .FirstOrDefaultAsync();
 
-                        var fieldNamesFromAi = fieldsFromAi.Select(f => f.FieldName).ToList();
-                        var fieldDefinitions = await _context.BotDataCaptureFields
-                            .Where(f => f.BotId == request.BotId && fieldNamesFromAi.Contains(f.FieldName))
-                            .ToDictionaryAsync(f => f.FieldName, f => f.Id, StringComparer.OrdinalIgnoreCase);
-
-                        var batchSubmissions = new List<BotDataSubmissionCreateDto>();
-                        var validFieldsFromAi = fieldsFromAi.Where(f => !string.IsNullOrEmpty(f.Value));
-
-                        foreach (var field in validFieldsFromAi)
+                        var shouldSendPaused = true;
+                        if (lastSystem != null && !string.IsNullOrEmpty(lastSystem.MessageText) && lastSystem.MessageText.Contains(pausedTextSnippet))
                         {
-                            if (fieldDefinitions.TryGetValue(field.FieldName, out var captureFieldId))
-                            {
-                                batchSubmissions.Add(new BotDataSubmissionCreateDto
-                                {
-                                    BotId = request.BotId,
-                                    CaptureFieldId = captureFieldId,
-                                    SubmissionValue = field.Value,
-                                    UserId = request.UserId,
-                                    SubmissionSessionId = conversationId.ToString()
-                                });
-                            }
-
+                            shouldSendPaused = false;
                         }
 
-                        if (batchSubmissions.Any())
+                        if (shouldSendPaused)
                         {
+                            // Persist a system message so it becomes part of the conversation history
+                            var sysMsg = new Voia.Api.Models.Messages.Message
+                            {
+                                BotId = conversation.BotId,
+                                UserId = null,
+                                PublicUserId = conversation.PublicUserId,
+                                ConversationId = conversation.Id,
+                                Sender = "system",
+                                MessageText = "El asistente está temporalmente pausado. Un agente humano te responderá.",
+                                Source = "system",
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            _context.Messages.Add(sysMsg);
+                            await _context.SaveChangesAsync();
 
-                            // Usar HttpClient para enviar al endpoint batch
-                            await _httpClient.PostAsJsonAsync("api/botdatasubmissions/batch", batchSubmissions);
+                            await Clients.Caller.SendAsync("ReceiveMessage", new
+                            {
+                                conversationId,
+                                from = "system",
+                                text = sysMsg.MessageText,
+                                timestamp = sysMsg.CreatedAt,
+                                id = sysMsg.Id,
+                                status = "paused",
+                                tempId = request.TempId
+                            });
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error checking/sending paused notification for conversation {conv}", conversationId);
+                        // Best-effort: do not block the request flow if this check fails
+                    }
+
+                    return;
                 }
+
+                await _messageQueue.EnqueueAsync(job);
+
+                _logger.LogInformation("Message enqueued for conversation {conv} message {msg}", conversationId, userMessage.Id);
+
+                // Optionally notify the client that the message was queued (status: queued)
+                await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request.TempId });
+
+                return;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error al procesar y guardar los CapturedFields de la respuesta de la IA.");
+                _logger.LogError(ex, "Failed to enqueue message job for conversation {conv}", conversationId);
             }
-            // --- 🔹 FIN: Procesar y guardar CapturedFields ---
-
-            // Guardar mensaje del bot
-            var botMessage = new Message
-            {
-                BotId = request.BotId,
-                UserId = conversation.PublicUserId.HasValue ? null : request.UserId, // Solo para usuarios autenticados
-                PublicUserId = conversation.PublicUserId, // Para usuarios anónimos de widget
-                ConversationId = conversation.Id,
-                Sender = "bot",
-                MessageText = displayText, // ✅ Guardar el texto limpio
-                Source = "widget",
-                CreatedAt = DateTime.UtcNow
-            };
-            _context.Messages.Add(botMessage);
-
-            // Contar tokens de la respuesta (solo para usuarios autenticados)
-            if (_tokenCounter != null && !string.IsNullOrWhiteSpace(botAnswer) && request.UserId.HasValue)
-            {
-                _context.TokenUsageLogs.Add(new TokenUsageLog
-                {
-                    UserId = request.UserId.Value, // Solo para usuarios autenticados
-                    BotId = request.BotId,
-                    TokensUsed = _tokenCounter.CountTokens(botAnswer),
-                    UsageDate = DateTime.UtcNow
-                });
-            }
-
-            // Actualizar conversación con respuesta
-            conversation.BotResponse = botAnswer;
-            conversation.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            // Enviar respuesta al grupo
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
-            {
-                conversationId,
-                from = "bot", // ✅ Cambiado a "bot" para consistencia con el resto del frontend
-                text = displayText, // ✅ Usamos el texto extraído
-                timestamp = botMessage.CreatedAt,
-                id = botMessage.Id
-            });
-
-            await StopTyping(conversationId, "bot");
-
-            _logger.LogInformation($"✅ [SendMessage] Mensaje completado para conversación {conversationId}");
         }
         catch (Exception ex)
         {

@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using System;
 using System.Linq;
 using Voia.Api.Attributes;
+using Microsoft.AspNetCore.SignalR;
+using Voia.Api.Hubs;
+using Microsoft.Extensions.Logging;
 
 namespace Voia.Api.Controllers
 {
@@ -17,10 +20,14 @@ namespace Voia.Api.Controllers
     public class MessagesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
+        private readonly ILogger<MessagesController> _logger;
 
-        public MessagesController(ApplicationDbContext context)
+        public MessagesController(ApplicationDbContext context, IHubContext<ChatHub> hubContext, ILogger<MessagesController> logger)
         {
             _context = context;
+            _hubContext = hubContext;
+            _logger = logger;
         }
 
         // Obtener todos los mensajes
@@ -123,6 +130,29 @@ namespace Voia.Api.Controllers
 
             _context.Messages.Add(message);
             await _context.SaveChangesAsync();
+
+            // Notify connected admins about the new message/conversation
+            try
+            {
+                var msgDto = new
+                {
+                    id = message.Id,
+                    conversationId = message.ConversationId,
+                    text = message.MessageText,
+                    from = message.Sender,
+                    fromRole = message.Sender == "admin" ? "admin" : "user",
+                    timestamp = message.CreatedAt,
+                    userId = message.UserId,
+                    publicUserId = message.PublicUserId
+                };
+
+                await _hubContext.Clients.Group("admin").SendAsync("NewConversationOrMessage", msgDto);
+                _logger?.LogInformation("Sent NewConversationOrMessage for message {MessageId} conv {ConversationId}", message.Id, message.ConversationId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to notify admins about new message {MessageId}", message.Id);
+            }
 
             return CreatedAtAction(nameof(GetMessages), new { id = message.Id }, message);
         }

@@ -257,6 +257,12 @@ namespace Voia.Api.Controllers
                 // No lanzamos la excepción para no interrumpir el flujo principal
             }
 
+            // Nota: No marcamos 'data_capture' aquí.
+            // El marcado de la fase `data_capture` debe hacerse cuando el documento haya sido correctamente
+            // procesado/vectorizado por el servicio de ingestión (p. ej. el endpoint en localhost:8000 o un job).
+            // Mantener este upsert aquí provocaba que acciones opcionales (subir un documento) marcaran
+            // inmediatamente la fase como completada.
+
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, new UploadedDocumentResponseDto
             {
                 Id = document.Id,

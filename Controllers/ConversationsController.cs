@@ -25,18 +25,20 @@ namespace Voia.Api.Controllers
     [Authorize(Roles = "Admin")]
     public class ConversationsController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
-        private readonly IHubContext<ChatHub> _hubContext;
-        private readonly BotDataCaptureService _captureService;
-        private readonly PromptBuilderService _promptBuilder;
-        private readonly IAiProviderService _aiProviderService;
+    private readonly ApplicationDbContext _context;
+    private readonly IHubContext<ChatHub> _hubContext;
+    private readonly BotDataCaptureService _captureService;
+    private readonly PromptBuilderService _promptBuilder;
+    private readonly IAiProviderService _aiProviderService;
+    private readonly ILogger<ConversationsController> _logger;
 
         public ConversationsController(
             ApplicationDbContext context,
             IHubContext<ChatHub> hubContext,
             BotDataCaptureService captureService,
             PromptBuilderService promptBuilder,
-            IAiProviderService aiProviderService
+            IAiProviderService aiProviderService,
+            ILogger<ConversationsController> logger
         )
         {
             _context = context;
@@ -44,6 +46,7 @@ namespace Voia.Api.Controllers
             _captureService = captureService;
             _promptBuilder = promptBuilder;
             _aiProviderService = aiProviderService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -194,14 +197,14 @@ namespace Voia.Api.Controllers
                         status = conversation.Status,
                         blocked = conversation.Blocked,
                         isWithAI = conversation.IsWithAI,
-                        unreadCount = 0
+                        unreadCount = 0,
+                        isWidget = effectivePublicUserId.HasValue,
+                        publicUserId = effectivePublicUserId
                     };
 
-                    // Solo notificar a admin si no es un usuario del widget
-                    if (!effectivePublicUserId.HasValue)
-                    {
-                        await _hubContext.Clients.Group("admin").SendAsync("NewConversation", conversationDto);
-                    }
+                    // Notificar al panel de admin sobre la nueva conversación
+                    // Incluimos las conversaciones creadas por widgets (public users)
+                    await _hubContext.Clients.Group("admin").SendAsync("NewConversation", conversationDto);
                 }
 
                 return Ok(new { conversationId = conversation.Id });
@@ -293,6 +296,7 @@ namespace Voia.Api.Controllers
                 .AsNoTracking()
                 .Where(m => m.ConversationId == conversationId)
                 .Include(m => m.User)
+                .Include(m => m.PublicUser)
                 .Include(m => m.Bot)
                 .Select(m => new ConversationItemDto
                 {
@@ -332,6 +336,16 @@ namespace Voia.Api.Controllers
                     FileType = f.FileType
                 })
                 .ToListAsync();
+
+            _logger?.LogInformation("[GetConversationHistory] Conversation {ConversationId}: messages={MessageCount}, files={FileCount}", conversationId, messages.Count, files.Count);
+
+                // DEBUG: log a small sample of messages returned to help diagnose missing public-user messages
+                try
+                {
+                    var sample = messages.Take(10).Select(m => new { m.Id, m.Type, m.Timestamp, m.FromRole, m.FromId, m.FromName, Text = m.Text ?? "" });
+                    _logger?.LogInformation("[GetConversationHistory] sample messages for conv {ConversationId}: {Sample}", conversationId, System.Text.Json.JsonSerializer.Serialize(sample));
+                }
+                catch { /* ignore logging errors */ }
 
             // --- Combinar y Ordenar ---
             var combinedHistory = messages.Concat(files)

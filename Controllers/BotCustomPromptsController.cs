@@ -113,6 +113,25 @@ namespace Voia.Api.Controllers
             _context.BotCustomPrompts.Add(prompt);
             await _context.SaveChangesAsync();
 
+            // Marcar fase 'training' como completada para el bot (non-blocking)
+            try
+            {
+                var meta = System.Text.Json.JsonSerializer.Serialize(new { source = "prompt_create", promptId = prompt.Id, role = prompt.Role.ToString() });
+                var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == prompt.BotId && p.Phase == "training");
+                if (phase == null)
+                {
+                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = prompt.BotId, Phase = "training", CompletedAt = DateTime.UtcNow, Meta = meta, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                }
+                else
+                {
+                    phase.CompletedAt = DateTime.UtcNow;
+                    phase.Meta = meta;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+            }
+            catch { /* non-blocking */ }
+
             var response = new BotCustomPromptResponseDto
             {
                 Id = prompt.Id,

@@ -168,7 +168,12 @@ namespace Voia.Api.Services.Chat
                         SubmissionValue = item.Value,
                         UserId = userId,
                         SubmissionSessionId = sessionId,
-                        SubmittedAt = DateTime.UtcNow
+                        SubmittedAt = DateTime.UtcNow,
+                        // Dejar campos contextuales nulos por defecto; pueden ser rellenados por el llamador (por ejemplo ChatHub)
+                        ConversationId = null,
+                        CaptureIntent = null,
+                        CaptureSource = "extraction",
+                        MetadataJson = null
                     };
                     newSubmissions.Add(submission);
                 }

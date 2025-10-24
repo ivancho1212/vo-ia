@@ -42,6 +42,7 @@ namespace Voia.Api.Data
         public DbSet<UserBotRelation> UserBotRelations { get; set; }
         public DbSet<BotAction> BotActions { get; set; }
         public DbSet<BotIntegration> BotIntegrations { get; set; }
+    public DbSet<Voia.Api.Models.Bots.BotPhase> BotPhases { get; set; }
         public DbSet<Role> Roles { get; set; } = null!;
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
@@ -307,6 +308,20 @@ namespace Voia.Api.Data
                 .HasOne(f => f.Conversation)
                 .WithMany()
                 .HasForeignKey(f => f.ConversationId);
+
+            // Bot phases table mapping
+            modelBuilder.Entity<Voia.Api.Models.Bots.BotPhase>(entity =>
+            {
+                entity.ToTable("bot_phases");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.BotId).HasColumnName("bot_id");
+                entity.Property(e => e.Phase).HasColumnName("phase");
+                entity.Property(e => e.CompletedAt).HasColumnName("completed_at");
+                entity.Property(e => e.Meta).HasColumnName("meta");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            });
 
         }
     }

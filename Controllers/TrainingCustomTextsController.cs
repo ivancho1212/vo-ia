@@ -144,6 +144,13 @@ namespace Voia.Api.Controllers
                 }
             }
 
+            // Validate that the bot exists before inserting (prevent FK violations)
+            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
+            if (!botExists)
+            {
+                return BadRequest(new { message = "El bot indicado no existe (botId). Verifica que estás enviando el id correcto." });
+            }
+
             var text = new TrainingCustomText
             {
                 BotId = dto.BotId,
@@ -173,6 +180,25 @@ namespace Voia.Api.Controllers
 
             _context.TrainingCustomTexts.Add(text);
             await _context.SaveChangesAsync();
+
+            // Marcar fase 'training' como completada para el bot (non-blocking)
+            try
+            {
+                var meta = System.Text.Json.JsonSerializer.Serialize(new { source = "training_text", textId = text.Id });
+                var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == text.BotId && p.Phase == "training");
+                if (phase == null)
+                {
+                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = text.BotId, Phase = "training", CompletedAt = DateTime.UtcNow, Meta = meta, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                }
+                else
+                {
+                    phase.CompletedAt = DateTime.UtcNow;
+                    phase.Meta = meta;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+            }
+            catch { /* non-blocking */ }
 
             // Llamar al servicio de vectorización
             try
@@ -213,6 +239,7 @@ namespace Voia.Api.Controllers
                 ContentHash = text.ContentHash
             });
         }
+
 
         /// <summary>
         /// Elimina un texto personalizado.

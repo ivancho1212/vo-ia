@@ -59,15 +59,18 @@ namespace Voia.Api.Controllers
         public async Task<ActionResult<IEnumerable<object>>> GetSubmissionsGroupedByBot(int botId)
         {
             // ✅ OPTIMIZACIÓN: Realizar el agrupamiento y la mayor parte del procesamiento en la base de datos.
+            // Nota: evitar llamadas a ToString() dentro de expresiones LINQ que se traducen a SQL
+            // porque EF Core no puede traducir esa llamada y provocará una excepción en tiempo de ejecución.
+            // En su lugar agrupamos por un objeto anónimo y realizamos el mapeo final en memoria.
             var groupedSubmissions = await _context.BotDataSubmissions
                 .Where(s => s.BotId == botId)
                 .Include(s => s.CaptureField) // Incluir el campo para obtener el nombre
-                .GroupBy(s => s.SubmissionSessionId ?? s.UserId.ToString())
+                .GroupBy(s => new { s.SubmissionSessionId, s.UserId })
                 .Select(g => new
                 {
-                    SessionKey = g.Key,
+                    Key = g.Key,
                     LastSubmissionDate = g.Max(s => s.SubmittedAt),
-                    Submissions = g.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue, s.UserId, s.SubmissionSessionId })
+                    Submissions = g.Select(s => new { s.CaptureField.FieldName, s.SubmissionValue, s.UserId, s.SubmissionSessionId, s.ConversationId, s.CaptureIntent, s.CaptureSource, s.MetadataJson })
                 })
                 .OrderByDescending(g => g.LastSubmissionDate)
                 .ToListAsync();
@@ -75,22 +78,27 @@ namespace Voia.Api.Controllers
             // Mapeo final en memoria
             var result = groupedSubmissions.Select(g => new
             {
-                sessionId = g.Submissions.FirstOrDefault()?.SubmissionSessionId,
-                userId = g.Submissions.FirstOrDefault()?.UserId,
+                // Ahora Key es un objeto con SubmissionSessionId y UserId
+                sessionId = g.Key.SubmissionSessionId,
+                userId = g.Key.UserId,
                 values = g.Submissions
                     .GroupBy(s => s.FieldName)
                     .ToDictionary(grp => grp.Key, grp => grp.Select(s => s.SubmissionValue).ToList()),
+                conversationId = g.Submissions.FirstOrDefault()?.ConversationId,
+                captureIntent = g.Submissions.FirstOrDefault()?.CaptureIntent,
+                captureSource = g.Submissions.FirstOrDefault()?.CaptureSource,
+                metadataJson = g.Submissions.FirstOrDefault()?.MetadataJson,
                 createdAt = g.LastSubmissionDate
             });
 
             return Ok(result);
         }
 
-        // GET: api/BotDataSubmissions/public/by-bot/{botId}
+    // GET: api/BotDataSubmissions/public/by-bot/{botId}
 
-        [HttpGet("public/by-bot/{botId}")]
-        // [AllowAnonymous] // Descomenta si quieres que sea público sin auth
-        public async Task<IActionResult> GetPublicSubmissions(int botId /*, [FromQuery] string token */)
+    [HttpGet("public/by-bot/{botId}")]
+    [HasPermission("datos_captados_bot")] // Require explicit permission to access public submissions
+    public async Task<IActionResult> GetPublicSubmissions(int botId /*, [FromQuery] string token */)
         {
             var bot = await _context.Bots.FindAsync(botId);
             if (bot == null)
@@ -119,7 +127,11 @@ namespace Voia.Api.Controllers
                     SessionId = s.SubmissionSessionId,
                     CreatedAt = s.SubmittedAt,
                     Field = fields[s.CaptureFieldId],
-                    Value = s.SubmissionValue
+                    Value = s.SubmissionValue,
+                    ConversationId = s.ConversationId,
+                    CaptureIntent = s.CaptureIntent,
+                    CaptureSource = s.CaptureSource,
+                    MetadataJson = s.MetadataJson
                 })
                 .OrderBy(x => x.SessionId)
                 .ThenBy(x => x.CreatedAt)
@@ -187,6 +199,10 @@ namespace Voia.Api.Controllers
                         SubmissionValue = dto.SubmissionValue,
                         UserId = dto.UserId,
                         SubmissionSessionId = dto.SubmissionSessionId,
+                        ConversationId = dto.ConversationId,
+                        CaptureIntent = dto.CaptureIntent,
+                        CaptureSource = dto.CaptureSource,
+                        MetadataJson = dto.MetadataJson,
                         SubmittedAt = DateTime.UtcNow
                     };
 
@@ -271,6 +287,10 @@ namespace Voia.Api.Controllers
                 SubmissionValue = dto.SubmissionValue,
                 UserId = dto.UserId,
                 SubmissionSessionId = dto.SubmissionSessionId,
+                ConversationId = dto.ConversationId,
+                CaptureIntent = dto.CaptureIntent,
+                CaptureSource = dto.CaptureSource,
+                MetadataJson = dto.MetadataJson,
                 SubmittedAt = DateTime.UtcNow
             };
 
@@ -296,7 +316,11 @@ namespace Voia.Api.Controllers
                 SubmissionValue = submission.SubmissionValue,
                 UserId = submission.UserId,
                 SubmissionSessionId = submission.SubmissionSessionId,
-                SubmittedAt = submission.SubmittedAt
+                SubmittedAt = submission.SubmittedAt,
+                ConversationId = submission.ConversationId,
+                CaptureIntent = submission.CaptureIntent,
+                CaptureSource = submission.CaptureSource,
+                MetadataJson = submission.MetadataJson
             };
 
             return CreatedAtAction(nameof(GetById), new { id = submission.Id }, response);
@@ -344,6 +368,278 @@ namespace Voia.Api.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // GET: api/BotDataSubmissions/export?botId=1&from=2025-01-01&to=2025-12-31&sessionId=...&intent=...
+        [HttpGet("export")]
+        public async Task<IActionResult> Export([FromQuery] int botId, [FromQuery] string? sessionId, [FromQuery] int? userId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? intent)
+        {
+            if (botId == 0)
+                return BadRequest(new { Message = "El parámetro botId es obligatorio." });
+
+            var bot = await _context.Bots.FindAsync(botId);
+            if (bot == null)
+                return NotFound(new { Message = $"Bot {botId} no encontrado." });
+
+            // Permisos: permitir solo al propietario del bot o a administradores/usuarios con permiso
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                               ?? User.FindFirst("sub")?.Value
+                               ?? User.FindFirst("id")?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var authUserId))
+            {
+                return Forbid();
+            }
+
+            if (bot.UserId != authUserId)
+            {
+                // No es el propietario. Comprobar rol/permission
+                var user = await _context.Users
+                    .Include(u => u.Role)
+                        .ThenInclude(r => r.RolePermissions)
+                            .ThenInclude(rp => rp.Permission)
+                    .FirstOrDefaultAsync(u => u.Id == authUserId);
+
+                if (user == null)
+                    return Forbid();
+
+                var isAdmin = !string.IsNullOrEmpty(user.Role?.Name) && user.Role.Name.Equals("admin", System.StringComparison.OrdinalIgnoreCase);
+                var hasPermission = user.Role?.RolePermissions?.Any(rp => rp.Permission != null && (rp.Permission.Name == "CanViewBots" || rp.Permission.Name == "CanExportData")) == true;
+
+                if (!isAdmin && !hasPermission)
+                {
+                    return Forbid();
+                }
+            }
+
+            // Obtener campos definidos para el bot (ordenados para consistencia de columnas)
+            var fields = await _context.BotDataCaptureFields
+                .Where(f => f.BotId == botId)
+                .OrderBy(f => f.Id)
+                .ToListAsync();
+
+            // Filtrar submissions según parámetros
+            var q = _context.BotDataSubmissions
+                .Where(s => s.BotId == botId);
+
+            if (!string.IsNullOrWhiteSpace(sessionId)) q = q.Where(s => s.SubmissionSessionId == sessionId);
+            if (userId.HasValue) q = q.Where(s => s.UserId == userId.Value);
+            if (from.HasValue) q = q.Where(s => s.SubmittedAt >= from.Value);
+            if (to.HasValue) q = q.Where(s => s.SubmittedAt <= to.Value);
+            if (!string.IsNullOrWhiteSpace(intent)) q = q.Where(s => s.CaptureIntent == intent);
+
+            var submissions = await q.Include(s => s.CaptureField).ToListAsync();
+
+            // Agrupar por sesión (submissionSessionId) y userId
+            var grouped = submissions
+                .GroupBy(s => new { s.SubmissionSessionId, s.UserId })
+                .OrderByDescending(g => g.Max(s => s.SubmittedAt))
+                .ToList();
+
+            // Construir CSV
+            var sb = new System.Text.StringBuilder();
+            // Header
+            var headerCols = new List<string> { "BotId", "BotName", "SessionId", "UserId", "ConversationId", "CaptureIntent", "CaptureSource", "MetadataJson", "LastSubmittedAt" };
+            headerCols.AddRange(fields.Select(f => f.FieldName));
+            sb.AppendLine(string.Join(",", headerCols.Select(h => '"' + h.Replace("\"", "\"\"") + '"')));
+
+            foreach (var g in grouped)
+            {
+                var lastSubmitted = g.Max(s => s.SubmittedAt);
+                var row = new List<string>
+                {
+                    botId.ToString(),
+                    (bot.Name ?? "").Replace("\"", "\"\""),
+                    g.Key.SubmissionSessionId ?? "",
+                    g.Key.UserId?.ToString() ?? "",
+                    g.Select(s => s.ConversationId).FirstOrDefault()?.ToString() ?? "",
+                    g.Select(s => s.CaptureIntent).FirstOrDefault() ?? "",
+                    g.Select(s => s.CaptureSource).FirstOrDefault() ?? "",
+                    (g.Select(s => s.MetadataJson).FirstOrDefault() ?? "").Replace("\"", "\"\""),
+                    lastSubmitted?.ToString("o") ?? ""
+                };
+
+                // Añadir columnas por campo
+                foreach (var f in fields)
+                {
+                    var values = g.Where(s => s.CaptureFieldId == f.Id).OrderBy(s => s.SubmittedAt).Select(s => s.SubmissionValue).Where(v => !string.IsNullOrEmpty(v)).ToList();
+                    var joined = values.Any() ? string.Join(" | ", values).Replace("\"", "\"\"") : "";
+                    row.Add(joined);
+                }
+
+                sb.AppendLine(string.Join(",", row.Select(c => '"' + c + '"')));
+            }
+
+            // Si se solicita formato xlsx, generar archivo XLSX con ClosedXML
+            var format = Request.Query.ContainsKey("format") ? Request.Query["format"].ToString().ToLower() : "csv";
+            var fileName = $"captured_bot_{botId}_{DateTime.UtcNow:yyyyMMddHHmmss}";
+
+            if (format == "xlsx")
+            {
+                using var workbook = new ClosedXML.Excel.XLWorkbook();
+                var ws = workbook.Worksheets.Add("Datos Capturados");
+                // Header
+                for (int i = 0; i < headerCols.Count; i++)
+                {
+                    ws.Cell(1, i + 1).Value = headerCols[i];
+                }
+
+                int rowIdx = 2;
+                foreach (var g in grouped)
+                {
+                    var lastSubmitted = g.Max(s => s.SubmittedAt);
+                    var colIdx = 1;
+                    ws.Cell(rowIdx, colIdx++).Value = botId;
+                    ws.Cell(rowIdx, colIdx++).Value = bot.Name ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Key.SubmissionSessionId ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Key.UserId?.ToString() ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Select(s => s.ConversationId).FirstOrDefault()?.ToString() ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Select(s => s.CaptureIntent).FirstOrDefault() ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Select(s => s.CaptureSource).FirstOrDefault() ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = g.Select(s => s.MetadataJson).FirstOrDefault() ?? "";
+                    ws.Cell(rowIdx, colIdx++).Value = lastSubmitted?.ToString("o") ?? "";
+
+                    foreach (var f in fields)
+                    {
+                        var values = g.Where(s => s.CaptureFieldId == f.Id).OrderBy(s => s.SubmittedAt).Select(s => s.SubmissionValue).Where(v => !string.IsNullOrEmpty(v)).ToList();
+                        var joined = values.Any() ? string.Join(" | ", values) : "";
+                        ws.Cell(rowIdx, colIdx++).Value = joined;
+                    }
+
+                    rowIdx++;
+                }
+
+                using var ms = new System.IO.MemoryStream();
+                workbook.SaveAs(ms);
+                ms.Position = 0;
+                var content = ms.ToArray();
+                return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName + ".xlsx");
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+            fileName = fileName + ".csv";
+            return File(bytes, "text/csv; charset=utf-8", fileName);
+        }
+
+        // GET: api/botdatasubmissions/by-bot-raw/{botId}
+        [HttpGet("by-bot-raw/{botId}")]
+        public async Task<IActionResult> GetSubmissionsRaw(int botId)
+        {
+            var bot = await _context.Bots.FindAsync(botId);
+            if (bot == null)
+                return NotFound();
+
+            var submissions = await _context.BotDataSubmissions
+                .Where(s => s.BotId == botId)
+                .Include(s => s.CaptureField)
+                .OrderBy(s => s.SubmittedAt)
+                .Select(s => new
+                {
+                    Id = s.Id,
+                    BotId = s.BotId,
+                    CaptureFieldId = s.CaptureFieldId,
+                    FieldName = s.CaptureField != null ? s.CaptureField.FieldName : null,
+                    SubmissionValue = s.SubmissionValue,
+                    SubmittedAt = s.SubmittedAt,
+                    UserId = s.UserId,
+                    SubmissionSessionId = s.SubmissionSessionId,
+                    ConversationId = s.ConversationId,
+                    CaptureIntent = s.CaptureIntent,
+                    CaptureSource = s.CaptureSource,
+                    MetadataJson = s.MetadataJson
+                })
+                .ToListAsync();
+
+            return Ok(submissions);
+        }
+
+        // GET: api/BotDataSubmissions/public/by-user/{userId}
+        // Seguridad: permite acceso si:
+        // - Llamador autenticado y su id == userId
+        // - Se entrega ?token=... que coincide con users.PublicDataToken
+        // - Llamador autenticado tiene permiso 'datos_captados_bot' o es admin
+        [HttpGet("public/by-user/{userId}")]
+        public async Task<IActionResult> GetPublicSubmissionsByUser(int userId, [FromQuery] string? token)
+        {
+            // Buscar usuario objetivo
+            var targetUser = await _context.Users.FindAsync(userId);
+            if (targetUser == null) return NotFound();
+
+            // Determinar caller autenticado (si existe)
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                               ?? User.FindFirst("sub")?.Value
+                               ?? User.FindFirst("id")?.Value;
+
+            int? authUserId = null;
+            if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out var parsed)) authUserId = parsed;
+
+            var authorized = false;
+
+            // 1) Si el llamador está autenticado y es el mismo usuario
+            if (authUserId.HasValue && authUserId.Value == userId) authorized = true;
+
+            // 2) Si se entrega token que coincide con el token público del usuario
+            if (!authorized && !string.IsNullOrEmpty(token) && !string.IsNullOrEmpty(targetUser.PublicDataToken) && token == targetUser.PublicDataToken)
+            {
+                authorized = true;
+            }
+
+            // 3) Si el llamador autenticado tiene permiso explícito o es admin
+            if (!authorized && authUserId.HasValue)
+            {
+                var caller = await _context.Users
+                    .Include(u => u.Role)
+                        .ThenInclude(r => r.RolePermissions)
+                            .ThenInclude(rp => rp.Permission)
+                    .FirstOrDefaultAsync(u => u.Id == authUserId.Value);
+
+                if (caller != null)
+                {
+                    var isAdmin = !string.IsNullOrEmpty(caller.Role?.Name) && caller.Role.Name.Equals("admin", System.StringComparison.OrdinalIgnoreCase);
+                    var hasPermission = caller.Role?.RolePermissions?.Any(rp => rp.Permission != null && rp.Permission.Name == "datos_captados_bot") == true;
+                    if (isAdmin || hasPermission) authorized = true;
+                }
+            }
+
+            if (!authorized) return Forbid();
+
+            // Recuperar bots asociados al usuario
+            var botIds = await _context.Bots.Where(b => b.UserId == userId).Select(b => b.Id).ToListAsync();
+
+            if (botIds == null || botIds.Count == 0) return Ok(new List<object>());
+
+            // Obtener campos para todos los bots (para ordenar columnas conservadoramente, usaremos los campos de la primera lista)
+            var firstBotId = botIds.First();
+            var fields = await _context.BotDataCaptureFields.Where(f => botIds.Contains(f.BotId)).OrderBy(f => f.Id).ToListAsync();
+
+            // Traer todas las submissions para esos bots
+            var allSubs = await _context.BotDataSubmissions
+                .Where(s => botIds.Contains(s.BotId))
+                .Include(s => s.CaptureField)
+                .ToListAsync();
+
+            // Agrupar por BotId + SessionId + UserId
+            var grouped = allSubs
+                .GroupBy(s => new { s.BotId, s.SubmissionSessionId, s.UserId })
+                .OrderByDescending(g => g.Max(s => s.SubmittedAt))
+                .ToList();
+
+            // Construir respuesta JSON (array de objetos con metadata + values)
+            var result = grouped.Select(g => new
+            {
+                BotId = g.Key.BotId,
+                SessionId = g.Key.SubmissionSessionId,
+                UserId = g.Key.UserId,
+                ConversationId = g.Select(s => s.ConversationId).FirstOrDefault(),
+                CaptureIntent = g.Select(s => s.CaptureIntent).FirstOrDefault(),
+                CaptureSource = g.Select(s => s.CaptureSource).FirstOrDefault(),
+                MetadataJson = g.Select(s => s.MetadataJson).FirstOrDefault(),
+                CreatedAt = g.Max(s => s.SubmittedAt),
+                Values = g.GroupBy(s => s.CaptureField.FieldName)
+                          .ToDictionary(grp => grp.Key ?? "", grp => grp.Select(s => s.SubmissionValue).Where(v => v != null).ToList())
+            });
+
+            return Ok(result);
         }
     }
 }

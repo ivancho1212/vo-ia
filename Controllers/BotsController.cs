@@ -146,10 +146,31 @@ namespace Voia.Api.Controllers
 
                 var bots = await _context.Bots
                     .Include(b => b.User)
+                    .Include(b => b.Style)
                     .Where(b => b.UserId == userId && b.IsActive)
                     .ToListAsync();
 
-                return Ok(bots);
+                // Project to a minimal DTO so the client reliably receives styleId / style
+                var result = bots.Select(b => new {
+                    id = b.Id,
+                    name = b.Name,
+                    description = b.Description,
+                    apiKey = b.ApiKey,
+                    isActive = b.IsActive,
+                    createdAt = b.CreatedAt,
+                    updatedAt = b.UpdatedAt,
+                    isReady = b.IsReady,
+                    userId = b.UserId,
+                    botTemplateId = b.BotTemplateId,
+                    styleId = b.StyleId,
+                    style = b.Style == null ? null : new {
+                        id = b.Style.Id,
+                        title = b.Style.Title,
+                        primaryColor = b.Style.PrimaryColor,
+                    }
+                });
+
+                return Ok(result);
             }
             catch (Exception ex)
             {
@@ -388,6 +409,26 @@ namespace Voia.Api.Controllers
             bot.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Marcar fase 'styles' como completada para el bot (non-blocking)
+            try
+            {
+                var meta = System.Text.Json.JsonSerializer.Serialize(new { source = "style_assign", styleId = dto.StyleId });
+                var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == bot.Id && p.Phase == "styles");
+                if (phase == null)
+                {
+                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = bot.Id, Phase = "styles", CompletedAt = DateTime.UtcNow, Meta = meta, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                }
+                else
+                {
+                    phase.CompletedAt = DateTime.UtcNow;
+                    phase.Meta = meta;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+            }
+            catch { /* non-blocking */ }
+
             return Ok(bot);
         }
 
@@ -482,6 +523,7 @@ namespace Voia.Api.Controllers
             var bot = await _context.Bots
                 .Include(b => b.User)
                 .Include(b => b.TrainingSessions)
+                .Include(b => b.Style)
                 .FirstOrDefaultAsync(b => b.Id == id);
 
             if (bot == null)
@@ -502,7 +544,24 @@ namespace Voia.Api.Controllers
                 isReady = bot.IsReady,
                 userId = bot.UserId,
                 botTemplateId = bot.BotTemplateId,
-                templateTrainingSessionId = lastSession?.Id
+                templateTrainingSessionId = lastSession?.Id,
+                // expose the StyleId so frontend can detect assigned style
+                styleId = bot.StyleId,
+                // minimal style object useful for UI (null-safe)
+                style = bot.Style == null ? null : new {
+                    id = bot.Style.Id,
+                    title = bot.Style.Title,
+                    primaryColor = bot.Style.PrimaryColor,
+                    secondaryColor = bot.Style.SecondaryColor,
+                    avatarUrl = bot.Style.AvatarUrl,
+                    position = bot.Style.Position,
+                    fontFamily = bot.Style.FontFamily,
+                    theme = bot.Style.Theme,
+                    customCss = bot.Style.CustomCss,
+                    headerBackgroundColor = bot.Style.HeaderBackgroundColor,
+                    allowImageUpload = bot.Style.AllowImageUpload,
+                    allowFileUpload = bot.Style.AllowFileUpload
+                }
             });
         }
         [HttpGet("{id}/widget-settings")]

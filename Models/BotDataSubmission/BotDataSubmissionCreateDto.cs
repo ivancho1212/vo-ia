@@ -17,5 +17,11 @@ namespace Voia.Api.Models.DTOs
 
         [MaxLength(100)]
         public string? SubmissionSessionId { get; set; }
+        
+        // New contextual fields
+        public long? ConversationId { get; set; }
+        public string? CaptureIntent { get; set; }
+        public string? CaptureSource { get; set; }
+        public string? MetadataJson { get; set; }
     }
 }

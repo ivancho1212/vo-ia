@@ -3,6 +3,7 @@
   const scriptTag = document.currentScript;
   const botId = scriptTag.getAttribute("data-bot");
   const token = scriptTag.getAttribute("data-token");
+  const allowedDomain = scriptTag.getAttribute('data-allowed-domain') || scriptTag.getAttribute('data-allowedDomain') || '';
 
   if (!botId) {
     console.error("❌ El atributo data-bot es requerido para el widget.");
@@ -11,6 +12,22 @@
 
   if (!token) {
     console.error("❌ El atributo data-token es requerido para el widget.");
+    return;
+  }
+
+  // Security: require allowedDomain and validate current host
+  if (!allowedDomain) {
+    console.warn('⚠️ Widget not loaded: missing data-allowed-domain attribute. Regenerate the integration snippet including the allowed domain.');
+    return;
+  }
+
+  try {
+    const allowedHost = (new URL(allowedDomain)).host;
+    if (window.location.host !== allowedHost) {
+      return; // not authorized here
+    }
+  } catch (e) {
+    console.warn('⚠️ Invalid data-allowed-domain value for widget.');
     return;
   }
 

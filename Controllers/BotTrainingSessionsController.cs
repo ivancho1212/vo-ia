@@ -49,6 +49,25 @@ namespace Voia.Api.Controllers
             _context.BotTrainingSessions.Add(session);
             await _context.SaveChangesAsync();
 
+            // Marcar fase 'training' como completada para el bot
+            try
+            {
+                var meta = System.Text.Json.JsonSerializer.Serialize(new { source = "training_session", sessionId = session.Id });
+                var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == session.BotId && p.Phase == "training");
+                if (phase == null)
+                {
+                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = session.BotId, Phase = "training", CompletedAt = DateTime.UtcNow, Meta = meta, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                }
+                else
+                {
+                    phase.CompletedAt = DateTime.UtcNow;
+                    phase.Meta = meta;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+            }
+            catch { }
+
             var result = new BotTrainingSessionResponseDto
             {
                 Id = session.Id,

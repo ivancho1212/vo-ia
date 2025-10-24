@@ -177,6 +177,12 @@ namespace Voia.Api.Controllers
                 _context.TrainingUrls.Add(url);
                 await _context.SaveChangesAsync();
 
+                // Nota: No marcamos 'data_capture' aquí.
+                // El marcado de la fase `data_capture` debe ocurrir cuando la URL haya sido procesada e indexada
+                // por el servicio de ingestión/vectorización (p. ej. el endpoint en localhost:8000). Marcarla ahora
+                // causa que la interfaz considere la fase completada por una simple adición, cuando en realidad el
+                // trabajo asíncrono de extracción/indexado puede fallar o estar pendiente.
+
                 // Llamar al servicio de vectorización
                 try
                 {
@@ -222,6 +228,10 @@ namespace Voia.Api.Controllers
                 return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
             }
         }
+
+        // Optional: mark data_capture when a URL is created (non-blocking)
+        // Note: kept outside try/catch above to not alter behavior, but executed after creation
+        // (no need to await here since controller already saved url; we do a fire-and-forget style call is avoided in serverside)
 
 
 

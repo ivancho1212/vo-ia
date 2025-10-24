@@ -52,6 +52,24 @@ builder.Services.AddAuthentication(options =>
         RoleClaimType = ClaimTypes.Role,
         NameClaimType = ClaimTypes.NameIdentifier
     };
+
+    // Support receiving access token from query string for SignalR negotiate/ws requests.
+    // This keeps standard Authorization header behavior while allowing the client
+    // SignalR JS to send the token as a query param (access_token) during negotiate.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var request = context.Request;
+            // Check query string for access_token or token when connecting to SignalR hub
+            var accessToken = request.Query["access_token"].FirstOrDefault() ?? request.Query["token"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(accessToken) && request.Path.StartsWithSegments("/chatHub"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -94,15 +112,62 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.WriteIndented = true;
     });
 
-builder.Services.AddSignalR(options =>
+// Configure SignalR and optional Redis backplane
+var signalRBuilder = builder.Services.AddSignalR(options =>
 {
     options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10 MB
 });
+
+// Redis optional: if REDIS_CONNECTION provided, register RedisService and PresenceService.
+// NOTE: To enable the SignalR Redis backplane (distribute groups across instances) add the
+// NuGet package Microsoft.AspNetCore.SignalR.StackExchangeRedis and uncomment the sample below.
+// signalRBuilder.AddStackExchangeRedis(redisConnection, options => { options.Configuration.ChannelPrefix = "voia-signalr"; });
+
+var redisConnection = builder.Configuration["REDIS_CONNECTION"]; // env var or appsettings
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    // Register RedisService and PresenceService when redis is configured
+    builder.Services.AddSingleton<RedisService>(sp =>
+    {
+        var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<RedisService>>();
+        return new RedisService(redisConnection, logger);
+    });
+    builder.Services.AddSingleton<PresenceService>(sp =>
+    {
+        var redis = sp.GetService<RedisService>();
+        var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PresenceService>>();
+        return new PresenceService(redis, logger);
+    });
+}
+else
+{
+    // No redis: register a PresenceService with null Redis (in-memory fallback could be added later)
+    builder.Services.AddSingleton<PresenceService>(sp =>
+    {
+        var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PresenceService>>();
+        return new PresenceService(null, logger);
+    });
+}
 
 builder.Services.AddEndpointsApiExplorer();
 
 // Hosted services
 builder.Services.AddHostedService<InactiveConversationWorker>();
+
+// Message processing queue and worker - use RedisStreamMessageQueue when Redis is configured, otherwise fallback to in-memory
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    // RedisService is already registered above when redisConnection is set
+    builder.Services.AddSingleton<RedisStreamMessageQueue>();
+    builder.Services.AddSingleton<IMessageQueue>(sp => sp.GetRequiredService<RedisStreamMessageQueue>());
+}
+else
+{
+    builder.Services.AddSingleton<InMemoryMessageQueue>();
+    builder.Services.AddSingleton<IMessageQueue>(sp => sp.GetRequiredService<InMemoryMessageQueue>());
+}
+
+builder.Services.AddHostedService<MessageProcessingWorker>();
 
 // SWAGGER con JWT + XML
 builder.Services.AddSwaggerGen(c =>

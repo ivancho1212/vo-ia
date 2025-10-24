@@ -22,7 +22,7 @@ namespace Voia.Api.Models
         public BotDataCaptureField CaptureField { get; set; }  // ✅ navegación
 
         [Column("submission_value")]
-        public string SubmissionValue { get; set; }
+    public string? SubmissionValue { get; set; }
 
         [Column("submitted_at")]
         public DateTime? SubmittedAt { get; set; }
@@ -33,6 +33,18 @@ namespace Voia.Api.Models
         [Column("submission_session_id")]
         [MaxLength(100)]
         public string? SubmissionSessionId { get; set; }
+
+        [Column("conversation_id")]
+        public long? ConversationId { get; set; }
+
+        [Column("capture_intent")]
+        public string? CaptureIntent { get; set; }
+
+        [Column("capture_source")]
+        public string? CaptureSource { get; set; }
+
+        [Column("metadata_json")]
+        public string? MetadataJson { get; set; }
     }
 
 }

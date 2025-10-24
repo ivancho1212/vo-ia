@@ -84,9 +84,32 @@ namespace Voia.Api.Controllers
 
         // POST: api/botdatacapturefields
         [HttpPost]
-    [HasPermission("CanEditBotDataCaptureFields")]
-    public async Task<ActionResult<BotDataCaptureFieldResponseDto>> Create(BotDataCaptureFieldCreateDto dto)
+        public async Task<ActionResult<BotDataCaptureFieldResponseDto>> Create(BotDataCaptureFieldCreateDto dto)
         {
+            // Authorization: allow if user has CanEditBotDataCaptureFields OR if user is owner of the bot
+            var userIdClaim = HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+            {
+                return Forbid();
+            }
+
+            // Check role permissions
+            var user = await _context.Users
+                .Include(u => u.Role)
+                    .ThenInclude(r => r.RolePermissions)
+                        .ThenInclude(rp => rp.Permission)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            var hasPermission = user != null && user.Role != null && user.Role.RolePermissions != null && user.Role.RolePermissions.Any(rp => rp.Permission != null && rp.Permission.Name == "CanEditBotDataCaptureFields");
+
+            // Check ownership of the target bot
+            var bot = await _context.Bots.FindAsync(dto.BotId);
+            var isOwner = bot != null && bot.UserId == userId;
+
+            if (!hasPermission && !isOwner)
+            {
+                return Forbid();
+            }
             var field = new BotDataCaptureField
             {
                 BotId = dto.BotId,
@@ -99,6 +122,31 @@ namespace Voia.Api.Controllers
 
             _context.BotDataCaptureFields.Add(field);
             await _context.SaveChangesAsync();
+
+            // Marcar fase 'data_capture' como completada para el bot (non-blocking)
+            // Nota: esta marca ocurre aquí porque la intención es que cuando el usuario añade un campo
+            // de captura y lo asocia con el bot, se considere esa parte de la captura de datos.
+            try
+            {
+                Console.WriteLine($"[BotPhases] BotDataCaptureFieldsController: upserting data_capture for bot {field.BotId} at {DateTime.UtcNow:o}");
+                var meta = System.Text.Json.JsonSerializer.Serialize(new { source = "data_capture_field", fieldId = field.Id });
+                var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == field.BotId && p.Phase == "data_capture");
+                if (phase == null)
+                {
+                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = field.BotId, Phase = "data_capture", CompletedAt = DateTime.UtcNow, Meta = meta, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                }
+                else
+                {
+                    phase.CompletedAt = DateTime.UtcNow;
+                    phase.Meta = meta;
+                    phase.UpdatedAt = DateTime.UtcNow;
+                }
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[BotPhases] BotDataCaptureFieldsController: failed to upsert data_capture for bot (err): {ex.Message}");
+            }
 
             var responseDto = new BotDataCaptureFieldResponseDto
             {
