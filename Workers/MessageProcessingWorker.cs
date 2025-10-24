@@ -291,5 +291,24 @@ public class MessageProcessingWorker : BackgroundService
             timestamp = botMessage.CreatedAt,
             id = botMessage.Id
         }, cancellationToken: cancellationToken);
+        // Notify any connected admins in real-time about this bot response so admin panels update immediately
+        try
+        {
+            await hubContext.Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                id = botMessage.Id,
+                conversationId = botMessage.ConversationId,
+                text = botMessage.MessageText,
+                from = "bot",
+                fromRole = "bot",
+                timestamp = botMessage.CreatedAt,
+                userId = botMessage.UserId,
+                publicUserId = botMessage.PublicUserId
+            }, cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to notify admins about bot message {MessageId} for conv {ConversationId}", botMessage.Id, botMessage.ConversationId);
+        }
     }
 }

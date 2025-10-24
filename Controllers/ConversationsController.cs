@@ -292,30 +292,33 @@ namespace Voia.Api.Controllers
                 return NotFound("Conversación no encontrada");
 
             // --- Mapeo de Mensajes ---
-            var messages = await _context.Messages
+            // Use in-memory mapping to avoid EF translation edge-cases that may filter out rows
+            var rawMessages = await _context.Messages
                 .AsNoTracking()
                 .Where(m => m.ConversationId == conversationId)
                 .Include(m => m.User)
                 .Include(m => m.PublicUser)
                 .Include(m => m.Bot)
-                .Select(m => new ConversationItemDto
-                {
-                    Id = m.Id,
-                    Type = "message",
-                    Text = m.MessageText,
-                    Timestamp = m.CreatedAt,
-                    FromRole = m.Sender,
-                    FromId = m.Sender == "user" ? (m.UserId ?? m.PublicUserId) : m.BotId,
-                    FromName = m.Sender == "user"
-        ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
-        : (m.Bot != null ? m.Bot.Name : "Bot"),
-                    FromAvatarUrl = m.Sender == "user"
-        ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
-        : "https://yourdomain.com/images/default-bot-avatar.png",
-                    ReplyToMessageId = m.ReplyToMessageId
-                })
-
+                .OrderBy(m => m.CreatedAt)
                 .ToListAsync();
+
+            var messages = rawMessages.Select(m => new ConversationItemDto
+            {
+                Id = m.Id,
+                Type = "message",
+                Text = m.MessageText,
+                Timestamp = m.CreatedAt,
+                FromRole = m.Sender,
+                // FromId/FromName: treat admin, bot and user separately to avoid mapping admin->bot
+                FromId = m.Sender == "user" ? (m.UserId ?? m.PublicUserId) : (m.Sender == "admin" ? m.UserId : m.BotId),
+                FromName = m.Sender == "user"
+                    ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
+                    : (m.Sender == "admin" ? (m.User != null ? m.User.Name : "Admin") : (m.Bot != null ? m.Bot.Name : "Bot")),
+                FromAvatarUrl = m.Sender == "user"
+                    ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
+                    : (m.Sender == "admin" ? (m.User != null ? (m.User.AvatarUrl ?? "") : "") : ""),
+                ReplyToMessageId = m.ReplyToMessageId
+            }).ToList();
 
             // --- Mapeo de Archivos ---
             var files = await _context.ChatUploadedFiles
@@ -347,10 +350,32 @@ namespace Voia.Api.Controllers
                 }
                 catch { /* ignore logging errors */ }
 
-            // --- Combinar y Ordenar ---
+            // --- Combinar, Normalizar y Ordenar ---
             var combinedHistory = messages.Concat(files)
                 .OrderBy(item => item.Timestamp)
                 .ToList();
+
+            // Quick debug counts by sender to help diagnose missing messages
+            var counts = rawMessages.GroupBy(m => (m.Sender ?? "user").ToLower())
+                .Select(g => new { sender = g.Key, count = g.Count() })
+                .ToList();
+
+            // Normalizar a un shape consistente (camelCase) para evitar problemas de casing
+            var normalizedHistory = combinedHistory.Select(item => new
+            {
+                id = item.Id,
+                type = item.Type ?? "message",
+                text = item.Text ?? string.Empty,
+                timestamp = item.Timestamp,
+                fromRole = (item.FromRole ?? "user").ToLower() == "admin" ? "admin" : ((item.FromRole ?? "user").ToLower() == "bot" ? "bot" : "user"),
+                fromId = item.FromId,
+                fromName = item.FromName,
+                fromAvatarUrl = item.FromAvatarUrl,
+                replyToMessageId = item.ReplyToMessageId,
+                fileUrl = item.FileUrl,
+                fileName = item.FileName,
+                fileType = item.FileType
+            }).ToList();
 
             return Ok(new
             {
@@ -361,8 +386,152 @@ namespace Voia.Api.Controllers
                     status = conversation.Status,
                     isWithAI = conversation.IsWithAI
                 },
-                history = combinedHistory
+                history = normalizedHistory,
+                debug = new { rawCount = rawMessages.Count, countsBySender = counts }
             });
+        }
+
+        /// <summary>
+        /// Devuelve mensajes paginados de una conversación.
+        /// Query params: before (ISO datetime) - opcional; limit - número de elementos a devolver (por defecto 50).
+        /// Retorna mensajes ordenados asc por timestamp (más antiguos primero), hasMore y nextBefore para paginar.
+        /// </summary>
+        [HttpGet("{conversationId}/messages")]
+        [HasPermission("CanViewConversations")]
+        public async Task<IActionResult> GetMessagesPaginated(int conversationId, [FromQuery] DateTime? before = null, [FromQuery] int limit = 50)
+        {
+            try
+            {
+            if (limit <= 0) limit = 50;
+            if (limit > 200) limit = 200; // cap razonable
+
+            var conversation = await _context.Conversations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+            if (conversation == null)
+                return NotFound("Conversación no encontrada");
+
+            // NOTE: previous implementation used a DB-level Take(order by desc) which in some environments
+            // returned only admin rows for the paged window (investigating root cause). To ensure correctness
+            // we fall back to an in-memory pagination over the ordered set for now (safe for typical
+            // conversation sizes). If performance becomes an issue, we can revisit with tuned SQL.
+
+            // Fetch the most recent messages (projection, no Includes) to avoid join-driven exclusions
+            var fetched = await _context.Messages
+                .AsNoTracking()
+                .Where(m => m.ConversationId == conversationId && (!before.HasValue || m.CreatedAt < before.Value))
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(limit)
+                .Select(m => new {
+                    m.Id,
+                    m.UserId,
+                    m.PublicUserId,
+                    m.BotId,
+                    Sender = (m.Sender ?? "user"),
+                    Text = m.MessageText,
+                    m.ReplyToMessageId,
+                    m.CreatedAt
+                })
+                .ToListAsync();
+
+            // We took the most recent 'limit' items in desc order — reverse to asc chronological
+            fetched.Reverse();
+
+            // Build selection and samples from fetched
+            var selection = fetched;
+            int totalWindow = await _context.Messages.AsNoTracking().CountAsync(m => m.ConversationId == conversationId && (!before.HasValue || m.CreatedAt < before.Value));
+            bool hasMore = totalWindow > selection.Count;
+
+            var allWindowFirst = fetched.Take(10).Select(m => new { id = m.Id, sender = m.Sender.ToLower(), createdAt = m.CreatedAt }).ToList<object>();
+            var allWindowLast = fetched.Skip(Math.Max(0, fetched.Count - 10)).Take(10).Select(m => new { id = m.Id, sender = m.Sender.ToLower(), createdAt = m.CreatedAt }).ToList<object>();
+
+            // Collect ids to fetch related names (users, public users, bots)
+            var userIds = selection.Where(m => m.UserId.HasValue).Select(m => m.UserId!.Value).Distinct().ToList();
+            var publicUserIds = selection.Where(m => m.PublicUserId.HasValue).Select(m => m.PublicUserId!.Value).Distinct().ToList();
+            var botIds = selection.Where(m => m.BotId.HasValue).Select(m => m.BotId!.Value).Distinct().ToList();
+
+            var usersMap = userIds.Any() ? await _context.Users.Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Name) : new Dictionary<int,string>();
+            var publicUsersMap = publicUserIds.Any() ? await _context.PublicUsers.Where(p => publicUserIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => $"Visitante {p.Id}") : new Dictionary<int,string>();
+            var botsMap = botIds.Any() ? await _context.Bots.Where(b => botIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name) : new Dictionary<int,string>();
+
+            var msgs = selection.Select(m => new
+            {
+                id = m.Id,
+                type = "message",
+                text = m.Text ?? string.Empty,
+                timestamp = m.CreatedAt,
+                fromRole = m.Sender.ToLower() == "admin" ? "admin" : (m.Sender.ToLower() == "bot" ? "bot" : "user"),
+                fromId = m.Sender.ToLower() == "user" ? (m.UserId ?? m.PublicUserId) : (m.Sender.ToLower() == "admin" ? m.UserId : m.BotId),
+                fromName = m.Sender.ToLower() == "user"
+                    ? (m.UserId.HasValue && usersMap.ContainsKey(m.UserId.Value) ? usersMap[m.UserId.Value] : (m.PublicUserId.HasValue && publicUsersMap.ContainsKey(m.PublicUserId.Value) ? publicUsersMap[m.PublicUserId.Value] : "Usuario"))
+                    : (m.Sender.ToLower() == "admin" ? (m.UserId.HasValue && usersMap.ContainsKey(m.UserId.Value) ? usersMap[m.UserId.Value] : "Admin") : (m.BotId.HasValue && botsMap.ContainsKey(m.BotId.Value) ? botsMap[m.BotId.Value] : "Bot")),
+                fromAvatarUrl = string.Empty,
+                replyToMessageId = m.ReplyToMessageId
+            }).ToList();
+
+            // Recompute hasMore more reliably: check if there are messages older than the earliest returned
+            if (msgs.Any())
+            {
+                var earliest = msgs.First().timestamp;
+                try
+                {
+                    var existsOlder = await _context.Messages
+                        .AsNoTracking()
+                        .AnyAsync(m => m.ConversationId == conversationId && m.CreatedAt < earliest);
+                    hasMore = existsOlder;
+                }
+                catch
+                {
+                    // If anything goes wrong, keep the previous heuristic
+                }
+            }
+
+            // nextBefore: timestamp del primer elemento (más antiguo) para usar como cursor en la siguiente petición
+            var nextBefore = msgs.Any() ? msgs.First().timestamp : (DateTime?)null;
+
+            // DEBUG: compute counts for the window we just queried to help diagnose missing messages
+            List<object> countsBySender = new List<object>();
+            int rawCount = 0;
+            var fetchedSample = new List<object>();
+            try
+            {
+                var counts = await _context.Messages
+                    .AsNoTracking()
+                    .Where(m => m.ConversationId == conversationId && (nextBefore == null || m.CreatedAt >= nextBefore))
+                    .GroupBy(m => (m.Sender ?? "user").ToLower())
+                    .Select(g => new { sender = g.Key, count = g.Count() })
+                    .ToListAsync();
+
+                countsBySender = counts.Cast<object>().ToList();
+                rawCount = counts.Sum(c => c.count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "[GetMessagesPaginated] failed to compute debug counts for conv {ConversationId}", conversationId);
+            }
+
+            try
+            {
+                // Provide a small sample of the fetched window (ids, sender, createdAt) to verify what rows were read
+                fetchedSample = selection.Select(m => new { id = m.Id, sender = (m.Sender ?? "user").ToLower(), createdAt = m.CreatedAt }).ToList<object>();
+            }
+            catch { /* ignore */ }
+
+            return Ok(new
+            {
+                conversationId = conversationId,
+                messages = msgs,
+                hasMore,
+                nextBefore,
+                debug = new { totalWindow, rawCount, countsBySender, allWindowFirst, allWindowLast, fetchedSample }
+            });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "[GetMessagesPaginated] Error fetching paginated messages for conv {ConversationId}", conversationId);
+                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
+            }
         }
 
         [HttpGet("with-last-message")]

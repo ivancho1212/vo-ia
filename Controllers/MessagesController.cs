@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System;
 using System.Linq;
 using Voia.Api.Attributes;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
 using Microsoft.Extensions.Logging;
@@ -67,9 +68,10 @@ namespace Voia.Api.Controllers
             return Ok(messages);
         }
 
-        // Marcar mensajes como leídos
-        [HttpPost("mark-read/{conversationId}")]
-        public async Task<IActionResult> MarkMessagesAsRead(int conversationId)
+    // Marcar mensajes como leídos (permitir a admins marcar como leídos desde la UI)
+    [HttpPost("mark-read/{conversationId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> MarkMessagesAsRead(int conversationId)
         {
             var messages = await _context.Messages
                 .Where(m => m.ConversationId == conversationId && m.Read == false && m.Sender == "user")
@@ -92,32 +94,41 @@ namespace Voia.Api.Controllers
         public async Task<ActionResult<Message>> CreateMessage([FromBody] CreateMessageDto dto)
         {
             // Validaciones
-            if (dto.UserId == null && dto.PublicUserId == null)
-                return BadRequest(new { message = "Se requiere UserId o PublicUserId." });
-
             var bot = await _context.Bots.FindAsync(dto.BotId);
             if (bot == null)
                 return NotFound(new { message = $"Bot with ID {dto.BotId} not found." });
+            // If caller didn't supply UserId/PublicUserId, try to resolve from the conversation
+            var conversation = await _context.Conversations.FindAsync(dto.ConversationId);
+            if (conversation == null)
+                return NotFound(new { message = $"Conversation with ID {dto.ConversationId} not found." });
 
-            if (dto.UserId.HasValue)
+            // Resolve identity: prefer explicit values from DTO; fallback to conversation.PublicUserId
+            int? resolvedUserId = dto.UserId;
+            int? resolvedPublicUserId = dto.PublicUserId ?? conversation.PublicUserId;
+
+            if (!resolvedUserId.HasValue && !resolvedPublicUserId.HasValue)
             {
-                var user = await _context.Users.FindAsync(dto.UserId.Value);
+                return BadRequest(new { message = "Se requiere UserId o PublicUserId (no se pudo resolver desde la conversación)." });
+            }
+
+            if (resolvedUserId.HasValue)
+            {
+                var user = await _context.Users.FindAsync(resolvedUserId.Value);
                 if (user == null)
-                    return NotFound(new { message = $"User with ID {dto.UserId} not found." });
+                    return NotFound(new { message = $"User with ID {resolvedUserId} not found." });
             }
 
-            if (dto.PublicUserId.HasValue)
+            if (resolvedPublicUserId.HasValue)
             {
-                var publicUser = await _context.PublicUsers.FindAsync(dto.PublicUserId.Value);
+                var publicUser = await _context.PublicUsers.FindAsync(resolvedPublicUserId.Value);
                 if (publicUser == null)
-                    return NotFound(new { message = $"PublicUser with ID {dto.PublicUserId} not found." });
+                    return NotFound(new { message = $"PublicUser with ID {resolvedPublicUserId} not found." });
             }
-
             var message = new Message
             {
                 BotId = dto.BotId,
-                UserId = dto.UserId,
-                PublicUserId = dto.PublicUserId,
+                UserId = resolvedUserId,
+                PublicUserId = resolvedPublicUserId,
                 ConversationId = dto.ConversationId,
                 Sender = dto.Sender,
                 MessageText = dto.MessageText,

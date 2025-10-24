@@ -15,9 +15,8 @@ namespace Voia.Api.Models.Messages
         public int? BotId { get; set; } // ✅ Ahora sí acepta null
 
 
-        [Required]
-        [Column("user_id")]
-        public int? UserId { get; set; }
+    [Column("user_id")]
+    public int? UserId { get; set; }
 
         [Required]
         [Column("conversation_id")]

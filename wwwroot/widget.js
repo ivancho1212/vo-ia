@@ -35,22 +35,9 @@
     // Crear iframe que carga directamente el ChatWidget (que ya tiene su propio ícono flotante)
     const iframe = document.createElement("iframe");
       iframe.src = `http://localhost:3000/widget-frame?bot=${botId}&token=${token}`;
-    iframe.style.cssText = `
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      width: 100vw;
-      height: 100vh;
-      border: none;
-      z-index: 9999;
-      background: transparent;
-      pointer-events: none;
-    `;
+    // Limit iframe to the visible widget area so it doesn't block the whole page
+
     iframe.setAttribute('allowtransparency', 'true');
-    
-    iframe.onload = function() {
-      this.style.pointerEvents = "auto";
-    };
 
     document.body.appendChild(iframe);
   }

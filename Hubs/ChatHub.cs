@@ -648,12 +648,22 @@ namespace Voia.Api.Hubs
                 await _context.SaveChangesAsync();
             }
 
+            // Recuperar el mensaje persistido para asegurar el id y timestamp reales
+            var saved = await _context.Messages
+                .Where(m => m.ConversationId == conversationId && m.Sender == "admin")
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            var sendTimestamp = saved?.CreatedAt ?? DateTime.UtcNow;
+            var sendId = saved?.Id;
+
             await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
             {
                 conversationId,
                 from = "admin",
                 text,
-                timestamp = DateTime.UtcNow,
+                timestamp = sendTimestamp,
+                id = sendId,
                 replyToMessageId = replyToMessageId,
                 replyToText = repliedText
             });
@@ -663,7 +673,8 @@ namespace Voia.Api.Hubs
                 conversationId,
                 from = "admin",
                 text,
-                timestamp = DateTime.UtcNow,
+                timestamp = sendTimestamp,
+                id = sendId,
                 alias = $"Sesión {conversationId}",
                 lastMessage = text,
                 replyToMessageId = replyToMessageId,
