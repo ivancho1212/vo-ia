@@ -718,8 +718,8 @@ namespace Voia.Api.Hubs
                     {
                         ConversationId = conversationId,
                         PublicUserId = userId,
-                        FileName = file.FileName,
-                        FileType = file.FileType,
+                        FileName = file.FileName ?? "archivo",
+                        FileType = file.FileType ?? "application/octet-stream",
                         FilePath = finalPath
                     };
 
@@ -817,94 +817,176 @@ namespace Voia.Api.Hubs
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
 
-            var json = JsonSerializer.Serialize(payload);
-            var fileObj = JsonSerializer.Deserialize<ChatFileDto>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (fileObj == null || string.IsNullOrWhiteSpace(fileObj.FileContent))
-            {
-                await Clients.Caller.SendAsync("ReceiveMessage", new
-                {
-                    conversationId,
-                    from = "bot",
-                    text = "⚠️ Archivo inválido.",
-                    timestamp = DateTime.UtcNow
-                });
-                return;
-            }
-
-            // Procesar base64 y guardar archivo
-            var base64Data = fileObj.FileContent.Contains(",")
-                ? fileObj.FileContent.Split(',')[1]
-                : fileObj.FileContent;
-
-            byte[] fileBytes;
             try
             {
-                fileBytes = Convert.FromBase64String(base64Data);
+                var json = JsonSerializer.Serialize(payload);
+                var fileObj = JsonSerializer.Deserialize<ChatFileDto>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
 
-                if (fileBytes.Length > 10 * 1024 * 1024) // 10 MB
-                    throw new InvalidOperationException("El archivo es demasiado grande.");
+                // Si el payload puede ser null o no traer contenido, devolver error al caller
+                if (fileObj == null)
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Archivo inválido.",
+                        timestamp = DateTime.UtcNow
+                    });
+                    return;
+                }
+
+            // Nota histórica: originalmente el cliente convertía el archivo a base64 y lo enviaba
+            // por SignalR en la propiedad `fileContent`. Esto causaba overhead de memoria y red.
+            //
+            // Optimización: soportamos ahora que el cliente suba por multipart/form-data
+            // a /api/ChatUploadedFiles y nos pase aquí la `fileUrl` resultante. En ese caso
+            // saltamos la decodificación base64 y usamos directamente la URL.
+
+            // Prueba rápida (frontend):
+            // - Subir archivo desde widget/dashboard: el cliente llamará POST /api/ChatUploadedFiles (multipart).
+            // - El servidor devuelve filePath (p.e. /uploads/chat/abcd.pdf).
+            // - El cliente invoca connection.invoke("SendFile", conversationId, { fileUrl: filePath, fileName, fileType, userId });
+            // - El Hub reutiliza el registro si existe y envía ReceiveMessage con files[] a los clientes del grupo.
+
+                string? finalPath = null;
+
+            if (!string.IsNullOrWhiteSpace(fileObj.FileUrl))
+            {
+                // Caso nuevo: ya subido por multipart y recibimos directamente la ruta
+                finalPath = fileObj.FileUrl;
+            }
+            else
+            {
+                // Flujo legacy: procesar base64 y guardar archivo
+                if (string.IsNullOrWhiteSpace(fileObj.FileContent))
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Archivo inválido.",
+                        timestamp = DateTime.UtcNow
+                    });
+                    return;
+                }
+
+                var base64Data = fileObj.FileContent.Contains(",")
+                    ? fileObj.FileContent.Split(',')[1]
+                    : fileObj.FileContent;
+
+                byte[] fileBytes;
+                try
+                {
+                    fileBytes = Convert.FromBase64String(base64Data);
+
+                    if (fileBytes.Length > 10 * 1024 * 1024) // 10 MB
+                        throw new InvalidOperationException("El archivo es demasiado grande.");
+                }
+                catch (Exception ex)
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = $"⚠️ Error al procesar el archivo: {ex.Message}",
+                        timestamp = DateTime.UtcNow
+                    });
+                    return;
+                }
+
+                finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, fileObj.FileName);
+            }
+
+                // Evitar duplicados: si el archivo ya fue creado por el endpoint multipart, reutilizarlo
+                if (string.IsNullOrWhiteSpace(finalPath))
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Ruta de archivo inválida.",
+                        timestamp = DateTime.UtcNow
+                    });
+                    return;
+                }
+
+                // Normalizar valores para evitar nulls al persistir
+                fileObj.FileName = fileObj.FileName ?? "archivo";
+                fileObj.FileType = fileObj.FileType ?? "application/octet-stream";
+
+                var existing = await _context.ChatUploadedFiles
+                    .FirstOrDefaultAsync(f => f.FilePath == finalPath && f.ConversationId == conversationId);
+
+                ChatUploadedFile dbFile;
+                if (existing != null)
+                {
+                    dbFile = existing;
+                }
+                else
+                {
+                    // Normarize and truncate file type to fit DB column (MaxLength 50)
+                    var fileTypeRaw = fileObj.FileType ?? "application/octet-stream";
+                    var fileTypeSafe = fileTypeRaw.Length > 50 ? fileTypeRaw.Substring(0, 50) : fileTypeRaw;
+
+                    dbFile = new ChatUploadedFile
+                    {
+                        ConversationId = conversationId,
+                        UserId = fileObj.UserId,
+                        FileName = fileObj.FileName ?? "archivo",
+                        FileType = fileTypeSafe,
+                        FilePath = finalPath
+                    };
+
+                    _context.ChatUploadedFiles.Add(dbFile);
+                    await _context.SaveChangesAsync();
+                }
+
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "user",
+                    files = new[] { new
+                    {
+                        fileName = dbFile.FileName,
+                        fileType = dbFile.FileType,
+                        fileUrl = dbFile.FilePath
+                    }},
+                    timestamp = DateTime.UtcNow
+                });
+
+                await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+                {
+                    conversationId,
+                    from = "user",
+                    text = "📎 Se envió un archivo.",
+                    alias = $"Sesión {conversationId}", // Changed from Usuario {fileObj.UserId}
+                    lastMessage = "📎 Se envió un archivo.",
+                    timestamp = DateTime.UtcNow,
+                    files = new[] { new
+                    {
+                        fileName = dbFile.FileName,
+                        fileType = dbFile.FileType,
+                        fileUrl = dbFile.FilePath
+                    }}
+                });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "❌ Error en SendFile: {Message}", ex.Message);
+                // Responder al caller con un mensaje legible
                 await Clients.Caller.SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "bot",
                     text = $"⚠️ Error al procesar el archivo: {ex.Message}",
-                    timestamp = DateTime.UtcNow
+                    timestamp = DateTime.UtcNow,
                 });
                 return;
             }
-
-
-            var filePath = await _chatFileService.SaveBase64FileAsync(base64Data, fileObj.FileName);
-
-            var dbFile = new ChatUploadedFile
-            {
-                ConversationId = conversationId,
-                UserId = fileObj.UserId,
-                FileName = fileObj.FileName,
-                FileType = fileObj.FileType,
-                FilePath = filePath
-            };
-
-
-            _context.ChatUploadedFiles.Add(dbFile);
-            await _context.SaveChangesAsync();
-
-
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
-            {
-                conversationId,
-                from = "user",
-                files = new[] { new
-                {
-                    fileName = dbFile.FileName,
-                    fileType = dbFile.FileType,
-                    fileUrl = dbFile.FilePath
-                }},
-                timestamp = DateTime.UtcNow
-            });
-
-            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
-            {
-                conversationId,
-                from = "user",
-                text = "📎 Se envió un archivo.",
-                alias = $"Sesión {conversationId}", // Changed from Usuario {fileObj.UserId}
-                lastMessage = "📎 Se envió un archivo.",
-                timestamp = DateTime.UtcNow,
-                files = new[] { new
-                {
-                    fileName = dbFile.FileName,
-                    fileType = dbFile.FileType,
-                    fileUrl = dbFile.FilePath
-                }}
-            });
+            
         }
 
     }

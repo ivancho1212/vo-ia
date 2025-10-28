@@ -255,6 +255,10 @@ builder.Services.AddHttpClient<GeminiClient>()
 // Registro de PromptBuilderService con HttpClient
 builder.Services.AddHttpClient<PromptBuilderService>();
 
+// Presigned upload service (in-memory local implementation). In production this can be
+// replaced by a service that requests signed URLs from S3 / Azure Blob.
+builder.Services.AddSingleton<Voia.Api.Services.Chat.IPresignedUploadService, Voia.Api.Services.Chat.PresignedUploadService>();
+
 // Configuracin del HttpClient para ChatHub
 // Esto es necesario para que ChatHub pueda hacer llamadas a otros endpoints de la misma API.
 builder.Services.AddHttpClient<ChatHub>(client =>
