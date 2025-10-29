@@ -30,9 +30,10 @@ namespace Voia.Api.Hubs
         private readonly ApplicationDbContext _context;
         private readonly IChatFileService _chatFileService;
         private readonly ILogger<ChatHub> _logger;
-        private readonly TokenCounterService _tokenCounter;
+    private readonly TokenCounterService _tokenCounter;
         private readonly BotDataCaptureService _dataCaptureService;
         private readonly HttpClient _httpClient; // <--- HttpClient inyectado
+    private readonly Voia.Api.Services.Upload.IFileSignatureChecker _checker;
         private const int TypingDelayMs = 1000; // 1 segundo
         private readonly PromptBuilderService _promptBuilderService;
 
@@ -50,6 +51,7 @@ namespace Voia.Api.Hubs
             BotDataCaptureService dataCaptureService,
             HttpClient httpClient,
             PromptBuilderService promptBuilderService,
+            Voia.Api.Services.Upload.IFileSignatureChecker checker,
             PresenceService? presenceService = null,
             IMessageQueue? messageQueue = null
         )
@@ -62,6 +64,7 @@ namespace Voia.Api.Hubs
             _dataCaptureService = dataCaptureService;
             _httpClient = httpClient;
             _promptBuilderService = promptBuilderService;
+            _checker = checker;
             _presenceService = presenceService;
             _messageQueue = messageQueue;
         }
@@ -706,7 +709,7 @@ namespace Voia.Api.Hubs
                             ? file.FileContent.Split(',')[1]
                             : file.FileContent;
 
-                        finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName);
+                        finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName ?? string.Empty);
                     }
                     else
                     {
@@ -714,12 +717,33 @@ namespace Voia.Api.Hubs
                         continue;
                     }
 
+                    // Determine file type from detected signature when storing local uploads
+                    string fileTypeToStore = file.FileType ?? "application/octet-stream";
+                    if (!string.IsNullOrWhiteSpace(finalPath) && finalPath.StartsWith("/uploads/chat/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Resolve physical path and re-validate signature
+                        var storedName = Path.GetFileName(finalPath);
+                        var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "chat", storedName);
+                        if (System.IO.File.Exists(physicalPath))
+                        {
+                            try
+                            {
+                                fileTypeToStore = await _checker.ValidateAsync(physicalPath, file.FileType ?? string.Empty, file.FileName ?? string.Empty);
+                            }
+                            catch
+                            {
+                                // If validation fails here, keep a safe fallback and continue; controller previously validated the file.
+                                fileTypeToStore = file.FileType ?? "application/octet-stream";
+                            }
+                        }
+                    }
+
                     var dbFile = new ChatUploadedFile
                     {
                         ConversationId = conversationId,
                         PublicUserId = userId,
                         FileName = file.FileName ?? "archivo",
-                        FileType = file.FileType ?? "application/octet-stream",
+                        FileType = fileTypeToStore ?? "application/octet-stream",
                         FilePath = finalPath
                     };
 
@@ -897,7 +921,7 @@ namespace Voia.Api.Hubs
                     return;
                 }
 
-                finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, fileObj.FileName);
+                finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, fileObj.FileName ?? string.Empty);
             }
 
                 // Evitar duplicados: si el archivo ya fue creado por el endpoint multipart, reutilizarlo

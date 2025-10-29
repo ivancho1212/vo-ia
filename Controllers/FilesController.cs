@@ -30,17 +30,20 @@ namespace Voia.Api.Controllers
             if (fileRec == null) return NotFound();
 
             var filePath = fileRec.FilePath ?? string.Empty; // e.g. /uploads/chat/xxxxx.png
-            if (string.IsNullOrWhiteSpace(filePath) || !filePath.StartsWith("/uploads/chat/"))
-                return BadRequest(new { message = "Invalid file path" });
+            if (string.IsNullOrWhiteSpace(filePath)) return BadRequest(new { message = "Invalid file path" });
 
-            var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), filePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            // Map to physical storage under 'Uploads/chat' regardless of the stored filePath string.
+            var storedFileName = Path.GetFileName(filePath);
+            if (string.IsNullOrWhiteSpace(storedFileName)) return NotFound();
+
+            var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "chat", storedFileName);
             if (!System.IO.File.Exists(physicalPath)) return NotFound();
 
             // Re-validate signature and detect mime
             string detectedMime;
             try
             {
-                detectedMime = await _checker.ValidateAsync(physicalPath, fileRec.FileType ?? string.Empty, fileRec.FileName);
+                detectedMime = await _checker.ValidateAsync(physicalPath, fileRec.FileType ?? string.Empty, fileRec.FileName ?? string.Empty);
             }
             catch (InvalidDataException)
             {

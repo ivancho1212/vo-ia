@@ -84,6 +84,14 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { error = "Invalid file type. Allowed types: images, PDF, Word, Excel, PowerPoint, TXT, CSV, JSON, XML." });
             }
 
+            // Block dangerous extensions explicitly (defence-in-depth)
+            var forbiddenExts = new[] { ".exe", ".bat", ".sh", ".js", ".cmd", ".msi", ".vbs", ".scr", ".jar", ".reg", ".ps1" };
+            var incomingExt = Path.GetExtension(file.FileName ?? string.Empty).ToLowerInvariant();
+            if (forbiddenExts.Contains(incomingExt))
+            {
+                return BadRequest(new { error = "File extension not allowed." });
+            }
+
             // Obtener la conversación para identificar el usuario
             var conversation = await _context.Conversations
                 .FirstOrDefaultAsync(c => c.Id == conversationId);
@@ -102,7 +110,7 @@ namespace Voia.Api.Controllers
             }
 
             // Save to a TEMP location first, validate using magic bytes, then move to the public uploads folder.
-            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "tmp");
+            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "tmp");
             if (!Directory.Exists(tmpDir)) Directory.CreateDirectory(tmpDir);
 
             var tmpFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
@@ -117,7 +125,7 @@ namespace Voia.Api.Controllers
             try
             {
                 // Validate by signature (magic numbers) and get detected mime
-                var detectedMime = await _checker.ValidateAsync(tmpPath, file.ContentType ?? string.Empty, file.FileName);
+                var detectedMime = await _checker.ValidateAsync(tmpPath, file.ContentType ?? string.Empty, file.FileName ?? string.Empty);
 
                 // Enforce size again on disk (defense-in-depth)
                 // reuse earlier maxSizeMb/maxSizeBytes variables from this method
@@ -128,8 +136,8 @@ namespace Voia.Api.Controllers
                     return BadRequest(new { error = $"File too large. Maximum allowed size is {maxSizeMb}MB." });
                 }
 
-                // Move to final public folder (wwwroot/uploads/chat)
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
+                // Move to final storage folder (Uploads/chat) - stored outside app-resources
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "chat");
                 if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
 
                 var finalFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
@@ -142,16 +150,19 @@ namespace Voia.Api.Controllers
                 var chatFile = new ChatUploadedFile
                 {
                     ConversationId = conversationId,
-                    FileName = file.FileName,
+                    FileName = file.FileName ?? string.Empty,
                     FileType = fileTypeSafe,
+                    // Store classic public path for backwards compatibility
                     FilePath = $"/uploads/chat/{finalFileName}",
                     UploadedAt = DateTime.UtcNow,
                     UserId = conversation.UserId,
                     PublicUserId = conversation.PublicUserId
                 };
-
                 _context.ChatUploadedFiles.Add(chatFile);
                 await _context.SaveChangesAsync();
+
+                // Provide both a storage path (backwards compat) and a secure API URL to prefer in clients
+                var fileUrl = $"/api/files/chat/{chatFile.Id}";
 
                 Console.WriteLine($"✅ [ChatUpload] Archivo validado y movido - ID: {chatFile.Id}, Path: {chatFile.FilePath}");
 
@@ -159,6 +170,7 @@ namespace Voia.Api.Controllers
                     id = chatFile.Id,
                     fileName = chatFile.FileName,
                     filePath = chatFile.FilePath,
+                    fileUrl,
                     uploadedAt = chatFile.UploadedAt
                 });
             }
@@ -206,12 +218,20 @@ namespace Voia.Api.Controllers
             if (!allowedTypes.Contains(dto.FileType))
                 return BadRequest(new { message = "Invalid file type" });
 
+            // Block dangerous extensions at presigned creation time
+            var forbiddenExts = new[] { ".exe", ".bat", ".sh", ".js", ".cmd", ".msi", ".vbs", ".scr", ".jar", ".reg", ".ps1" };
+            var dtoExt = Path.GetExtension(dto.FileName ?? string.Empty).ToLowerInvariant();
+            if (forbiddenExts.Contains(dtoExt))
+            {
+                return BadRequest(new { message = "File extension not allowed" });
+            }
+
             var maxSizeMb = _config.GetValue<int>("FileUpload:MaxSizeMB", 10);
 
             // Create token
             var meta = new Voia.Api.Services.Chat.PresignedUploadMetadata
             {
-                FileName = dto.FileName,
+                FileName = dto.FileName ?? string.Empty,
                 FileType = dto.FileType,
                 ConversationId = dto.ConversationId,
                 UserId = dto.UserId
@@ -239,7 +259,7 @@ namespace Voia.Api.Controllers
             var maxSizeBytes = (long)maxSizeMb * 1024 * 1024;
 
             // Save incoming PUT to a temp location first
-            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "tmp");
+            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "tmp");
             if (!Directory.Exists(tmpDir)) Directory.CreateDirectory(tmpDir);
 
             var ext = Path.GetExtension(meta.FileName);
@@ -267,11 +287,11 @@ namespace Voia.Api.Controllers
             try
             {
                 // Validate signature
-                var detectedMime = await _checker.ValidateAsync(tmpPath, meta.FileType ?? string.Empty, meta.FileName);
+                var detectedMime = await _checker.ValidateAsync(tmpPath, meta.FileType ?? string.Empty, meta.FileName ?? string.Empty);
 
                 // Move to final public folder
-                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
-                if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+                    var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "chat");
+                    if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
 
                 var finalFileName = $"{Guid.NewGuid()}{ext}";
                 var physicalPath = Path.Combine(uploadsDir, finalFileName);
@@ -282,7 +302,7 @@ namespace Voia.Api.Controllers
                 var chatFile = new ChatUploadedFile
                 {
                     ConversationId = meta.ConversationId,
-                    FileName = meta.FileName,
+                    FileName = meta.FileName ?? string.Empty,
                     FileType = metaTypeSafe,
                     FilePath = $"/uploads/chat/{finalFileName}",
                     UploadedAt = DateTime.UtcNow,

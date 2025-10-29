@@ -68,10 +68,30 @@ namespace Voia.Api.Services.Upload
             var pk = new byte[] { 0x50, 0x4B, 0x03, 0x04 };
             if (StartsWith(buffer, pk))
             {
-                // Map declared extension heuristics
-                var ext = Path.GetExtension(originalFileName ?? string.Empty).ToLowerInvariant();
-                if (ext == ".docx" || ext == ".xlsx" || ext == ".pptx")
-                    return "application/zip"; // caller can map to office types if needed
+                // If it's a ZIP-based file (Office formats), do a lightweight inspection
+                try
+                {
+                    using var z = System.IO.Compression.ZipFile.OpenRead(filePath);
+                    // Look for VBA project entries which indicate macros: vbaProject.bin
+                    foreach (var entry in z.Entries)
+                    {
+                        var name = entry.FullName ?? string.Empty;
+                        if (name.IndexOf("vbaproject.bin", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            name.IndexOf("vbaProject.bin", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            throw new InvalidDataException("Office documents containing macros are not allowed.");
+                        }
+                    }
+                }
+                catch (InvalidDataException)
+                {
+                    throw; // rethrow macro-detection
+                }
+                catch
+                {
+                    // If zip inspection fails, be conservative and treat as zip
+                }
+
                 return "application/zip";
             }
 
