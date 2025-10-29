@@ -684,8 +684,8 @@ namespace Voia.Api.Hubs
             await StopTyping(conversationId, "admin");
         }
 
-        [HubMethodName("SendGroupedImages")]
-        public async Task SendGroupedImages(int conversationId, int userId, List<ChatFileDto> multipleFiles)
+    [HubMethodName("SendGroupedImages")]
+    public async Task SendGroupedImages(int conversationId, int? userId, List<ChatFileDto> multipleFiles)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
             try
