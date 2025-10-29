@@ -12,6 +12,7 @@ using Voia.Api.Services.Interfaces;
 using System.Net.Http.Headers;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Services.Chat;
+using Voia.Api.Services.Upload;
 using Api.Services;
 using Voia.Api.Services.Mocks;
 using System.Text.Json.Serialization;
@@ -214,6 +215,10 @@ builder.Services.AddHttpClient<FastApiService>();
 
 builder.Services.AddScoped<IAiProviderService, MockAiProviderService>();
 builder.Services.AddScoped<IChatFileService, ChatFileService>();
+// File signature checker validates magic numbers and blocks executables/scripts before
+// moving files to the public uploads folder. In production this can be replaced or
+// augmented with cloud storage validation + antivirus scanning.
+builder.Services.AddSingleton<Voia.Api.Services.Upload.IFileSignatureChecker, Voia.Api.Services.Upload.FileSignatureChecker>();
 builder.Services.AddScoped<IAClientFactory>();
 builder.Services.AddScoped<BotDataCaptureService>();
 builder.Services.AddScoped<DataExtractionService>();

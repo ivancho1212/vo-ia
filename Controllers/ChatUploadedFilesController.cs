@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Voia.Api.Data;
 using Voia.Api.Models.Chat;
 using Voia.Api.Attributes;
+using Voia.Api.Services.Upload;
 
 namespace Voia.Api.Controllers
 {
@@ -15,12 +16,14 @@ namespace Voia.Api.Controllers
             private readonly ApplicationDbContext _context;
             private readonly IConfiguration _config;
             private readonly Voia.Api.Services.Chat.IPresignedUploadService _presigned;
+            private readonly IFileSignatureChecker _checker;
 
-            public ChatUploadedFilesController(ApplicationDbContext context, IConfiguration config, Voia.Api.Services.Chat.IPresignedUploadService presigned)
+            public ChatUploadedFilesController(ApplicationDbContext context, IConfiguration config, Voia.Api.Services.Chat.IPresignedUploadService presigned, IFileSignatureChecker checker)
             {
                 _context = context;
                 _config = config;
                 _presigned = presigned;
+                _checker = checker;
             }
 
         [HttpGet("conversation/{conversationId}")]
@@ -98,52 +101,79 @@ namespace Voia.Api.Controllers
                 return BadRequest(new { error = $"File too large. Maximum allowed size is {maxSizeMb}MB." });
             }
 
-            // Crear nombre único para el archivo
-            var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            // Save to a TEMP location first, validate using magic bytes, then move to the public uploads folder.
+            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "tmp");
+            if (!Directory.Exists(tmpDir)) Directory.CreateDirectory(tmpDir);
 
-            // Guardar en wwwroot/uploads/chat para que sea servible por la app
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
+            var tmpFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var tmpPath = Path.Combine(tmpDir, tmpFileName);
 
-            // Crear directorio si no existe
-            if (!Directory.Exists(uploadsDir))
-            {
-                Directory.CreateDirectory(uploadsDir);
-            }
-
-            var physicalPath = Path.Combine(uploadsDir, fileName);
-
-            // Guardar archivo (streaming desde IFormFile)
-            using (var stream = new FileStream(physicalPath, FileMode.Create))
+            // Save incoming stream to temp file
+            using (var stream = new FileStream(tmpPath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            // Crear registro en base de datos
-            var fileTypeRaw = file.ContentType ?? "application/octet-stream";
-            var fileTypeSafe = fileTypeRaw.Length > 50 ? fileTypeRaw.Substring(0, 50) : fileTypeRaw;
-
-            var chatFile = new ChatUploadedFile
+            try
             {
-                ConversationId = conversationId,
-                FileName = file.FileName,
-                FileType = fileTypeSafe,
-                FilePath = $"/uploads/chat/{fileName}",
-                UploadedAt = DateTime.UtcNow,
-                UserId = conversation.UserId, // Usuario registrado (si aplica)
-                PublicUserId = conversation.PublicUserId // Usuario público/widget (si aplica)
-            };
+                // Validate by signature (magic numbers) and get detected mime
+                var detectedMime = await _checker.ValidateAsync(tmpPath, file.ContentType ?? string.Empty, file.FileName);
 
-            _context.ChatUploadedFiles.Add(chatFile);
-            await _context.SaveChangesAsync();
+                // Enforce size again on disk (defense-in-depth)
+                // reuse earlier maxSizeMb/maxSizeBytes variables from this method
+                var fileInfo = new FileInfo(tmpPath);
+                if (fileInfo.Length > maxSizeBytes)
+                {
+                    System.IO.File.Delete(tmpPath);
+                    return BadRequest(new { error = $"File too large. Maximum allowed size is {maxSizeMb}MB." });
+                }
 
-            Console.WriteLine($"✅ [ChatUpload] Archivo subido exitosamente - ID: {chatFile.Id}, Path: {chatFile.FilePath}");
-            
-            return Ok(new { 
-                id = chatFile.Id,
-                fileName = chatFile.FileName,
-                filePath = chatFile.FilePath,
-                uploadedAt = chatFile.UploadedAt
-            });
+                // Move to final public folder (wwwroot/uploads/chat)
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
+                if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+
+                var finalFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+                var physicalPath = Path.Combine(uploadsDir, finalFileName);
+                System.IO.File.Move(tmpPath, physicalPath);
+
+                // Create DB record using detected mime (trim to 50)
+                var fileTypeSafe = (detectedMime ?? "application/octet-stream").Length > 50 ? (detectedMime ?? "application/octet-stream").Substring(0, 50) : (detectedMime ?? "application/octet-stream");
+
+                var chatFile = new ChatUploadedFile
+                {
+                    ConversationId = conversationId,
+                    FileName = file.FileName,
+                    FileType = fileTypeSafe,
+                    FilePath = $"/uploads/chat/{finalFileName}",
+                    UploadedAt = DateTime.UtcNow,
+                    UserId = conversation.UserId,
+                    PublicUserId = conversation.PublicUserId
+                };
+
+                _context.ChatUploadedFiles.Add(chatFile);
+                await _context.SaveChangesAsync();
+
+                Console.WriteLine($"✅ [ChatUpload] Archivo validado y movido - ID: {chatFile.Id}, Path: {chatFile.FilePath}");
+
+                return Ok(new {
+                    id = chatFile.Id,
+                    fileName = chatFile.FileName,
+                    filePath = chatFile.FilePath,
+                    uploadedAt = chatFile.UploadedAt
+                });
+            }
+            catch (InvalidDataException ide)
+            {
+                // Validation failed -> ensure temp file removed
+                if (System.IO.File.Exists(tmpPath)) System.IO.File.Delete(tmpPath);
+                return BadRequest(new { error = ide.Message });
+            }
+            catch (Exception ex)
+            {
+                if (System.IO.File.Exists(tmpPath)) System.IO.File.Delete(tmpPath);
+                Console.WriteLine($"❌ [ChatUpload] Error al validar/mover archivo: {ex.Message}");
+                return StatusCode(500, new { error = "Error interno del servidor al procesar el archivo" });
+            }
             }
             catch (Exception ex)
             {
@@ -208,16 +238,16 @@ namespace Voia.Api.Controllers
             var maxSizeMb = _config.GetValue<int>("FileUpload:MaxSizeMB", 10);
             var maxSizeBytes = (long)maxSizeMb * 1024 * 1024;
 
-            // Guardar en wwwroot/uploads/chat
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
-            if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+            // Save incoming PUT to a temp location first
+            var tmpDir = Path.Combine(Directory.GetCurrentDirectory(), "uploads", "tmp");
+            if (!Directory.Exists(tmpDir)) Directory.CreateDirectory(tmpDir);
 
             var ext = Path.GetExtension(meta.FileName);
-            var fileName = $"{Guid.NewGuid()}{ext}";
-            var physicalPath = Path.Combine(uploadsDir, fileName);
+            var tmpFileName = $"{Guid.NewGuid()}{ext}";
+            var tmpPath = Path.Combine(tmpDir, tmpFileName);
 
             long total = 0;
-            using (var fs = new FileStream(physicalPath, FileMode.Create))
+            using (var fs = new FileStream(tmpPath, FileMode.Create))
             {
                 var buffer = new byte[81920];
                 int read;
@@ -227,31 +257,54 @@ namespace Voia.Api.Controllers
                     if (total > maxSizeBytes)
                     {
                         fs.Close();
-                        System.IO.File.Delete(physicalPath);
+                        System.IO.File.Delete(tmpPath);
                         return BadRequest(new { message = $"File too large. Max {maxSizeMb}MB" });
                     }
                     await fs.WriteAsync(buffer.AsMemory(0, read));
                 }
             }
 
-            // Crear registro en DB
-            var metaTypeRaw = meta.FileType ?? "application/octet-stream";
-            var metaTypeSafe = metaTypeRaw.Length > 50 ? metaTypeRaw.Substring(0, 50) : metaTypeRaw;
-
-            var chatFile = new ChatUploadedFile
+            try
             {
-                ConversationId = meta.ConversationId,
-                FileName = meta.FileName,
-                FileType = metaTypeSafe,
-                FilePath = $"/uploads/chat/{fileName}",
-                UploadedAt = DateTime.UtcNow,
-                UserId = meta.UserId
-            };
+                // Validate signature
+                var detectedMime = await _checker.ValidateAsync(tmpPath, meta.FileType ?? string.Empty, meta.FileName);
 
-            _context.ChatUploadedFiles.Add(chatFile);
-            await _context.SaveChangesAsync();
+                // Move to final public folder
+                var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "chat");
+                if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
 
-            return Ok(new { id = chatFile.Id, filePath = chatFile.FilePath, fileName = chatFile.FileName });
+                var finalFileName = $"{Guid.NewGuid()}{ext}";
+                var physicalPath = Path.Combine(uploadsDir, finalFileName);
+                System.IO.File.Move(tmpPath, physicalPath);
+
+                var metaTypeSafe = (detectedMime ?? "application/octet-stream").Length > 50 ? (detectedMime ?? "application/octet-stream").Substring(0, 50) : (detectedMime ?? "application/octet-stream");
+
+                var chatFile = new ChatUploadedFile
+                {
+                    ConversationId = meta.ConversationId,
+                    FileName = meta.FileName,
+                    FileType = metaTypeSafe,
+                    FilePath = $"/uploads/chat/{finalFileName}",
+                    UploadedAt = DateTime.UtcNow,
+                    UserId = meta.UserId
+                };
+
+                _context.ChatUploadedFiles.Add(chatFile);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { id = chatFile.Id, filePath = chatFile.FilePath, fileName = chatFile.FileName });
+            }
+            catch (InvalidDataException ide)
+            {
+                if (System.IO.File.Exists(tmpPath)) System.IO.File.Delete(tmpPath);
+                return BadRequest(new { message = ide.Message });
+            }
+            catch (Exception ex)
+            {
+                if (System.IO.File.Exists(tmpPath)) System.IO.File.Delete(tmpPath);
+                Console.WriteLine($"❌ [ChatUpload] Error al validar/mover archivo presigned: {ex.Message}");
+                return StatusCode(500, new { message = "Internal server error while processing file" });
+            }
         }
     }
 }
