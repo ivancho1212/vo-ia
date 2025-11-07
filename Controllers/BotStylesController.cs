@@ -8,6 +8,7 @@ using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Data;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using System.Security.Claims;
 using Voia.Api.Attributes;
 
@@ -277,6 +278,7 @@ namespace Voia.Api.Controllers
         /// Obtiene el estilo de un bot para widgets (sin autenticación)
         /// </summary>
         [AllowAnonymous]
+        [EnableCors("AllowWidgets")] // 🔧 CORS para widgets
         [HttpGet("widget/{botId}")]
         public async Task<ActionResult<object>> GetStyleForWidget(int botId)
         {

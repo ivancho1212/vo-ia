@@ -54,6 +54,88 @@ ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos n
         }
 
         /// <summary>
+        /// Detecta el idioma probable del mensaje del usuario analizando palabras clave
+        /// </summary>
+        private string DetectUserLanguage(string userMessage)
+        {
+            if (string.IsNullOrEmpty(userMessage))
+                return "unknown";
+
+            // Palabras clave comunes en diferentes idiomas
+            var spanishKeywords = new[] { "hola", "qué", "cómo", "para", "porque", "donde", "cuando", "gracias", "por favor", "ayuda", "sí", "no", "está", "tengo" };
+            var englishKeywords = new[] { "hello", "what", "how", "please", "thank", "help", "yes", "no", "where", "when", "thanks", "can", "is", "have" };
+            var frenchKeywords = new[] { "bonjour", "comment", "où", "quand", "pourquoi", "merci", "s'il vous plaît", "oui", "non", "comment ça", "ça va" };
+            var portugueseKeywords = new[] { "olá", "oi", "como", "onde", "quando", "obrigado", "por favor", "sim", "não", "está", "tenho" };
+            var germanKeywords = new[] { "hallo", "wie", "wo", "wann", "warum", "danke", "bitte", "ja", "nein", "ist", "habe" };
+
+            var lowerMessage = userMessage.ToLower();
+
+            var spanishCount = spanishKeywords.Count(kw => lowerMessage.Contains(kw));
+            var englishCount = englishKeywords.Count(kw => lowerMessage.Contains(kw));
+            var frenchCount = frenchKeywords.Count(kw => lowerMessage.Contains(kw));
+            var portugueseCount = portugueseKeywords.Count(kw => lowerMessage.Contains(kw));
+            var germanCount = germanKeywords.Count(kw => lowerMessage.Contains(kw));
+
+            // Retornar el idioma con más coincidencias
+            var detectedLanguage = "unknown";
+            int maxCount = Math.Max(spanishCount, Math.Max(englishCount, Math.Max(frenchCount, Math.Max(portugueseCount, germanCount))));
+
+            if (maxCount == 0)
+                return "unknown"; // No hay coincidencias claras
+
+            if (maxCount == spanishCount) detectedLanguage = "Spanish";
+            else if (maxCount == englishCount) detectedLanguage = "English";
+            else if (maxCount == frenchCount) detectedLanguage = "French";
+            else if (maxCount == portugueseCount) detectedLanguage = "Portuguese";
+            else if (maxCount == germanCount) detectedLanguage = "German";
+
+            _logger.LogInformation("🔍 [LanguageDetection] Idioma detectado: {language} (Score: {score})", detectedLanguage, maxCount);
+            return detectedLanguage;
+        }
+
+        /// <summary>
+        /// Construye un contexto regional DINÁMICO basado en idioma y ubicación del usuario
+        /// Adapta el mensaje para que la IA entienda cómo debe responder
+        /// </summary>
+        private string BuildDynamicRegionalContext(string city, string country, string detectedLanguage)
+        {
+            // Mapeo de idiomas detectados a su nombre en inglés (para que OpenAI entienda)
+            var languageInEnglish = detectedLanguage switch
+            {
+                "Spanish" => "Spanish",
+                "English" => "English",
+                "French" => "French",
+                "Portuguese" => "Portuguese",
+                "German" => "German",
+                _ => "the user's language"
+            };
+
+            // Construcción dinámica del mensaje
+            var dynamicContext = $@"
+
+---CONTEXTO DE USUARIO---
+📍 UBICACIÓN: El usuario está escribiendo desde {city}, {country}
+🗣️ IDIOMA: El usuario está comunicándose en {languageInEnglish}
+
+INSTRUCCIÓN CRÍTICA:
+1. Responde en {languageInEnglish} (el idioma que el usuario está usando)
+2. Adapta el contenido considerando la región {city}, {country}:
+   - Usa acentos, expresiones y referencias culturales de esa región
+   - Menciona monedas, medidas y costumbres locales si es relevante
+   - Ten en cuenta la zona horaria y contexto temporal de {country}
+3. Si bien el usuario está en {city}, {country}, mantén tu respuesta auténtica a esa región
+4. No cambies el idioma - responde en {languageInEnglish} tal como el usuario te escribe
+
+EJEMPLO DE COMPORTAMIENTO:
+- Usuario en Buenos Aires (Argentina) escribiendo en ESPAÑOL: Responde con acento argentino, referencias locales
+- Usuario en Tokyo (Japón) escribiendo en INGLÉS: Responde en inglés, pero con contexto de Japón
+- Usuario en Montreal (Canadá) escribiendo en FRANCÉS: Responde en francés, con contexto de Québec/Canadá
+---FIN CONTEXTO DE USUARIO---";
+
+            return dynamicContext;
+        }
+
+        /// <summary>
         /// Construye un payload JSON limpio para la IA, incluyendo contexto, recursos, historial y último mensaje.
         /// Funciona tanto para mock como para producción.
         /// </summary>
@@ -61,7 +143,10 @@ ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos n
             int botId,
             int userId,
             string userMessage,
-            List<DataField> capturedFields
+            List<DataField> capturedFields,
+            string? userCountry = null,
+            string? userCity = null,
+            string? contextMessage = null
         )
         {
             // 🔹 Modo mock: devolvemos un JSON con toda la estructura
@@ -95,17 +180,34 @@ ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos n
             catch (Exception ex)
             {
                 // Si no hay contexto, igual devolvemos un JSON limpio
+                // Detectar idioma del usuario y construir contexto dinámico
+                var fallbackDetectedLanguage = DetectUserLanguage(userMessage);
+                var fallbackSystemPrompt = "⚠️ No se pudo obtener contexto del bot: " + ex.Message;
+                
+                if (!string.IsNullOrEmpty(userCountry) && !string.IsNullOrEmpty(userCity))
+                {
+                    var dynamicRegionalContext = BuildDynamicRegionalContext(userCity, userCountry, fallbackDetectedLanguage);
+                    fallbackSystemPrompt += dynamicRegionalContext;
+                    _logger.LogInformation("🌍 [PromptBuilderService-Fallback] CONTEXTO DINÁMICO AÑADIDO - Idioma: {language}, Ubicación: {city}, {country}", 
+                        fallbackDetectedLanguage, userCity, userCountry);
+                }
+                
                 var fallbackPayload = new
                 {
-                Error = $"No se pudo obtener contexto del bot: {ex.Message}",
+                    Error = $"No se pudo obtener contexto del bot: {ex.Message}",
                     BotId = botId, 
-                    UserId = userId, // 👈 USADO: Usamos el UserId real
-                    OriginalQuestion = $"👤 Usuario dice: {userMessage}",
+                    UserId = userId,
                     UserQuestion = userMessage,
                     CapturedFields = capturedFields ?? new List<DataField>(),
+                    UserLocation = new
+                    {
+                        Country = userCountry,
+                        City = userCity
+                    },
+                    ContextMessage = contextMessage,
                     Context = new
                     {
-                        SystemPrompt = $"⚠️ No se pudo obtener contexto del bot: {ex.Message}",
+                        SystemPrompt = fallbackSystemPrompt,
                         DataCaptureStatus = BuildDataCaptureStatusPrompt(capturedFields ?? new List<DataField>()),
                         Resources = new { Documents = new List<string>(), Urls = new List<string>(), CustomTexts = new List<string>() },
                         ConversationHistory = new List<object>
@@ -122,6 +224,20 @@ ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos n
 
             // 🔹 Extraer el system prompt y el historial del contexto
             var systemPrompt = botContext.Messages?.FirstOrDefault(m => m.Role == "system")?.Content ?? string.Empty;
+            
+            // 🌍 ENRIQUECER SYSTEM PROMPT CON CONTEXTO GEOGRÁFICO Y DE IDIOMA
+            // Detectar idioma del usuario desde el primer mensaje
+            var detectedLanguage = DetectUserLanguage(userMessage);
+            
+            if (!string.IsNullOrEmpty(userCountry) && !string.IsNullOrEmpty(userCity))
+            {
+                // Construir contexto dinámico basado en idioma Y ubicación
+                var regionContext = BuildDynamicRegionalContext(userCity, userCountry, detectedLanguage);
+                systemPrompt += regionContext;
+                _logger.LogInformation("🌍 [PromptBuilderService] CONTEXTO DINÁMICO AÑADIDO - Idioma: {language}, Ubicación: {city}, {country}", 
+                    detectedLanguage, userCity, userCountry);
+            }
+            
             // Obtenemos los mensajes de ejemplo (user/assistant) del contexto
             var conversationHistory = botContext.Messages?.Where(m => m.Role == "user" || m.Role == "assistant").ToList() ?? new List<MessageDto>();
             // Añadir el mensaje actual del usuario al historial
@@ -136,31 +252,35 @@ ACCIÓN: Pregunta únicamente por '{missing[0].FieldName}'. No repitas saludos n
                 })
                 .ToList() ?? new List<DataField>();
 
-            // 🔹 Construir el JSON final con los datos dinámicos del endpoint
+            // 🔹 Construir el JSON OPTIMIZADO para OpenAI - Solo lo que la IA necesita
             var payload = new
             {
-                BotId = botId,
-                UserId = userId, // 👈 USADO: Usamos el UserId real
-                OriginalQuestion = $"👤 Usuario dice: {userMessage}",
                 UserQuestion = userMessage,
-                CapturedFields = captureFieldsFromContext,
-                Context = new
+                UserLocation = new
                 {
-                    SystemPrompt = systemPrompt,
-                    DataCaptureStatus = BuildDataCaptureStatusPrompt(captureFieldsFromContext),
-                    Resources = new
-                    {
-                        Documents = botContext.Training?.Documents ?? new List<string>(),
-                        Urls = botContext.Training?.Urls ?? new List<string>(),
-                        CustomTexts = botContext.Training?.CustomTexts ?? new List<string>(),
-                        Vectors = botContext.Training?.Vectors ?? new List<object>()
-                    },
-                    ConversationHistory = conversationHistory.Select(m => new { m.Role, m.Content }).ToList<object>()
+                    Country = userCountry,
+                    City = userCity
                 },
-                Timestamp = DateTime.UtcNow
+                ContextMessage = contextMessage,
+                SystemPrompt = systemPrompt,
+                DataCaptureStatus = BuildDataCaptureStatusPrompt(captureFieldsFromContext),
+                CapturedFields = captureFieldsFromContext,
+                Resources = new
+                {
+                    Documents = botContext.Training?.Documents ?? new List<string>(),
+                    Urls = botContext.Training?.Urls ?? new List<string>(),
+                    CustomTexts = botContext.Training?.CustomTexts ?? new List<string>(),
+                    Vectors = botContext.Training?.Vectors ?? new List<object>()
+                },
+                ConversationHistory = conversationHistory.Select(m => new { m.Role, m.Content }).ToList<object>()
             };
 
-            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+            var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+            
+            _logger.LogInformation("📍 [PromptBuilderService] JSON payload built for bot {BotId} with location: {city}, {country}", botId, userCity, userCountry);
+            _logger.LogInformation("📤 [PromptBuilderService] FULL JSON PAYLOAD:\n{jsonPayload}", jsonPayload);
+            
+            return jsonPayload;
         }
     }
 }

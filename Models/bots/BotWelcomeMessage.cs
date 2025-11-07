@@ -11,7 +11,7 @@ namespace Voia.Api.Models.Bots
         public int Id { get; set; }
 
         [Column("bot_id")]
-        public int BotId { get; set; }
+        public int? BotId { get; set; }
 
         [Column("message")]
         public string Message { get; set; }

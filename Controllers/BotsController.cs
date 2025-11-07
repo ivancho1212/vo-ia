@@ -14,6 +14,9 @@ using Voia.Api.Attributes;
 using Voia.Api.Models.Bots;
 using Voia.Api.Models.BotTrainingSession;
 using Voia.Api.Services;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace Voia.Api.Controllers
 {
@@ -26,11 +29,14 @@ namespace Voia.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly FastApiService _fastApiService;
         private readonly VectorSearchService _vectorSearch;
-        public BotsController(ApplicationDbContext context, FastApiService fastApiService, VectorSearchService vectorSearch)
+        private readonly IConfiguration _config;
+
+        public BotsController(ApplicationDbContext context, FastApiService fastApiService, VectorSearchService vectorSearch, IConfiguration config)
         {
             _context = context;
             _fastApiService = fastApiService;
             _vectorSearch = vectorSearch;
+            _config = config;
         }
 
         /// <summary>
@@ -516,6 +522,8 @@ namespace Voia.Api.Controllers
         /// <returns>Bot encontrado.</returns>
         /// <response code="200">Devuelve el bot encontrado.</response>
         /// <response code="404">Si el bot no se encuentra.</response>
+        [AllowAnonymous]
+        [EnableCors("AllowWidgets")] // 🔧 CORS para widgets
         [HttpGet("{id}")]
         // [HasPermission("CanViewBot")]
         public async Task<ActionResult<object>> GetBotById(int id)
@@ -572,48 +580,117 @@ namespace Voia.Api.Controllers
         {
             try
             {
-                var bot = await _context.Bots
+                // Primero intentar validar como JWT
+                if (!string.IsNullOrEmpty(token) && token.Contains("."))
+                {
+                    try
+                    {
+                        var tokenHandler = new JwtSecurityTokenHandler();
+                        var jwtKey = _config["Jwt:Key"] ?? string.Empty;
+                        var key = Encoding.ASCII.GetBytes(jwtKey);
+
+                        var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+                        {
+                            ValidateIssuerSigningKey = true,
+                            IssuerSigningKey = new SymmetricSecurityKey(key),
+                            ValidateIssuer = true,
+                            ValidIssuer = _config["Jwt:Issuer"],
+                            ValidateAudience = true,
+                            ValidAudience = _config["Jwt:Audience"],
+                            ValidateLifetime = true,
+                            ClockSkew = TimeSpan.Zero
+                        }, out SecurityToken validatedToken);
+
+                        // Extraer el botId del token
+                        var botIdClaim = principal.FindFirst("botId");
+                        if (botIdClaim == null || !int.TryParse(botIdClaim.Value, out int tokenBotId) || tokenBotId != id)
+                        {
+                            return Unauthorized(new { Message = "Invalid token for this bot" });
+                        }
+
+                        // Token JWT válido y corresponde a este bot
+                        var bot = await _context.Bots
+                            .Include(b => b.Style)
+                            .FirstOrDefaultAsync(b => b.Id == id);
+
+                        if (bot == null)
+                            return NotFound(new { Message = "Bot not found" });
+
+                        var style = bot.Style;
+                        var settings = new WidgetSettingsDto
+                        {
+                            Styles = new StyleSettings
+                            {
+                                LauncherBackground = style?.PrimaryColor ?? "#000000",
+                                HeaderBackground = style?.PrimaryColor ?? "#000000",
+                                HeaderText = "#FFFFFF",
+                                UserMessageBackground = style?.SecondaryColor ?? "#0084ff",
+                                UserMessageText = "#FFFFFF",
+                                ResponseMessageBackground = "#f4f7f9",
+                                ResponseMessageText = "#000000",
+                                Title = style?.Title ?? bot.Name ?? "Asistente Virtual",
+                                Subtitle = "Powered by Voia",
+                                AvatarUrl = style?.AvatarUrl,
+                                Position = style?.Position ?? "bottom-right",
+                                FontFamily = style?.FontFamily ?? "Arial",
+                                Theme = style?.Theme ?? "light",
+                                CustomCss = style?.CustomCss,
+                                HeaderBackgroundColor = style?.HeaderBackgroundColor,
+                                AllowImageUpload = style?.AllowImageUpload ?? true,
+                                AllowFileUpload = style?.AllowFileUpload ?? true
+                            },
+                            WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
+                        };
+
+                        return Ok(settings);
+                    }
+                    catch (SecurityTokenException)
+                    {
+                        // JWT inválido, intentar con ApiTokenHash
+                    }
+                }
+
+                // Fallback: validar como ApiTokenHash (para compatibilidad hacia atrás)
+                var bot2 = await _context.Bots
                     .Include(b => b.Style)
                     .FirstOrDefaultAsync(b => b.Id == id);
 
-                if (bot == null)
+                if (bot2 == null)
                     return NotFound(new { Message = "Bot not found" });
 
-                // Verificar que el token corresponde a una integración válida
                 var integration = await _context.BotIntegrations
                     .FirstOrDefaultAsync(bi => bi.BotId == id && bi.ApiTokenHash == token);
 
                 if (integration == null)
                     return Unauthorized(new { Message = "Invalid token for this bot" });
 
-                // Convertir el estilo del bot a configuración del widget (todos los campos)
-                var style = bot.Style;
-                var settings = new WidgetSettingsDto
+                var style2 = bot2.Style;
+                var settings2 = new WidgetSettingsDto
                 {
                     Styles = new StyleSettings
                     {
-                        LauncherBackground = style?.PrimaryColor ?? "#000000",
-                        HeaderBackground = style?.PrimaryColor ?? "#000000",
+                        LauncherBackground = style2?.PrimaryColor ?? "#000000",
+                        HeaderBackground = style2?.PrimaryColor ?? "#000000",
                         HeaderText = "#FFFFFF",
-                        UserMessageBackground = style?.SecondaryColor ?? "#0084ff",
+                        UserMessageBackground = style2?.SecondaryColor ?? "#0084ff",
                         UserMessageText = "#FFFFFF",
                         ResponseMessageBackground = "#f4f7f9",
                         ResponseMessageText = "#000000",
-                        Title = style?.Title ?? bot.Name ?? "Asistente Virtual",
+                        Title = style2?.Title ?? bot2.Name ?? "Asistente Virtual",
                         Subtitle = "Powered by Voia",
-                        AvatarUrl = style?.AvatarUrl,
-                        Position = style?.Position ?? "bottom-right",
-                        FontFamily = style?.FontFamily ?? "Arial",
-                        Theme = style?.Theme ?? "light",
-                        CustomCss = style?.CustomCss,
-                        HeaderBackgroundColor = style?.HeaderBackgroundColor,
-                        AllowImageUpload = style?.AllowImageUpload ?? true,
-                        AllowFileUpload = style?.AllowFileUpload ?? true
+                        AvatarUrl = style2?.AvatarUrl,
+                        Position = style2?.Position ?? "bottom-right",
+                        FontFamily = style2?.FontFamily ?? "Arial",
+                        Theme = style2?.Theme ?? "light",
+                        CustomCss = style2?.CustomCss,
+                        HeaderBackgroundColor = style2?.HeaderBackgroundColor,
+                        AllowImageUpload = style2?.AllowImageUpload ?? true,
+                        AllowFileUpload = style2?.AllowFileUpload ?? true
                     },
                     WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
                 };
 
-                return Ok(settings);
+                return Ok(settings2);
             }
             catch (Exception ex)
             {

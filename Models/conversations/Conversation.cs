@@ -47,9 +47,23 @@ namespace Voia.Api.Models.Conversations
         [Column("last_active_at")]
         public DateTime? LastActiveAt { get; set; }
 
+        // 🆕 CAMPOS PARA MULTI-DISPOSITIVO (MOBILE SESSIONS)
+        [Column("active_mobile_session")]
+        public bool ActiveMobileSession { get; set; } = false;
+
+        [Column("mobile_device_type")]
+        public string? MobileDeviceType { get; set; } // "mobile", "tablet", etc
+
+        [Column("mobile_joined_at")]
+        public DateTime? MobileJoinedAt { get; set; }
+
+        // 🆕 CAMPO PARA CIERRE POR EXPIRACIÓN
+        [Column("closed_at")]
+        public DateTime? ClosedAt { get; set; }
+
         // Relaciones de navegación
-        public virtual User User { get; set; }
-        public virtual Bot Bot { get; set; }
+        public virtual User? User { get; set; }
+        public virtual Bot? Bot { get; set; }
         [Column("public_user_id")]
         public int? PublicUserId { get; set; }
 

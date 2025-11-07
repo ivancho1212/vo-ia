@@ -23,21 +23,24 @@ namespace Voia.Api.Models.Chat
 
         [Column("file_name")]
         [MaxLength(255)]
-        public string FileName { get; set; }
+        public string? FileName { get; set; }
 
         [Column("file_type")]
         [MaxLength(50)]
-        public string FileType { get; set; }
+        public string? FileType { get; set; }
 
         [Column("file_path")]
-        public string FilePath { get; set; }
+        public string? FilePath { get; set; }
 
         [Column("uploaded_at")]
         public DateTime? UploadedAt { get; set; } = DateTime.UtcNow;
 
+        [Column("deleted_at")]
+        public DateTime? DeletedAt { get; set; } = null;  // Soft-delete timestamp
+
         // 🔗 Relaciones
         [ForeignKey("ConversationId")]
-        public virtual Conversation Conversation { get; set; }
+        public virtual Conversation? Conversation { get; set; }
 
         [ForeignKey("UserId")]
         public User? User { get; set; }

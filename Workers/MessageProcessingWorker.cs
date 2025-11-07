@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
 using Voia.Api.Services.Interfaces;
 using Voia.Api.Services;
+using Voia.Api.Services.Chat;
 using Voia.Api.Data;
 using System;
 using Microsoft.EntityFrameworkCore;
@@ -165,6 +166,7 @@ public class MessageProcessingWorker : BackgroundService
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
         var vectorSearch = scope.ServiceProvider.GetService<VectorSearchService>();
         var promptBuilder = scope.ServiceProvider.GetService<PromptBuilderService>();
+        var dataCaptureService = scope.ServiceProvider.GetService<BotDataCaptureService>(); // 🆕
 
         // Re-fetch conversation for safety
         var conversation = await db.Conversations.FindAsync(job.ConversationId);
@@ -181,9 +183,90 @@ public class MessageProcessingWorker : BackgroundService
             return;
         }
 
+        // 🆕 PASO 1: PROCESAR CAPTURA DE DATOS PRIMERO
+        // Si el usuario escribió datos capturables, extraerlos y guardarlos antes de enviar a IA
+        var currentCapturedFields = job.CapturedFields ?? new System.Collections.Generic.List<Voia.Api.Services.DataField>();
+        
+        _logger.LogInformation("🔹 [Worker] job.CapturedFields: {count} campos", currentCapturedFields.Count);
+        foreach (var field in currentCapturedFields)
+        {
+            _logger.LogInformation("  - {fieldName}: {value}", field.FieldName, field.Value ?? "NULL");
+        }
+        
+        if (dataCaptureService != null && currentCapturedFields.Any())
+        {
+            _logger.LogInformation("🔍 [MessageProcessingWorker] Procesando captura de datos - Mensaje: {msg}, Campos pendientes: {count}", 
+                job.Question, currentCapturedFields.Where(f => string.IsNullOrEmpty(f.Value)).Count());
+            
+            try
+            {
+                var captureResult = await dataCaptureService.ProcessMessageAsync(
+                    job.BotId,
+                    job.UserId,
+                    job.ConversationId.ToString(), // Usar conversationId como sessionId
+                    job.Question,
+                    currentCapturedFields
+                );
+
+                _logger.LogInformation("📊 [Worker] Resultado de captura: {newSubmissions} nuevos, RequiresAiClarification: {requiresClarification}", 
+                    captureResult.NewSubmissions.Count, captureResult.RequiresAiClarification);
+
+                // 🆕 Actualizar campos con los nuevos datos capturados
+                if (captureResult.NewSubmissions.Any())
+                {
+                    _logger.LogInformation("✅ [MessageProcessingWorker] Se capturaron {count} nuevos datos", captureResult.NewSubmissions.Count);
+                    
+                    // Aplicar los nuevos datos a la lista de campos para el próximo prompt
+                    foreach (var submission in captureResult.NewSubmissions)
+                    {
+                        _logger.LogInformation("  📝 Submission: CaptureFieldId={id}, Value='{value}', CaptureField.FieldName='{fieldName}'", 
+                            submission.CaptureFieldId, submission.SubmissionValue, submission.CaptureField?.FieldName);
+                        
+                        var field = currentCapturedFields.FirstOrDefault(f => f.FieldName == submission.CaptureField?.FieldName);
+                        if (field != null)
+                        {
+                            field.Value = submission.SubmissionValue;
+                            _logger.LogInformation("✅ Campo actualizado: {fieldName} = {value}", field.FieldName, submission.SubmissionValue);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("⚠️ No se encontró campo en memoria para: {fieldName}", submission.CaptureField?.FieldName);
+                        }
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("ℹ️ No se capturaron nuevos datos");
+                }
+
+                // Si requiere aclaración de la IA, procesar eso
+                if (captureResult.RequiresAiClarification)
+                {
+                    _logger.LogInformation("🤔 [MessageProcessingWorker] La captura requiere aclaración de IA");
+                    job.Question = captureResult.AiClarificationPrompt; // Usar la pregunta de aclaración
+                }
+            }
+            catch (Exception capEx)
+            {
+                _logger.LogWarning(capEx, "Error en servicio de captura de datos para job {job}", job.MessageId);
+                // Continuar sin fallo - la captura es adicional
+            }
+        }
+        else
+        {
+            if (dataCaptureService == null)
+                _logger.LogWarning("⚠️ dataCaptureService es NULL");
+            else
+                _logger.LogInformation("ℹ️ No hay campos para procesar (currentCapturedFields vacío o nulo)");
+        }
+
         // 0) Optional: perform a vector search to decide whether we have relevant context
+        string prompt = job.Question;  // 🆕 Declarar prompt aquí para que sea accesible más abajo
+        
         try
         {
+            _logger.LogInformation("📍 [MessageProcessingWorker] Processing job {jobId} - Location: {city}, {country} | Context: {context}", job.MessageId, job.UserCity, job.UserCountry, job.ContextMessage);
+            
             var vectors = new System.Collections.Generic.List<object>();
             if (vectorSearch != null)
             {
@@ -198,6 +281,40 @@ public class MessageProcessingWorker : BackgroundService
                 }
             }
 
+            // 🆕 PASO 2: CONSTRUIR PROMPT CON CAMPOS CAPTURADOS ACTUALIZADOS
+            try
+            {
+                if (promptBuilder != null)
+                {
+                    try
+                    {
+                        // 🆕 Pasar los campos capturados actualizados en lugar de lista vacía
+                        prompt = await promptBuilder.BuildPromptFromBotContextAsync(
+                            job.BotId, 
+                            job.UserId ?? 0, 
+                            job.Question, 
+                            currentCapturedFields,  // 🆕 Usar campos actuales (con datos ya capturados)
+                            job.UserCountry, 
+                            job.UserCity, 
+                            job.ContextMessage
+                        );
+                        _logger.LogInformation("✅ [MessageProcessingWorker] Prompt built successfully - Location data + Capture fields ({fieldCount} campos)", 
+                            currentCapturedFields.Count);
+                    }
+                    catch (Exception pex)
+                    {
+                        _logger.LogWarning(pex, "PromptBuilder failed for job {job}, falling back to raw question", job.MessageId);
+                        prompt = job.Question;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error while building prompt for job {job}", job.MessageId);
+                prompt = job.Question;
+            }
+
+            // Ahora validar vectores para decidir si responder con IA o con "no access"
             if (vectors == null || vectors.Count == 0)
             {
                 // No relevant vectors -> avoid hallucination, reply with a safe message
@@ -235,34 +352,13 @@ public class MessageProcessingWorker : BackgroundService
             // Continue to attempt AI call as a best-effort fallback
         }
 
-        // Build the final prompt including vectors and context using PromptBuilderService if available
-        string prompt = job.Question;
-        try
-        {
-            if (promptBuilder != null)
-            {
-                try
-                {
-                    prompt = await promptBuilder.BuildPromptFromBotContextAsync(job.BotId, job.UserId ?? 0, job.Question, new System.Collections.Generic.List<Voia.Api.Services.DataField>());
-                }
-                catch (Exception pex)
-                {
-                    _logger.LogWarning(pex, "PromptBuilder failed for job {job}, falling back to raw question", job.MessageId);
-                    prompt = job.Question;
-                }
-            }
-
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error while building prompt for job {job}", job.MessageId);
-            prompt = job.Question;
-        }
-
+        // prompt ya fue construido arriba con la ubicación y campos capturados
+        
         string botAnswer;
         try
         {
-            botAnswer = await ai.GetBotResponseAsync(job.BotId, job.UserId ?? 0, prompt, new System.Collections.Generic.List<Voia.Api.Services.DataField>());
+            _logger.LogInformation("📤 [MessageProcessingWorker] PROMPT BEING SENT TO AI:\n{prompt}", prompt);
+            botAnswer = await ai.GetBotResponseAsync(job.BotId, job.UserId ?? 0, prompt, currentCapturedFields); // 🆕 Pasar campos capturados
         }
         catch (Exception ex)
         {

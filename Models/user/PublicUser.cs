@@ -15,6 +15,10 @@ namespace Voia.Api.Models.Users
         [Column("ip_address")]
         public string? IpAddress { get; set; }
 
+        [Column("browser_fingerprint")]
+        [MaxLength(256)]
+        public string? BrowserFingerprint { get; set; }
+
         [Column("user_agent")]
         public string? UserAgent { get; set; }
 
@@ -23,9 +27,6 @@ namespace Voia.Api.Models.Users
 
         [Column("city")]
         public string? City { get; set; }
-
-        [Column("phone")]
-        public string? Phone { get; set; }
 
         [Column("bot_id")]
         public int? BotId { get; set; }

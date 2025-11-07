@@ -18,6 +18,7 @@ using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
 using Voia.Api.Models.Users;
+using Voia.Api.Models.Messages.DTOs;
 
 namespace Voia.Api.Hubs
 {
@@ -393,28 +394,80 @@ namespace Voia.Api.Hubs
             }
 
             // 🔹 PASO 1: Obtener el estado actual de los campos capturados para esta conversación
-            var currentCapturedFields = await _context.BotDataCaptureFields
-                .Where(f => f.BotId == request.BotId)
-                .Select(f => new DataField
+            var currentCapturedFields = await (from f in _context.BotDataCaptureFields
+                where f.BotId == request.BotId
+                select new DataField
                 {
                     FieldName = f.FieldName,
-                    Value = _context.BotDataSubmissions.Where(s =>
+                    Value = string.Join(", ", _context.BotDataSubmissions.Where(s =>
                             s.BotId == request.BotId && s.CaptureFieldId == f.Id &&
                             s.SubmissionSessionId == conversationId.ToString())
-                        .OrderByDescending(s => s.SubmittedAt)
+                        .OrderBy(s => s.SubmittedAt)
                         .Select(s => s.SubmissionValue)
-                        .FirstOrDefault()
+                        .Distinct())
                 })
                 .ToListAsync();
 
+            _logger.LogInformation("🔹 [ChatHub] Campos cargados de BD: {count} campos", currentCapturedFields.Count);
+            foreach (var field in currentCapturedFields)
+            {
+                _logger.LogInformation("  - {fieldName}: {value}", field.FieldName, field.Value ?? "NULL");
+            }
+
             // 🔹 PASO 2: Procesar el mensaje para capturar nuevos datos
+            _logger.LogInformation("🔍 [ChatHub] Procesando mensaje con BotDataCaptureService: '{msg}'", request.Question);
+            
+            // 🆕 Construir historial de conversación para PHASE 3 (revisión retrospectiva)
+            var conversationMessages = await _context.Messages
+                .Where(m => m.ConversationId == conversation.Id)
+                .OrderBy(m => m.CreatedAt)
+                .Select(m => new { m.Sender, m.MessageText, m.CreatedAt })
+                .ToListAsync();
+            
+            var conversationHistory = string.Join("\n", conversationMessages.Select(m => 
+                $"[{m.Sender}]: {m.MessageText}"));
+            
+            _logger.LogInformation("📜 [ChatHub] Historial de conversación ({msgCount} mensajes): {preview}...",
+                conversationMessages.Count, 
+                conversationHistory.Length > 200 ? conversationHistory.Substring(0, 200) : conversationHistory);
+
             var captureResult = await _dataCaptureService.ProcessMessageAsync(
                 request.BotId,
                 request.UserId,
                 conversationId.ToString(), // Usamos el ID de conversación como ID de sesión
                 request.Question ?? string.Empty,
-                currentCapturedFields // ✅ FIX: Pasamos la lista de campos que obtuvimos
+                currentCapturedFields, // ✅ FIX: Pasamos la lista de campos que obtuvimos
+                conversationHistory   // 🆕 PHASE 3: Pasamos el historial completo de conversación
             );
+
+            _logger.LogInformation("📊 [ChatHub] Resultado de captura: {newSubmissions} nuevos, RequiresAiClarification: {requiresClarification}", 
+                captureResult.NewSubmissions.Count, captureResult.RequiresAiClarification);
+
+            // 🆕 Actualizar campos con datos capturados
+            if (captureResult.NewSubmissions.Any())
+            {
+                _logger.LogInformation("✅ [ChatHub] Se capturaron {count} nuevos datos en la captura de datos", captureResult.NewSubmissions.Count);
+                foreach (var submission in captureResult.NewSubmissions)
+                {
+                    _logger.LogInformation("  📝 Submission: CaptureFieldId={id}, SubmissionValue='{value}'", 
+                        submission.CaptureFieldId, submission.SubmissionValue);
+                    
+                    var field = currentCapturedFields.FirstOrDefault(f => f.FieldName == submission.CaptureField?.FieldName);
+                    if (field != null)
+                    {
+                        field.Value = submission.SubmissionValue;
+                        _logger.LogInformation("✅ [ChatHub] Campo actualizado: {fieldName} = {value}", field.FieldName, submission.SubmissionValue);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️ [ChatHub] No se encontró campo en memoria para: {fieldName}", submission.CaptureField?.FieldName);
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogInformation("ℹ️ [ChatHub] No se capturaron nuevos datos");
+            }
 
             if (captureResult.RequiresAiClarification)
             {
@@ -448,7 +501,8 @@ namespace Voia.Api.Hubs
                         UserId = request.UserId,
                         MessageId = userMessage.Id,
                         Question = captureResult.ConfirmationPrompt,
-                        TempId = request.TempId ?? string.Empty
+                        TempId = request.TempId ?? string.Empty,
+                        CapturedFields = currentCapturedFields // 🆕 AGREGAR CAMPOS CAPTURADOS AL JOB
                     };
                     await _messageQueue.EnqueueAsync(job);
                     await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request.TempId });
@@ -520,14 +574,47 @@ namespace Voia.Api.Hubs
                     return;
                 }
 
+                // 🆕 Obtener ubicación del usuario público
+                string? userCountry = null;
+                string? userCity = null;
+                string? contextMessage = null;
+                
+                if (conversation.PublicUserId.HasValue)
+                {
+                    var publicUser = await _context.PublicUsers
+                        .FirstOrDefaultAsync(p => p.Id == conversation.PublicUserId.Value);
+                    
+                    if (publicUser != null)
+                    {
+                        userCountry = publicUser.Country;
+                        userCity = publicUser.City;
+                        _logger.LogInformation("📍 [ChatHub] Ubicación del usuario público: {city}, {country}", userCity, userCountry);
+                    }
+                }
+                
+                // 🆕 Extraer contextMessage del payload si viene del request
+                if (request != null)
+                {
+                    // Intentar obtener contextMessage del request (si existe como propiedad dinámica)
+                    var requestDict = request as System.Collections.Generic.IDictionary<string, object>;
+                    if (requestDict != null && requestDict.TryGetValue("contextMessage", out var ctxMsg))
+                    {
+                        contextMessage = ctxMsg?.ToString();
+                    }
+                }
+
                 var job = new MessageJob
                 {
                     ConversationId = conversation.Id,
-                    BotId = request.BotId,
-                    UserId = request.UserId,
+                    BotId = request?.BotId ?? 0,
+                    UserId = request?.UserId,
                     MessageId = userMessage.Id,
-                    Question = request.Question ?? string.Empty,
-                    TempId = request.TempId ?? string.Empty
+                    Question = request?.Question ?? string.Empty,
+                    TempId = request?.TempId ?? string.Empty,
+                    UserCountry = userCountry,      // 🆕
+                    UserCity = userCity,            // 🆕
+                    ContextMessage = contextMessage, // 🆕
+                    CapturedFields = currentCapturedFields // 🆕 Pasar los campos capturados actuales
                 };
 
                 // If the conversation has AI paused, do NOT enqueue a job. Admin should reply manually.
@@ -576,7 +663,7 @@ namespace Voia.Api.Hubs
                                 timestamp = sysMsg.CreatedAt,
                                 id = sysMsg.Id,
                                 status = "paused",
-                                tempId = request.TempId
+                                tempId = request?.TempId
                             });
                         }
                     }
@@ -594,7 +681,7 @@ namespace Voia.Api.Hubs
                 _logger.LogInformation("Message enqueued for conversation {conv} message {msg}", conversationId, userMessage.Id);
 
                 // Optionally notify the client that the message was queued (status: queued)
-                await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request.TempId });
+                await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request?.TempId });
 
                 return;
             }
@@ -621,177 +708,195 @@ namespace Voia.Api.Hubs
 
         public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null, string? replyToText = null)
         {
-            var convo = await _context.Conversations.FindAsync(conversationId);
-
-            string? repliedText = null;
-
-            if (replyToMessageId.HasValue)
+            try
             {
-                repliedText = _context.Messages
-                    .Where(m => m.Id == replyToMessageId.Value)
-                    .Select(m => m.MessageText)
-                    .FirstOrDefault();
-            }
+                var convo = await _context.Conversations.FindAsync(conversationId);
 
-            if (convo != null)
-            {
-                var adminMessage = new Message
+                string? repliedText = null;
+
+                if (replyToMessageId.HasValue)
                 {
-                    BotId = convo.BotId,
-                    UserId = convo.UserId,
-                    ConversationId = conversationId,
-                    Sender = "admin",
-                    MessageText = text,
-                    Source = "admin-panel",
-                    CreatedAt = DateTime.UtcNow,
-                    ReplyToMessageId = replyToMessageId
-                };
+                    // Use async EF call to avoid blocking the DB context while other async
+                    // operations (e.g., SaveChangesAsync) may be in flight.
+                    repliedText = await _context.Messages
+                        .Where(m => m.Id == replyToMessageId.Value)
+                        .Select(m => m.MessageText)
+                        .FirstOrDefaultAsync();
+                }
 
-                _context.Messages.Add(adminMessage);
-                await _context.SaveChangesAsync();
+                if (convo != null)
+                {
+                    var adminMessage = new Message
+                    {
+                        BotId = convo.BotId,
+                        UserId = convo.UserId,
+                        ConversationId = conversationId,
+                        Sender = "admin",
+                        MessageText = text,
+                        Source = "admin-panel",
+                        CreatedAt = DateTime.UtcNow,
+                        ReplyToMessageId = replyToMessageId
+                    };
+
+                    _context.Messages.Add(adminMessage);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Recuperar el mensaje persistido para asegurar el id y timestamp reales
+                var saved = await _context.Messages
+                    .Where(m => m.ConversationId == conversationId && m.Sender == "admin")
+                    .OrderByDescending(m => m.CreatedAt)
+                    .FirstOrDefaultAsync();
+
+                var sendTimestamp = saved?.CreatedAt ?? DateTime.UtcNow;
+                var sendId = saved?.Id;
+
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    from = "admin",
+                    text,
+                    timestamp = sendTimestamp,
+                    id = sendId,
+                    replyToMessageId = replyToMessageId,
+                    replyToText = repliedText
+                });
+
+                await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+                {
+                    conversationId,
+                    from = "admin",
+                    text,
+                    timestamp = sendTimestamp,
+                    id = sendId,
+                    alias = $"Sesión {conversationId}",
+                    lastMessage = text,
+                    replyToMessageId = replyToMessageId,
+                    replyToText = repliedText
+                });
+
+                await StopTyping(conversationId, "admin");
             }
-
-            // Recuperar el mensaje persistido para asegurar el id y timestamp reales
-            var saved = await _context.Messages
-                .Where(m => m.ConversationId == conversationId && m.Sender == "admin")
-                .OrderByDescending(m => m.CreatedAt)
-                .FirstOrDefaultAsync();
-
-            var sendTimestamp = saved?.CreatedAt ?? DateTime.UtcNow;
-            var sendId = saved?.Id;
-
-            await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+            catch (Exception ex)
             {
-                conversationId,
-                from = "admin",
-                text,
-                timestamp = sendTimestamp,
-                id = sendId,
-                replyToMessageId = replyToMessageId,
-                replyToText = repliedText
-            });
-
-            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
-            {
-                conversationId,
-                from = "admin",
-                text,
-                timestamp = sendTimestamp,
-                id = sendId,
-                alias = $"Sesión {conversationId}",
-                lastMessage = text,
-                replyToMessageId = replyToMessageId,
-                replyToText = repliedText
-            });
-
-            await StopTyping(conversationId, "admin");
+                _logger.LogError(ex, "❌ Error en AdminMessage para conversation {convId}: {msg}", conversationId, ex.Message);
+                // Re-throw as HubException so the client receives a readable message and the stack is logged
+                throw new HubException("Error al enviar mensaje desde el panel administrativo: " + ex.Message);
+            }
         }
 
-    [HubMethodName("SendGroupedImages")]
+        [HubMethodName("SendGroupedImages")]
     public async Task SendGroupedImages(int conversationId, int? userId, List<ChatFileDto> multipleFiles)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
             try
             {
+                _logger.LogInformation($"📸 [SendGroupedImages] Iniciando. ConvId: {conversationId}, UserId: {userId}, FilesCount: {multipleFiles?.Count}");
+                
+                if (multipleFiles == null || multipleFiles.Count == 0)
+                {
+                    _logger.LogWarning($"⚠️ [SendGroupedImages] Sin archivos para procesar");
+                    throw new HubException("No se recibieron archivos para procesar.");
+                }
+
                 var fileDtos = new List<object>();
+                var messagesToAdd = new List<Message>();
+
+                // Get conversation and bot once
+                var convo = await _context.Conversations.FindAsync(conversationId);
+                if (convo == null)
+                {
+                    _logger.LogWarning($"⚠️ [SendGroupedImages] Conversación no encontrada: {conversationId}");
+                    throw new HubException($"Conversación {conversationId} no encontrada.");
+                }
+
+                var bot = await _context.Bots.FindAsync(convo.BotId);
+                if (bot == null)
+                {
+                    _logger.LogWarning($"⚠️ [SendGroupedImages] Bot no encontrado: {convo.BotId}");
+                    throw new HubException($"Bot {convo.BotId} no encontrado.");
+                }
 
                 foreach (var file in multipleFiles)
                 {
-                    string finalPath;
-
-                    if (!string.IsNullOrWhiteSpace(file.FileUrl))
+                    try
                     {
-                        finalPath = file.FileUrl;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(file.FileContent))
-                    {
-                        var base64Data = file.FileContent.Contains(",")
-                            ? file.FileContent.Split(',')[1]
-                            : file.FileContent;
-
-                        finalPath = await _chatFileService.SaveBase64FileAsync(base64Data, file.FileName ?? string.Empty);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("❌ Archivo inválido: sin URL ni contenido base64.");
-                        continue;
-                    }
-
-                    // Determine file type from detected signature when storing local uploads
-                    string fileTypeToStore = file.FileType ?? "application/octet-stream";
-                    if (!string.IsNullOrWhiteSpace(finalPath) && finalPath.StartsWith("/uploads/chat/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Resolve physical path and re-validate signature
-                        var storedName = Path.GetFileName(finalPath);
-                        var physicalPath = Path.Combine(Directory.GetCurrentDirectory(), "Uploads", "chat", storedName);
-                        if (System.IO.File.Exists(physicalPath))
+                        _logger.LogInformation($"📄 [SendGroupedImages] Procesando archivo: {file.FileName}");
+                        
+                        // ✅ The fileUrl comes from previous sendChatFile calls
+                        // Format: /api/files/chat/{id}
+                        // Extract the ID from the fileUrl
+                        if (string.IsNullOrWhiteSpace(file.FileUrl))
                         {
-                            try
+                            _logger.LogWarning($"❌ [SendGroupedImages] Archivo sin fileUrl: {file.FileName}");
+                            continue;
+                        }
+
+                        // Parse fileId from fileUrl (e.g., "/api/files/chat/312" → 312)
+                        int fileId = 0;
+                        if (file.FileUrl.Contains("/api/files/chat/"))
+                        {
+                            var idStr = file.FileUrl.Replace("/api/files/chat/", "").Split('/')[0];
+                            if (int.TryParse(idStr, out var parsedId))
                             {
-                                fileTypeToStore = await _checker.ValidateAsync(physicalPath, file.FileType ?? string.Empty, file.FileName ?? string.Empty);
-                            }
-                            catch
-                            {
-                                // If validation fails here, keep a safe fallback and continue; controller previously validated the file.
-                                fileTypeToStore = file.FileType ?? "application/octet-stream";
+                                fileId = parsedId;
                             }
                         }
+
+                        if (fileId <= 0)
+                        {
+                            _logger.LogWarning($"❌ [SendGroupedImages] No se pudo extraer ID del fileUrl: {file.FileUrl}");
+                            continue;
+                        }
+
+                        // ✅ Just create a message linked to the existing file
+                        var fileMessage = new Message
+                        {
+                            BotId = convo.BotId,
+                            UserId = userId,
+                            ConversationId = conversationId,
+                            Sender = "user",
+                            MessageText = $"📎 {file.FileName}",
+                            FileId = fileId,  // ✅ Link to existing ChatUploadedFile
+                            Source = "widget",
+                            CreatedAt = DateTime.UtcNow,
+                            Status = "sent"
+                        };
+
+                        messagesToAdd.Add(fileMessage);
+
+                        fileDtos.Add(new
+                        {
+                            fileName = file.FileName,
+                            fileType = file.FileType,
+                            fileUrl = file.FileUrl  // ✅ Use the fileUrl from sendChatFile
+                        });
+
+                        _logger.LogInformation($"✅ [SendGroupedImages] Mensaje creado para archivo: {file.FileName} (FileId: {fileId})");
                     }
-
-                    var dbFile = new ChatUploadedFile
+                    catch (Exception fileEx)
                     {
-                        ConversationId = conversationId,
-                        PublicUserId = userId,
-                        FileName = file.FileName ?? "archivo",
-                        FileType = fileTypeToStore ?? "application/octet-stream",
-                        FilePath = finalPath
-                    };
-
-                    _context.ChatUploadedFiles.Add(dbFile);
-                    await _context.SaveChangesAsync();
-
-                    var convo = await _context.Conversations.FindAsync(conversationId);
-                    if (convo == null)
-                    {
-                        continue; // Skip saving this message if conversation not found
+                        _logger.LogError($"❌ [SendGroupedImages] Error procesando archivo {file.FileName}: {fileEx.Message}");
+                        // Continue with next file instead of throwing
                     }
-
-
-                    var bot = await _context.Bots.FindAsync(convo.BotId);
-                    if (bot == null)
-                    {
-                        continue; // Skip saving this message if bot not found
-                    }
-
-                    var fileMessage = new Message
-                    {
-                        BotId = convo.BotId, // Use the BotId from the conversation
-                        UserId = userId,
-                        ConversationId = conversationId,
-                        Sender = "user",
-                        MessageText = $"📎 {dbFile.FileName}",
-                        Source = "widget",
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    _context.Messages.Add(fileMessage);
-                    await _context.SaveChangesAsync();
-
-                    fileDtos.Add(new
-                    {
-                        fileName = dbFile.FileName,
-                        fileType = dbFile.FileType,
-                        fileUrl = dbFile.FilePath
-                    });
                 }
-                Console.WriteLine($"[ChatHub] Sending ReceiveMessage for grouped images. ConversationId: {conversationId}");
+
+                // ✅ Save all messages at once
+                if (messagesToAdd.Count > 0)
+                {
+                    _context.Messages.AddRange(messagesToAdd);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation($"✅ [SendGroupedImages] {messagesToAdd.Count} mensajes guardados en DB");
+                }
+                
+                _logger.LogInformation($"📸 [SendGroupedImages] Completado. Enviando {fileDtos.Count} archivos al grupo.");
 
                 await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId,
                     from = "user",
-                    images = fileDtos,
-                    text = "", // para no enviarlo vacío
+                    files = fileDtos,
+                    text = "",
                     timestamp = DateTime.UtcNow
                 });
 
@@ -799,20 +904,20 @@ namespace Voia.Api.Hubs
                 {
                     conversationId,
                     from = "user",
-                    alias = $"Sesión {conversationId}", // Changed from Usuario {userId}
+                    alias = $"Sesión {conversationId}",
                     text = "Se enviaron múltiples imágenes.",
-                    images = fileDtos,
+                    files = fileDtos,
                     timestamp = DateTime.UtcNow
                 });
+                
+                _logger.LogInformation($"✅ [SendGroupedImages] Notificaciones enviadas exitosamente.");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Error al enviar imágenes agrupadas. Detalles: {ExceptionDetails}", ex.ToString());
-                throw new HubException("Ocurrió un error al enviar las imágenes.");
+                _logger.LogError(ex, "❌ [SendGroupedImages] Error general al enviar imágenes agrupadas. Detalles: {ExceptionDetails}", ex.ToString());
+                throw new HubException($"Ocurrió un error al enviar las imágenes: {ex.Message}");
             }
         }
-
-
         // ✅ Renombrado para claridad y corregido para notificar solo a los OTROS clientes.
         public async Task Typing(int conversationId, string userId)
         {
@@ -1011,6 +1116,175 @@ namespace Voia.Api.Hubs
                 return;
             }
             
+        }
+
+        /// <summary>
+        /// ✅ NUEVA ARQUITECTURA: Actualizar estado de un mensaje después del upload.
+        /// 
+        /// Flujo profesional (como WhatsApp):
+        /// 1. Cliente crea messageId único (UUID)
+        /// 2. Envía mensaje con estado "pending"
+        /// 3. Upload inicia en background con progress tracking
+        /// 4. Al completar, cliente invoca UpdateMessage con fileUrl
+        /// 5. Hub notifica al grupo que el mensaje fue actualizado
+        /// 
+        /// Beneficios:
+        /// - Preview local inmediato (blob URL)
+        /// - Progress bar visible durante upload
+        /// - Retry automático si falla
+        /// - Sin duplicación de datos (base64 solo local)
+        /// </summary>
+        [Authorize]
+        public async Task UpdateMessage(UpdateFileUploadStatusDto dto)
+        {
+            try
+            {
+                _logger.LogInformation("🔄 [UpdateMessage] Actualizando mensaje {messageId} en conversación {convId}. Status: {status}", 
+                    dto.MessageId, dto.ConversationId, dto.Status);
+
+                // Validar que la conversación exista
+                var conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => c.Id == dto.ConversationId);
+
+                if (conversation == null)
+                {
+                    _logger.LogError("❌ [UpdateMessage] Conversación {convId} no encontrada", dto.ConversationId);
+                    await Clients.Caller.SendAsync("Error", "Conversación no encontrada");
+                    return;
+                }
+
+                // Si el upload fue exitoso, actualizar el mensaje con los detalles del archivo
+                if (dto.Status == "sent" && dto.FileId.HasValue)
+                {
+                    var fileRecord = await _context.ChatUploadedFiles
+                        .FirstOrDefaultAsync(f => f.Id == dto.FileId.Value);
+
+                    if (fileRecord != null)
+                    {
+                        _logger.LogInformation("✅ [UpdateMessage] Archivo {fileId} vinculado. Enviando actualización al grupo", dto.FileId.Value);
+                    }
+                }
+
+                // Notificar a TODOS en la conversación que el mensaje fue actualizado
+                // (incluyendo al sender para suavizar transición blob URL → CDN URL)
+                await Clients.Group(dto.ConversationId.ToString())
+                    .SendAsync("MessageUpdated", new
+                    {
+                        messageId = dto.MessageId,
+                        conversationId = dto.ConversationId,
+                        fileUrl = dto.FileUrl,
+                        fileId = dto.FileId,
+                        status = dto.Status,
+                        uploadProgress = dto.UploadProgress,
+                        timestamp = DateTime.UtcNow
+                    });
+
+                _logger.LogInformation("✅ [UpdateMessage] Notificación enviada al grupo {convId}", dto.ConversationId);
+
+                // También notificar al panel admin
+                await Clients.Group("admin").SendAsync("MessageUpdated", new
+                {
+                    conversationId = dto.ConversationId,
+                    messageId = dto.MessageId,
+                    fileUrl = dto.FileUrl,
+                    status = dto.Status,
+                    uploadProgress = dto.UploadProgress
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ [UpdateMessage] Error actualizando mensaje {messageId}: {msg}", dto.MessageId, ex.Message);
+                await Clients.Caller.SendAsync("Error", $"Error al actualizar mensaje: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 🆕 MÓVIL MULTI-DISPOSITIVO: Notificar al backend que una sesión móvil se unió
+        /// Se llama desde el frontend móvil después de conectarse a SignalR
+        /// </summary>
+        [HubMethodName("NotifyMobileJoined")]
+        public async Task NotifyMobileJoined(int conversationId, string deviceType)
+        {
+            try
+            {
+                _logger.LogInformation("📱 [Hub] Móvil se unió a conversación {convId} - Tipo: {device}", conversationId, deviceType);
+
+                var conversation = await _context.Conversations.FindAsync(conversationId);
+                if (conversation == null)
+                {
+                    _logger.LogWarning("⚠️ [Hub] Conversación {convId} no encontrada", conversationId);
+                    return;
+                }
+
+                // Actualizar estado en BD
+                conversation.ActiveMobileSession = true;
+                conversation.MobileDeviceType = deviceType ?? "mobile";
+                conversation.MobileJoinedAt = DateTime.UtcNow;
+                conversation.LastActiveAt = DateTime.UtcNow;
+                conversation.Blocked = true; // Bloquear web
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("✅ [Hub] Estado actualizado - Conversación {convId} bloqueada", conversationId);
+
+                // Notificar a TODOS en el grupo (incluyendo web)
+                await Clients.Group(conversationId.ToString())
+                    .SendAsync("MobileSessionStarted", new
+                    {
+                        conversationId,
+                        deviceType,
+                        joinedAt = conversation.MobileJoinedAt
+                    });
+
+                _logger.LogInformation("📢 [Hub] Evento 'MobileSessionStarted' enviado al grupo {convId}", conversationId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ [NotifyMobileJoined] Error: {msg}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 🆕 MÓVIL MULTI-DISPOSITIVO: Notificar al backend que una sesión móvil se cerró
+        /// Se llama desde el frontend móvil cuando cierra o expira (30s inactividad)
+        /// </summary>
+        [HubMethodName("NotifyMobileClosed")]
+        public async Task NotifyMobileClosed(int conversationId)
+        {
+            try
+            {
+                _logger.LogInformation("📱 [Hub] Móvil cerró conversación {convId}", conversationId);
+
+                var conversation = await _context.Conversations.FindAsync(conversationId);
+                if (conversation == null)
+                {
+                    _logger.LogWarning("⚠️ [Hub] Conversación {convId} no encontrada", conversationId);
+                    return;
+                }
+
+                // Marcar como cerrada
+                conversation.ActiveMobileSession = false;
+                conversation.Status = "closed";
+                conversation.ClosedAt = DateTime.UtcNow;
+                conversation.Blocked = false; // Desbloquear web
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation("✅ [Hub] Sesión móvil cerrada - Conversación {convId} desbloqueada", conversationId);
+
+                // Notificar a TODOS en el grupo (incluyendo web)
+                await Clients.Group(conversationId.ToString())
+                    .SendAsync("MobileSessionEnded", new
+                    {
+                        conversationId,
+                        reason = "mobile-closed",
+                        closedAt = conversation.ClosedAt
+                    });
+
+                _logger.LogInformation("📢 [Hub] Evento 'MobileSessionEnded' enviado al grupo {convId}", conversationId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ [NotifyMobileClosed] Error: {msg}", ex.Message);
+            }
         }
 
     }

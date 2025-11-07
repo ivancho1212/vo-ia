@@ -22,6 +22,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // CONFIGURAR SERVICIOS
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
@@ -93,14 +94,31 @@ builder.Services.AddCors(options =>
             .WithExposedHeaders("X-Widget-Token");
     });
 
-    // Poltica especfica para widgets - permitir todos los orgenes por ahora
-    // TODO: Implementar validacin de dominios ms adelante con un servicio apropiado
+    // Policy for widgets - allow any origin since widgets are embedded everywhere
+    // The /inline endpoint for file serving requires this for cross-origin img tag loading
     options.AddPolicy("AllowWidgets", policy =>
     {
         policy
             .AllowAnyOrigin()
             .AllowAnyMethod()
-            .AllowAnyHeader();
+            .AllowAnyHeader()
+            .WithExposedHeaders("X-Widget-Token", "Content-Type", "X-Content-Type-Options");
+    });
+
+    // ✅ DEVELOPMENT: Allow localhost:5006 (widget origin when served from localhost:3000)
+    options.AddPolicy("AllowLocalhost", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:5006",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:5006"
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials()
+            .WithExposedHeaders("X-Widget-Token", "Content-Type", "X-Content-Type-Options");
     });
 });
 
@@ -297,8 +315,10 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseRouting();
 
-// CORS debe ir DESPUS de UseRouting pero ANTES de UseAuthentication
-app.UseCors("AllowFrontend"); // Default para el dashboard
+// CORS debe ir DESPUÉS de UseRouting pero ANTES de UseAuthentication
+// Use default policy, but allow controller-level [EnableCors] to override
+app.UseCors("AllowFrontend"); // Default for dashboard
+// Note: [EnableCors] on specific endpoints will override this default policy
 
 app.UseAuthentication();
 app.UseAuthorization();

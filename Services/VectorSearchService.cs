@@ -23,7 +23,14 @@ namespace Voia.Api.Services
                 // URL del endpoint de Python
                 var url = $"http://localhost:8000/search_vectors?bot_id={botId}&query={Uri.EscapeDataString(query)}&limit={limit}";
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3)); // Timeout aún más corto
+                // ✅ Timeout dinámico basado en complejidad de query
+                int timeoutMs = string.IsNullOrEmpty(query) 
+                    ? 3000  // Query vacío: 3 segundos
+                    : query.Length > 150 
+                        ? 8000  // Query largo (>150 chars): 8 segundos
+                        : 5000; // Query medio: 5 segundos
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(timeoutMs));
                 var response = await _httpClient.GetAsync(url, cts.Token);
                 
                 if (!response.IsSuccessStatusCode)
