@@ -13,6 +13,8 @@ using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
 using Microsoft.Extensions.Logging;
 
+using Voia.Api.Services.Security;
+
 namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
@@ -23,12 +25,14 @@ namespace Voia.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ILogger<MessagesController> _logger;
+        private readonly ISanitizationService _sanitizer;
 
-        public MessagesController(ApplicationDbContext context, IHubContext<ChatHub> hubContext, ILogger<MessagesController> logger)
+        public MessagesController(ApplicationDbContext context, IHubContext<ChatHub> hubContext, ILogger<MessagesController> logger, ISanitizationService sanitizer)
         {
             _context = context;
             _hubContext = hubContext;
             _logger = logger;
+            _sanitizer = sanitizer;
         }
 
         // Obtener todos los mensajes
@@ -131,7 +135,7 @@ namespace Voia.Api.Controllers
                 PublicUserId = resolvedPublicUserId,
                 ConversationId = dto.ConversationId,
                 Sender = dto.Sender,
-                MessageText = dto.MessageText,
+                MessageText = _sanitizer.SanitizeText(dto.MessageText),
                 TokensUsed = dto.TokensUsed ?? 0,
                 Source = dto.Source ?? "widget",
                 CreatedAt = DateTime.UtcNow,
@@ -181,7 +185,7 @@ namespace Voia.Api.Controllers
             message.PublicUserId = dto.PublicUserId;
             message.ConversationId = dto.ConversationId;
             message.Sender = dto.Sender;
-            message.MessageText = dto.MessageText;
+            message.MessageText = _sanitizer.SanitizeText(dto.MessageText);
             message.TokensUsed = dto.TokensUsed ?? 0;
             message.Source = dto.Source;
             message.ReplyToMessageId = dto.ReplyToMessageId;

@@ -4,6 +4,7 @@ namespace Voia.Api.Models.DTOs
 {
     public class CreateUserDto
     {
+        public string? RoleName { get; set; }
         [Required(ErrorMessage = "El nombre es obligatorio.")]
         public string Name { get; set; }
 

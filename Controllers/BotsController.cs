@@ -17,6 +17,8 @@ using Voia.Api.Services;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Voia.Api.Services.Caching;
+using Voia.Api.Services.Security;
 
 namespace Voia.Api.Controllers
 {
@@ -30,13 +32,17 @@ namespace Voia.Api.Controllers
         private readonly FastApiService _fastApiService;
         private readonly VectorSearchService _vectorSearch;
         private readonly IConfiguration _config;
+        private readonly ICacheService _cacheService;
+        private readonly ISanitizationService _sanitizer;
 
-        public BotsController(ApplicationDbContext context, FastApiService fastApiService, VectorSearchService vectorSearch, IConfiguration config)
+        public BotsController(ApplicationDbContext context, FastApiService fastApiService, VectorSearchService vectorSearch, IConfiguration config, ICacheService cacheService, ISanitizationService sanitizer)
         {
             _context = context;
             _fastApiService = fastApiService;
             _vectorSearch = vectorSearch;
             _config = config;
+            _cacheService = cacheService;
+            _sanitizer = sanitizer;
         }
 
         /// <summary>
@@ -113,6 +119,22 @@ namespace Voia.Api.Controllers
         {
             try
             {
+                // Construir cache key en función de filtros (estrategia simple: si hay filtros, no cachear)
+                string? cacheKey = null;
+                if (!isActive.HasValue && string.IsNullOrEmpty(name))
+                {
+                    cacheKey = CacheConstants.GetBotsKey(); // Cache global de bots sin filtros
+                }
+
+                if (cacheKey != null)
+                {
+                    var cached = await _cacheService.GetAsync<List<Bot>>(cacheKey);
+                    if (cached != null)
+                    {
+                        return Ok(cached);
+                    }
+                }
+
                 var query = _context.Bots
                     .Include(b => b.User) // Incluye la relación User para que no sea null
                     .AsQueryable();
@@ -128,6 +150,12 @@ namespace Voia.Api.Controllers
                 }
 
                 var bots = await query.ToListAsync();
+
+                // Guardar en caché si no hay filtros
+                if (cacheKey != null && bots.Count > 0)
+                {
+                    await _cacheService.SetAsync(cacheKey, bots, CacheConstants.BOT_TTL);
+                }
 
                 if (bots.Count == 0)
                 {
@@ -149,32 +177,42 @@ namespace Voia.Api.Controllers
             try
             {
                 var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                var cacheKey = CacheConstants.GetBotsByUserKey(userId);
 
-                var bots = await _context.Bots
-                    .Include(b => b.User)
-                    .Include(b => b.Style)
-                    .Where(b => b.UserId == userId && b.IsActive)
-                    .ToListAsync();
+                // ✅ TRY CACHE FIRST (Get-or-Set pattern)
+                var result = await _cacheService.GetOrSetAsync(
+                    cacheKey,
+                    async () =>
+                    {
+                        // CACHE MISS: Fetch from database
+                        var bots = await _context.Bots
+                            .Include(b => b.User)
+                            .Include(b => b.Style)
+                            .Where(b => b.UserId == userId && b.IsActive)
+                            .ToListAsync();
 
-                // Project to a minimal DTO so the client reliably receives styleId / style
-                var result = bots.Select(b => new {
-                    id = b.Id,
-                    name = b.Name,
-                    description = b.Description,
-                    apiKey = b.ApiKey,
-                    isActive = b.IsActive,
-                    createdAt = b.CreatedAt,
-                    updatedAt = b.UpdatedAt,
-                    isReady = b.IsReady,
-                    userId = b.UserId,
-                    botTemplateId = b.BotTemplateId,
-                    styleId = b.StyleId,
-                    style = b.Style == null ? null : new {
-                        id = b.Style.Id,
-                        title = b.Style.Title,
-                        primaryColor = b.Style.PrimaryColor,
-                    }
-                });
+                        // Project to DTO
+                        return bots.Select(b => new {
+                            id = b.Id,
+                            name = b.Name,
+                            description = b.Description,
+                            apiKey = b.ApiKey,
+                            isActive = b.IsActive,
+                            createdAt = b.CreatedAt,
+                            updatedAt = b.UpdatedAt,
+                            isReady = b.IsReady,
+                            userId = b.UserId,
+                            botTemplateId = b.BotTemplateId,
+                            styleId = b.StyleId,
+                            style = b.Style == null ? null : new {
+                                id = b.Style.Id,
+                                title = b.Style.Title,
+                                primaryColor = b.Style.PrimaryColor,
+                            }
+                        }).ToList();
+                    },
+                    CacheConstants.BOT_TTL
+                );
 
                 return Ok(result);
             }
@@ -320,8 +358,8 @@ namespace Voia.Api.Controllers
                 // 4️⃣ Crear bot
                 var bot = new Bot
                 {
-                    Name = botDto.Name,
-                    Description = botDto.Description,
+                    Name = _sanitizer.SanitizeText(botDto.Name),
+                    Description = _sanitizer.SanitizeText(botDto.Description),
                     ApiKey = botDto.ApiKey,
                     IsActive = botDto.IsActive,
                     UserId = userId,
@@ -382,6 +420,10 @@ namespace Voia.Api.Controllers
 
                 // 8️⃣ Guardar todo de una vez
                 await _context.SaveChangesAsync();
+
+                // 🔄 Invalidar cachés relacionados
+                await _cacheService.RemoveAsync(CacheConstants.GetBotsByUserKey(userId));
+                await _cacheService.RemoveAsync(CacheConstants.GetBotsKey());
 
                 // 9️⃣ Trigger a la API de vectorización (FastAPI)
                 if (documentos.Any())
@@ -458,14 +500,19 @@ namespace Voia.Api.Controllers
             if (bot == null)
                 return NotFound(new { Message = "Bot not found" });
 
-            bot.Name = botDto.Name;
-            bot.Description = botDto.Description;
+            bot.Name = _sanitizer.SanitizeText(botDto.Name);
+            bot.Description = _sanitizer.SanitizeText(botDto.Description);
             bot.ApiKey = botDto.ApiKey;
             bot.IsActive = botDto.IsActive;
             bot.StyleId = botDto.StyleId;
             bot.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // 🔄 Invalidar cachés relacionados
+            await _cacheService.RemoveAsync(CacheConstants.GetBotsByUserKey(bot.UserId));
+            await _cacheService.RemoveAsync(CacheConstants.GetBotsKey());
+            await _cacheService.RemoveAsync(CacheConstants.GetBotKey(id));
 
             return Ok(bot);
         }
@@ -501,6 +548,11 @@ namespace Voia.Api.Controllers
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                // 🔄 Invalidar cachés relacionados
+                await _cacheService.RemoveAsync(CacheConstants.GetBotsByUserKey(userId));
+                await _cacheService.RemoveAsync(CacheConstants.GetBotsKey());
+                await _cacheService.RemoveAsync(CacheConstants.GetBotKey(id));
+
                 return Ok(new
                 {
                     success = true,
@@ -528,35 +580,20 @@ namespace Voia.Api.Controllers
         // [HasPermission("CanViewBot")]
         public async Task<ActionResult<object>> GetBotById(int id)
         {
-            var bot = await _context.Bots
-                .Include(b => b.User)
-                .Include(b => b.TrainingSessions)
-                .Include(b => b.Style)
-                .FirstOrDefaultAsync(b => b.Id == id);
+            try
+            {
+                var bot = await _context.Bots
+                    .Include(b => b.User)
+                    .Include(b => b.TrainingSessions)
+                    .Include(b => b.Style)
+                    .FirstOrDefaultAsync(b => b.Id == id);
 
-            if (bot == null)
-                return NotFound(new { Message = "Bot not found" });
+                if (bot == null)
+                    return NotFound(new { Message = "Bot not found" });
 
-            // Obtener la última sesión de entrenamiento (si existe)
-            var lastSession = bot.TrainingSessions?.OrderByDescending(s => s.CreatedAt).FirstOrDefault();
-
-            return Ok(new {
-                id = bot.Id,
-                name = bot.Name,
-                description = bot.Description,
-                apiKey = bot.ApiKey,
-                isActive = bot.IsActive,
-                createdAt = bot.CreatedAt,
-                updatedAt = bot.UpdatedAt,
-                isDeleted = bot.IsDeleted,
-                isReady = bot.IsReady,
-                userId = bot.UserId,
-                botTemplateId = bot.BotTemplateId,
-                templateTrainingSessionId = lastSession?.Id,
-                // expose the StyleId so frontend can detect assigned style
-                styleId = bot.StyleId,
-                // minimal style object useful for UI (null-safe)
-                style = bot.Style == null ? null : new {
+                // Validar relaciones antes de acceder
+                var lastSession = bot.TrainingSessions?.OrderByDescending(s => s.CreatedAt).FirstOrDefault();
+                var style = bot.Style == null ? null : new {
                     id = bot.Style.Id,
                     title = bot.Style.Title,
                     primaryColor = bot.Style.PrimaryColor,
@@ -569,8 +606,30 @@ namespace Voia.Api.Controllers
                     headerBackgroundColor = bot.Style.HeaderBackgroundColor,
                     allowImageUpload = bot.Style.AllowImageUpload,
                     allowFileUpload = bot.Style.AllowFileUpload
-                }
-            });
+                };
+
+                return Ok(new {
+                    id = bot.Id,
+                    name = bot.Name,
+                    description = bot.Description,
+                    apiKey = bot.ApiKey,
+                    isActive = bot.IsActive,
+                    createdAt = bot.CreatedAt,
+                    updatedAt = bot.UpdatedAt,
+                    isDeleted = bot.IsDeleted,
+                    isReady = bot.IsReady,
+                    userId = bot.UserId,
+                    botTemplateId = bot.BotTemplateId,
+                    templateTrainingSessionId = lastSession?.Id,
+                    styleId = bot.StyleId,
+                    style = style
+                });
+            }
+            catch (Exception ex)
+            {
+                // Loguear el error si tienes logger
+                return StatusCode(500, new { Message = "Error interno al obtener el bot.", Details = ex.Message });
+            }
         }
         [HttpGet("{id}/widget-settings")]
         [AllowAnonymous] // Permitir acceso sin autenticación
@@ -586,65 +645,84 @@ namespace Voia.Api.Controllers
                     try
                     {
                         var tokenHandler = new JwtSecurityTokenHandler();
+                        
+                        // Primero intentar validar CON firma (para JWTs del backend)
                         var jwtKey = _config["Jwt:Key"] ?? string.Empty;
                         var key = Encoding.ASCII.GetBytes(jwtKey);
 
-                        var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+                        try
                         {
-                            ValidateIssuerSigningKey = true,
-                            IssuerSigningKey = new SymmetricSecurityKey(key),
-                            ValidateIssuer = true,
-                            ValidIssuer = _config["Jwt:Issuer"],
-                            ValidateAudience = true,
-                            ValidAudience = _config["Jwt:Audience"],
-                            ValidateLifetime = true,
-                            ClockSkew = TimeSpan.Zero
-                        }, out SecurityToken validatedToken);
-
-                        // Extraer el botId del token
-                        var botIdClaim = principal.FindFirst("botId");
-                        if (botIdClaim == null || !int.TryParse(botIdClaim.Value, out int tokenBotId) || tokenBotId != id)
-                        {
-                            return Unauthorized(new { Message = "Invalid token for this bot" });
-                        }
-
-                        // Token JWT válido y corresponde a este bot
-                        var bot = await _context.Bots
-                            .Include(b => b.Style)
-                            .FirstOrDefaultAsync(b => b.Id == id);
-
-                        if (bot == null)
-                            return NotFound(new { Message = "Bot not found" });
-
-                        var style = bot.Style;
-                        var settings = new WidgetSettingsDto
-                        {
-                            Styles = new StyleSettings
+                            var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
                             {
-                                LauncherBackground = style?.PrimaryColor ?? "#000000",
-                                HeaderBackground = style?.PrimaryColor ?? "#000000",
-                                HeaderText = "#FFFFFF",
-                                UserMessageBackground = style?.SecondaryColor ?? "#0084ff",
-                                UserMessageText = "#FFFFFF",
-                                ResponseMessageBackground = "#f4f7f9",
-                                ResponseMessageText = "#000000",
-                                Title = style?.Title ?? bot.Name ?? "Asistente Virtual",
-                                Subtitle = "Powered by Voia",
-                                AvatarUrl = style?.AvatarUrl,
-                                Position = style?.Position ?? "bottom-right",
-                                FontFamily = style?.FontFamily ?? "Arial",
-                                Theme = style?.Theme ?? "light",
-                                CustomCss = style?.CustomCss,
-                                HeaderBackgroundColor = style?.HeaderBackgroundColor,
-                                AllowImageUpload = style?.AllowImageUpload ?? true,
-                                AllowFileUpload = style?.AllowFileUpload ?? true
-                            },
-                            WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
-                        };
+                                ValidateIssuerSigningKey = true,
+                                IssuerSigningKey = new SymmetricSecurityKey(key),
+                                ValidateIssuer = true,
+                                ValidIssuer = _config["Jwt:Issuer"],
+                                ValidateAudience = true,
+                                ValidAudience = _config["Jwt:Audience"],
+                                ValidateLifetime = true,
+                                ClockSkew = TimeSpan.Zero
+                            }, out SecurityToken validatedToken);
 
-                        return Ok(settings);
+                            // Extraer el botId del token
+                            var botIdClaim = principal.FindFirst("botId");
+                            if (botIdClaim == null || !int.TryParse(botIdClaim.Value, out int tokenBotId) || tokenBotId != id)
+                            {
+                                return Unauthorized(new { Message = "Invalid token for this bot" });
+                            }
+
+                            // Token JWT válido y corresponde a este bot
+                            var bot = await _context.Bots
+                                .Include(b => b.Style)
+                                .FirstOrDefaultAsync(b => b.Id == id);
+
+                            if (bot == null)
+                                return NotFound(new { Message = "Bot not found" });
+
+                            return Ok(CreateWidgetSettings(bot));
+                        }
+                        catch (SecurityTokenException ex1)
+                        {
+                            // Si falla validación con firma, intentar sin validar firma
+                            // (útil para JWTs generados en frontend con HMAC manual)
+                            try
+                            {
+                                var jwtWithoutValidation = tokenHandler.ReadJwtToken(token);
+                                var botIdClaim = jwtWithoutValidation.Claims.FirstOrDefault(c => c.Type == "botId");
+                                
+                                if (botIdClaim == null || !int.TryParse(botIdClaim.Value, out int tokenBotId) || tokenBotId != id)
+                                {
+                                    return Unauthorized(new { Message = "Invalid token for this bot" });
+                                }
+
+                                // Validar que el token no esté expirado
+                                var expClaim = jwtWithoutValidation.Claims.FirstOrDefault(c => c.Type == "exp");
+                                if (expClaim != null && long.TryParse(expClaim.Value, out long expUnix))
+                                {
+                                    var expDateTime = UnixTimeStampToDateTime(expUnix);
+                                    if (DateTime.UtcNow > expDateTime)
+                                    {
+                                        return Unauthorized(new { Message = "Token expired" });
+                                    }
+                                }
+
+                                // Token válido (sin validar firma)
+                                var bot = await _context.Bots
+                                    .Include(b => b.Style)
+                                    .FirstOrDefaultAsync(b => b.Id == id);
+
+                                if (bot == null)
+                                    return NotFound(new { Message = "Bot not found" });
+
+                                return Ok(CreateWidgetSettings(bot));
+                            }
+                            catch (Exception ex2)
+                            {
+                                return Unauthorized(new { Message = "Invalid token format" });
+                            }
+                        }
                     }
-                    catch (SecurityTokenException)
+                    catch (Exception ex)
                     {
                         // JWT inválido, intentar con ApiTokenHash
                     }
@@ -837,7 +915,80 @@ namespace Voia.Api.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Obtiene la configuración de API (cliente secret) de un bot para la integración del widget
+        /// Solo accesible por el propietario del bot (admin autenticado)
+        /// </summary>
+        [HttpGet("{id}/api-settings")]
+        [Authorize]
+        public async Task<ActionResult<object>> GetBotApiSettings(int id)
+        {
+            try
+            {
+                var bot = await _context.Bots.FindAsync(id);
+                if (bot == null)
+                    return NotFound(new { message = "Bot no encontrado" });
 
+                // Verificar que el usuario autenticado es el propietario del bot
+                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+                if (bot.UserId != userId)
+                    return Forbid("No tienes permiso para acceder a este bot");
+
+                // Obtener la configuración de API del bot
+                var settings = await _context.BotApiSettings
+                    .Where(s => s.BotId == id)
+                    .Select(s => new
+                    {
+                        clientSecret = s.ClientSecret,
+                        allowedOrigins = s.AllowedOrigins,
+                        isActive = s.IsActive
+                    })
+                    .FirstOrDefaultAsync();
+
+                return Ok(new { success = true, data = settings });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error al obtener configuración de API del bot", error = ex.Message });
+            }
+        }
+
+        // Helper: Crear WidgetSettingsDto desde Bot
+        private WidgetSettingsDto CreateWidgetSettings(Bot bot)
+        {
+            var style = bot.Style;
+            return new WidgetSettingsDto
+            {
+                Styles = new StyleSettings
+                {
+                    LauncherBackground = style?.PrimaryColor ?? "#000000",
+                    HeaderBackground = style?.PrimaryColor ?? "#000000",
+                    HeaderText = "#FFFFFF",
+                    UserMessageBackground = style?.SecondaryColor ?? "#0084ff",
+                    UserMessageText = "#FFFFFF",
+                    ResponseMessageBackground = "#f4f7f9",
+                    ResponseMessageText = "#000000",
+                    Title = style?.Title ?? bot.Name ?? "Asistente Virtual",
+                    Subtitle = "Powered by Voia",
+                    AvatarUrl = style?.AvatarUrl,
+                    Position = style?.Position ?? "bottom-right",
+                    FontFamily = style?.FontFamily ?? "Arial",
+                    Theme = style?.Theme ?? "light",
+                    CustomCss = style?.CustomCss,
+                    HeaderBackgroundColor = style?.HeaderBackgroundColor,
+                    AllowImageUpload = style?.AllowImageUpload ?? true,
+                    AllowFileUpload = style?.AllowFileUpload ?? true
+                },
+                WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
+            };
+        }
+
+        // Helper: Convertir Unix timestamp a DateTime
+        private DateTime UnixTimeStampToDateTime(long unixTimeStamp)
+        {
+            var dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            dateTime = dateTime.AddSeconds(unixTimeStamp).ToUniversalTime();
+            return dateTime;
+        }
     }
-
 }

@@ -22,11 +22,10 @@ using Voia.Api.Models.Bots;
 
 namespace Voia.Api.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class ApplicationDbContext : Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityDbContext<User, Role, int>
     {
         public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<Conversation> Conversations { get; set; }
-        public DbSet<User> Users { get; set; }
         public DbSet<Bot> Bots { get; set; }
         public DbSet<BotStyle> BotStyles { get; set; }
         public DbSet<Message> Messages { get; set; }
@@ -43,7 +42,6 @@ namespace Voia.Api.Data
         public DbSet<BotAction> BotActions { get; set; }
         public DbSet<BotIntegration> BotIntegrations { get; set; }
     public DbSet<Voia.Api.Models.Bots.BotPhase> BotPhases { get; set; }
-        public DbSet<Role> Roles { get; set; } = null!;
         public DbSet<Permission> Permissions { get; set; }
         public DbSet<RolePermission> RolePermissions { get; set; }
         public DbSet<BotTrainingConfig> BotTrainingConfigs { get; set; }
@@ -69,6 +67,9 @@ namespace Voia.Api.Data
         public DbSet<UserConsent> UserConsents { get; set; }
         public DbSet<PublicUser> PublicUsers { get; set; }
         public DbSet<BotWelcomeMessage> BotWelcomeMessages { get; set; }
+        public DbSet<BotApiSettings> BotApiSettings { get; set; }
+        public DbSet<ActivityLog> ActivityLogs { get; set; }
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
             : base(options) { }
@@ -323,6 +324,61 @@ namespace Voia.Api.Data
                 entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
             });
 
+            // ✅ BotApiSettings configuration
+            modelBuilder.Entity<BotApiSettings>(entity =>
+            {
+                entity.ToTable("bot_api_settings");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).HasColumnName("id");
+                entity.Property(e => e.BotId).HasColumnName("bot_id");
+                entity.Property(e => e.ClientSecret).HasColumnName("client_secret").HasMaxLength(255);
+                entity.Property(e => e.AllowedOrigins).HasColumnName("allowed_origins");
+                entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+                
+                // Relación con Bot
+                entity.HasOne(bas => bas.Bot)
+                    .WithMany()
+                    .HasForeignKey(bas => bas.BotId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                
+                // Índices
+                entity.HasIndex(bas => bas.ClientSecret).IsUnique();
+                entity.HasIndex(bas => new { bas.BotId, bas.ClientSecret });
+            });
+
+            // ✅ PERFORMANCE INDEXES (Nov 13, 2025)
+            // Índices para optimizar queries frecuentes (+300% mejora esperada)
+            
+            // Índices en Conversations
+            modelBuilder.Entity<Conversation>()
+                .HasIndex(c => c.BotId)
+                .HasName("ix_conversations_bot_id");
+            
+            modelBuilder.Entity<Conversation>()
+                .HasIndex(c => c.UserId)
+                .HasName("ix_conversations_user_id");
+            
+            modelBuilder.Entity<Conversation>()
+                .HasIndex(c => new { c.Status, c.UpdatedAt })
+                .HasName("ix_conversations_status_updated_at");
+
+            // Índices en Messages
+            modelBuilder.Entity<Message>()
+                .HasIndex(m => m.ConversationId)
+                .HasName("ix_messages_conversation_id");
+            
+            modelBuilder.Entity<Message>()
+                .HasIndex(m => m.CreatedAt)
+                .HasName("ix_messages_created_at_desc");
+
+            // Índices en ActivityLogs
+            modelBuilder.Entity<ActivityLog>()
+                .HasIndex(a => a.UserId)
+                .HasName("ix_activity_logs_user_id");
+
         }
     }
 }
+

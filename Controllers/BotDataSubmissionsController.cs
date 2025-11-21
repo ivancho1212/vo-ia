@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
@@ -11,10 +12,12 @@ namespace Voia.Api.Controllers
     public class BotDataSubmissionsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly UserManager<User> _userManager;
 
-        public BotDataSubmissionsController(ApplicationDbContext context)
+        public BotDataSubmissionsController(ApplicationDbContext context, UserManager<User> userManager)
         {
             _context = context;
+            _userManager = userManager;
         }
 
         // GET: api/botdatasubmissions
@@ -395,16 +398,15 @@ namespace Voia.Api.Controllers
             {
                 // No es el propietario. Comprobar rol/permission
                 var user = await _context.Users
-                    .Include(u => u.Role)
-                        .ThenInclude(r => r.RolePermissions)
-                            .ThenInclude(rp => rp.Permission)
+                    // Identity gestiona roles, no incluir relación directa
                     .FirstOrDefaultAsync(u => u.Id == authUserId);
 
                 if (user == null)
                     return Forbid();
 
-                var isAdmin = !string.IsNullOrEmpty(user.Role?.Name) && user.Role.Name.Equals("admin", System.StringComparison.OrdinalIgnoreCase);
-                var hasPermission = user.Role?.RolePermissions?.Any(rp => rp.Permission != null && (rp.Permission.Name == "CanViewBots" || rp.Permission.Name == "CanExportData")) == true;
+                var userRoles = await _userManager.GetRolesAsync(user);
+                var isAdmin = userRoles.Contains("admin") || userRoles.Contains("Admin");
+                var hasPermission = userRoles.Contains("CanViewBots") || userRoles.Contains("CanExportData");
 
                 if (!isAdmin && !hasPermission)
                 {
@@ -588,15 +590,14 @@ namespace Voia.Api.Controllers
             if (!authorized && authUserId.HasValue)
             {
                 var caller = await _context.Users
-                    .Include(u => u.Role)
-                        .ThenInclude(r => r.RolePermissions)
-                            .ThenInclude(rp => rp.Permission)
+                    // Identity gestiona roles, no incluir relación directa
                     .FirstOrDefaultAsync(u => u.Id == authUserId.Value);
 
                 if (caller != null)
                 {
-                    var isAdmin = !string.IsNullOrEmpty(caller.Role?.Name) && caller.Role.Name.Equals("admin", System.StringComparison.OrdinalIgnoreCase);
-                    var hasPermission = caller.Role?.RolePermissions?.Any(rp => rp.Permission != null && rp.Permission.Name == "datos_captados_bot") == true;
+                    var callerRoles = await _userManager.GetRolesAsync(caller);
+                    var isAdmin = callerRoles.Contains("admin") || callerRoles.Contains("Admin");
+                    var hasPermission = callerRoles.Contains("datos_captados_bot");
                     if (isAdmin || hasPermission) authorized = true;
                 }
             }

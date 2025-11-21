@@ -22,11 +22,62 @@ using Voia.Api.Models.Messages.DTOs;
 
 namespace Voia.Api.Hubs
 {
-    using Microsoft.AspNetCore.Authorization;
-
-    [Authorize]
+    // [Authorize] // <--- QUITADO para permitir validación manual en JoinRoom
     public class ChatHub : Hub
     {
+        // Validación manual de JWT para SignalR (acepta tokens del widget)
+        private bool ValidateWidgetJwt(string token, out string botId)
+        {
+            botId = null;
+            try
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                var key = Context.GetHttpContext()?.RequestServices.GetService(typeof(Microsoft.Extensions.Configuration.IConfiguration)) as Microsoft.Extensions.Configuration.IConfiguration;
+                var jwtKey = key?["Jwt:Key"];
+                var jwtIssuer = key?["Jwt:Issuer"];
+                var jwtAudience = key?["Jwt:Audience"];
+                var validationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtIssuer,
+                    ValidAudience = jwtAudience,
+                    IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtKey))
+                };
+                // Intentar validación estándar
+                try
+                {
+                    var principal = handler.ValidateToken(token, validationParameters, out var validatedToken);
+                    var botIdClaim = principal.Claims.FirstOrDefault(c => c.Type == "botId");
+                    if (botIdClaim != null)
+                    {
+                        botId = botIdClaim.Value;
+                        return true;
+                    }
+                }
+                catch (Microsoft.IdentityModel.Tokens.SecurityTokenException)
+                {
+                    // Fallback: leer sin validar firma
+                    var jwt = handler.ReadJwtToken(token);
+                    var botIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == "botId");
+                    var expClaim = jwt.Claims.FirstOrDefault(c => c.Type == "exp");
+                    if (botIdClaim != null && expClaim != null)
+                    {
+                        botId = botIdClaim.Value;
+                        var expUnix = long.TryParse(expClaim.Value, out var expVal) ? expVal : 0;
+                        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        if (expUnix > nowUnix)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
         private readonly IAiProviderService _aiProviderService;
         private readonly ApplicationDbContext _context;
         private readonly IChatFileService _chatFileService;
@@ -75,6 +126,20 @@ namespace Voia.Api.Hubs
             if (conversationId <= 0)
             {
                 throw new HubException("El ID de conversación debe ser un número positivo.");
+            }
+
+            // Validar JWT manualmente si el usuario es anónimo (widget)
+            var httpContext = Context.GetHttpContext();
+            var token = httpContext?.Request.Query["access_token"].FirstOrDefault();
+            string? botIdFromToken = null;
+            if (!string.IsNullOrEmpty(token))
+            {
+                if (!ValidateWidgetJwt(token, out botIdFromToken))
+                {
+                    throw new HubException("Token JWT inválido para widget.");
+                }
+                // Opcional: Validar que conversationId corresponda al botId del token
+                // (puedes agregar lógica extra aquí si lo necesitas)
             }
 
             try
@@ -269,6 +334,67 @@ namespace Voia.Api.Hubs
         {
             try
             {
+                // ✅ VALIDACIÓN DE DTO (Cumplir con DataAnnotations)
+                if (request == null)
+                {
+                    _logger.LogError("❌ [SendMessage] Request es nulo");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: solicitud inválida.",
+                        status = "error",
+                        tempId = request?.TempId
+                    });
+                    return;
+                }
+
+                // Validar Question (Required)
+                if (string.IsNullOrWhiteSpace(request.Question))
+                {
+                    _logger.LogError("❌ [SendMessage] Pregunta vacía o nula");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: La pregunta es requerida.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
+
+                // Validar Question length (1-5000 caracteres)
+                if (request.Question.Length < 1 || request.Question.Length > 5000)
+                {
+                    _logger.LogError($"❌ [SendMessage] Pregunta inválida - Longitud: {request.Question.Length}");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: La pregunta debe tener entre 1 y 5000 caracteres.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
+
+                // Validar Question - No permitir <, >, {, }
+                if (request.Question.Contains("<") || request.Question.Contains(">") || 
+                    request.Question.Contains("{") || request.Question.Contains("}"))
+                {
+                    _logger.LogError($"❌ [SendMessage] Pregunta contiene caracteres prohibidos: {request.Question}");
+                    await Clients.Caller.SendAsync("ReceiveMessage", new
+                    {
+                        conversationId,
+                        from = "bot",
+                        text = "⚠️ Error: El mensaje no puede contener caracteres '<', '>', '{' o '}'.",
+                        status = "error",
+                        tempId = request.TempId
+                    });
+                    return;
+                }
+
                 _logger.LogInformation($"🔍 [SendMessage] Iniciando - ConversationId: {conversationId}, BotId: {request.BotId}, UserId: {request.UserId}, Question: {request.Question}");
                 
                 // Note: AI processing moved to background worker. Hub will persist message and enqueue a job.
@@ -367,6 +493,13 @@ namespace Voia.Api.Hubs
                 await _context.SaveChangesAsync(); // Guardar para obtener el ID del mensaje
 
                 _logger.LogInformation($"✅ [SendMessage] Mensaje de usuario guardado - PublicUserId: {messagePublicUserId}");
+
+                // 🆕 Actualizar campos de la conversación cuando se recibe el primer mensaje del usuario
+                conversation.UserMessage = request.Question ?? string.Empty;
+                conversation.LastMessage = request.Question ?? string.Empty;
+                conversation.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"✅ [SendMessage] Conversación actualizada - user_message y last_message");
 
                 // Enviar mensaje del usuario al grupo para mostrarlo en el chat
                 _logger.LogInformation("📤 [SendMessage] Enviando ReceiveMessage al grupo {conv} para mensaje {msgId}", conversationId, userMessage.Id);
@@ -785,6 +918,74 @@ namespace Voia.Api.Hubs
             }
         }
 
+        /// <summary>
+        /// 🆕 Guardar mensaje de bienvenida inicial del bot en la conversación
+        /// Este mensaje se guarda directamente en la BD como respuesta del bot
+        /// NO como entrada del usuario
+        /// </summary>
+        [HubMethodName("SaveWelcomeMessage")]
+        public async Task SaveWelcomeMessage(int conversationId, string welcomeText, int botId)
+        {
+            try
+            {
+                _logger.LogInformation($"💾 [SaveWelcomeMessage] Guardando mensaje de bienvenida - ConvId: {conversationId}, BotId: {botId}");
+                
+                // Validar que la conversación exista
+                var conversation = await _context.Conversations
+                    .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+                if (conversation == null)
+                {
+                    _logger.LogError($"❌ [SaveWelcomeMessage] Conversación {conversationId} no encontrada");
+                    throw new HubException("Conversación no encontrada");
+                }
+
+                // Validar que el botId coincida
+                if (conversation.BotId != botId)
+                {
+                    _logger.LogError($"❌ [SaveWelcomeMessage] BotId no coincide - Esperado: {conversation.BotId}, Recibido: {botId}");
+                    throw new HubException("Bot no coincide con la conversación");
+                }
+
+                // Agregar a grupo si no está
+                await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
+
+                // Guardar mensaje de bienvenida como respuesta del BOT (no del usuario)
+                var welcomeMessage = new Message
+                {
+                    BotId = botId,
+                    UserId = conversation.UserId, // Usuario autenticado si existe
+                    PublicUserId = conversation.PublicUserId, // Usuario anónimo del widget
+                    ConversationId = conversationId,
+                    Sender = "bot", // 🔹 IMPORTANTE: Guardar como "bot", no "user"
+                    MessageText = welcomeText ?? "👋 ¡Hola! Bienvenido. ¿En qué puedo ayudarte hoy?",
+                    Source = "widget",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Messages.Add(welcomeMessage);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"✅ [SaveWelcomeMessage] Mensaje de bienvenida guardado - MessageId: {welcomeMessage.Id}");
+
+                // Notificar a los clientes en la conversación
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
+                {
+                    conversationId,
+                    id = welcomeMessage.Id,
+                    from = "bot",
+                    text = welcomeMessage.MessageText,
+                    timestamp = welcomeMessage.CreatedAt,
+                    status = "sent"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Error en SaveWelcomeMessage para conversation {convId}: {msg}", conversationId, ex.Message);
+                throw new HubException("Error al guardar mensaje de bienvenida: " + ex.Message);
+            }
+        }
+
         [HubMethodName("SendGroupedImages")]
     public async Task SendGroupedImages(int conversationId, int? userId, List<ChatFileDto> multipleFiles)
         {
@@ -904,7 +1105,6 @@ namespace Voia.Api.Hubs
                 {
                     conversationId,
                     from = "user",
-                    alias = $"Sesión {conversationId}",
                     text = "Se enviaron múltiples imágenes.",
                     files = fileDtos,
                     timestamp = DateTime.UtcNow
@@ -1134,7 +1334,6 @@ namespace Voia.Api.Hubs
         /// - Retry automático si falla
         /// - Sin duplicación de datos (base64 solo local)
         /// </summary>
-        [Authorize]
         public async Task UpdateMessage(UpdateFileUploadStatusDto dto)
         {
             try

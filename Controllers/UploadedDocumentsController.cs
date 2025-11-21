@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
@@ -6,6 +5,8 @@ using Voia.Api.Models;
 using Voia.Api.Models.Dtos;
 using Voia.Api.Helpers;
 using Voia.Api.Services;
+using Voia.Api.Services.Security;
+using System.Security.Claims;
 
 namespace Voia.Api.Controllers
 {
@@ -14,10 +15,12 @@ namespace Voia.Api.Controllers
     public class UploadedDocumentsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IFileAccessAuthorizationService _fileAccessAuth;
 
-        public UploadedDocumentsController(ApplicationDbContext context)
+        public UploadedDocumentsController(ApplicationDbContext context, IFileAccessAuthorizationService fileAccessAuth)
         {
             _context = context;
+            _fileAccessAuth = fileAccessAuth;
         }
 
         /// <summary>
@@ -45,11 +48,22 @@ namespace Voia.Api.Controllers
         }
         /// <summary>
         /// Obtiene documentos por ID de bot.
+        /// ✅ SEGURIDAD: Valida que el usuario es propietario del bot
         /// </summary>
         [HttpGet("by-bot/{botId}")]
         [HasPermission("CanViewUploadedDocuments")]
         public async Task<ActionResult<IEnumerable<UploadedDocumentResponseDto>>> GetByBot(int botId)
         {
+            // 🔐 Obtener ID del usuario autenticado
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdStr, out var userId))
+                return Unauthorized(new { message = "Usuario no autenticado." });
+
+            // 🔐 Validar que el usuario es propietario del bot
+            var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == botId && b.UserId == userId && !b.IsDeleted);
+            if (bot == null)
+                return Forbid(); // 403 Forbidden - usuario no es propietario
+
             var docs = await _context.UploadedDocuments
                         .Where(x => x.BotId == botId)
                         .Select(d => new UploadedDocumentResponseDto
@@ -107,21 +121,35 @@ namespace Voia.Api.Controllers
 
         /// <summary>
         /// Crea un nuevo documento subido, extrae el texto, y lo divide en chunks.
+        /// ✅ SEGURIDAD: Valida tipo de archivo, propietario del bot, y autorización
         /// </summary>
         [HttpPost]
+        [HasPermission("CanUploadFiles")]
         public async Task<ActionResult<UploadedDocumentResponseDto>> Create(
         [FromForm] UploadedDocumentCreateDto dto,
         [FromServices] TextChunkingService chunkingService,
         [FromServices] TextExtractionService textExtractionService
 )
         {
+            // 🔐 Obtener ID del usuario autenticado
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdStr, out var userId))
+                return Unauthorized(new { message = "Usuario no autenticado." });
+
             if (dto.File == null || dto.File.Length == 0)
                 return BadRequest(new { message = "No se recibió un archivo válido." });
 
-            // Validar que existe el bot
-            var botExists = await _context.Bots.AnyAsync(b => b.Id == dto.BotId);
-            if (!botExists)
-                return BadRequest($"El Bot con ID {dto.BotId} no existe.");
+            // 🔐 Validar tipo de archivo (bloquear ejecutables, scripts, etc.)
+            var fileExtension = Path.GetExtension(dto.File.FileName);
+            if (!_fileAccessAuth.IsFileTypeAllowed(fileExtension, dto.File.ContentType))
+            {
+                return BadRequest(new { message = "Tipo de archivo no permitido. Suba documentos (.pdf, .docx, .txt, etc.)." });
+            }
+
+            // 🔐 Validar que existe el bot y el usuario es propietario
+            var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId && b.UserId == userId && !b.IsDeleted);
+            if (bot == null)
+                return BadRequest(new { message = "El Bot no existe o no tienes permiso para acceder a él." });
 
             // Validar que existe el template
             var templateExists = await _context.BotTemplates.AnyAsync(t => t.Id == dto.BotTemplateId);
@@ -280,12 +308,27 @@ namespace Voia.Api.Controllers
 
         /// <summary>
         /// Elimina un documento subido.
+        /// ✅ SEGURIDAD: Valida que el usuario es propietario del documento (vía bot)
         /// </summary>
         [HttpDelete("{id}")]
+        [HasPermission("CanDeleteUploads")]
         public async Task<IActionResult> Delete(int id)
         {
-            var document = await _context.UploadedDocuments.FindAsync(id);
-            if (document == null) return NotFound();
+            // 🔐 Obtener ID del usuario autenticado
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(userIdStr, out var userId))
+                return Unauthorized(new { message = "Usuario no autenticado." });
+
+            var document = await _context.UploadedDocuments
+                .Include(d => d.Bot)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (document == null)
+                return NotFound();
+
+            // 🔐 Validar autorización: usuario es propietario del bot
+            if (!await _fileAccessAuth.CanAccessUploadedDocumentAsync(id, userId))
+                return Forbid(); // 403 Forbidden
 
             try
             {
@@ -317,3 +360,4 @@ namespace Voia.Api.Controllers
 
     }
 }
+

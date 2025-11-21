@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using Voia.Api.Models.Bots;
 using Microsoft.Extensions.Logging;
+using Voia.Api.Services.Security;
 
 namespace Voia.Api.Services
 {
@@ -21,13 +22,19 @@ namespace Voia.Api.Services
         private readonly HttpClient _httpClient;
         private readonly bool _isMock; // Permite alternar entre mock y real
         private readonly ILogger<PromptBuilderService> _logger;
+        private readonly IPromptInjectionProtectionService _promptProtection;
 
         // 🔹 Cambiado el valor por defecto de isMock a false para que la implementación real sea la predeterminada.
-        public PromptBuilderService(HttpClient httpClient, ILogger<PromptBuilderService> logger, bool isMock = false)
+        public PromptBuilderService(
+            HttpClient httpClient,
+            ILogger<PromptBuilderService> logger,
+            IPromptInjectionProtectionService promptProtection,
+            bool isMock = false)
         {
             _httpClient = httpClient;
             _isMock = isMock;
             _logger = logger;
+            _promptProtection = promptProtection;
         }
 
         // Construye el estado de captura de datos
@@ -238,10 +245,33 @@ EJEMPLO DE COMPORTAMIENTO:
                     detectedLanguage, userCity, userCountry);
             }
             
+            // 🔐 PROTECCIÓN CONTRA PROMPT INJECTION
+            // Validar que el mensaje del usuario no contiene intents maliciosos
+            if (_promptProtection.DetectPromptInjectionAttempt(userMessage))
+            {
+                _logger.LogWarning(
+                    "🚨 PROMPT INJECTION ATTEMPT DETECTED: BotId={BotId}, UserId={UserId}",
+                    botId, userId);
+                // Sanitizar el mensaje para prevenir inyección
+                userMessage = _promptProtection.SanitizeUserInput(userMessage);
+            }
+
+            // Validar seguridad del prompt completo
+            var promptValidation = _promptProtection.ValidatePromptSafety(systemPrompt, userMessage);
+            if (!promptValidation.IsValid)
+            {
+                _logger.LogWarning(
+                    "⚠️ PROMPT SAFETY VALIDATION FAILED: RiskScore={RiskScore}, Issues={Issues}",
+                    promptValidation.RiskScore,
+                    string.Join(", ", promptValidation.Issues));
+                // Aplicar sanitización adicional
+                userMessage = _promptProtection.SanitizeUserInput(userMessage);
+            }
+            
             // Obtenemos los mensajes de ejemplo (user/assistant) del contexto
             var conversationHistory = botContext.Messages?.Where(m => m.Role == "user" || m.Role == "assistant").ToList() ?? new List<MessageDto>();
-            // Añadir el mensaje actual del usuario al historial
-            conversationHistory.Add(new MessageDto { Role = "user", Content = userMessage }); // El mensaje actual siempre va al final
+            // Añadir el mensaje actual del usuario al historial (sanitizado)
+            conversationHistory.Add(new MessageDto { Role = "user", Content = userMessage });
 
             // 🔹 Mapear campos de captura, cruzando la definición con los valores ya capturados
             var captureFieldsFromContext = botContext.Capture?.Fields?

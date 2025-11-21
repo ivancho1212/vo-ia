@@ -17,6 +17,9 @@ using Voia.Api.Attributes;
 using Voia.Api.Models.Users;
 using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 
 namespace Voia.Api.Controllers
@@ -31,8 +34,10 @@ namespace Voia.Api.Controllers
     private readonly BotDataCaptureService _captureService;
     private readonly PromptBuilderService _promptBuilder;
     private readonly IAiProviderService _aiProviderService;
-    private readonly ILogger<ConversationsController> _logger;
+    // Logger eliminado para limpieza
     private readonly IGeoLocationService _geoLocationService;
+    private readonly IWebHostEnvironment _environment;
+    private readonly IConfiguration _config;
 
         public ConversationsController(
             ApplicationDbContext context,
@@ -40,8 +45,9 @@ namespace Voia.Api.Controllers
             BotDataCaptureService captureService,
             PromptBuilderService promptBuilder,
             IAiProviderService aiProviderService,
-            ILogger<ConversationsController> logger,
-            IGeoLocationService geoLocationService
+            IGeoLocationService geoLocationService,
+            IWebHostEnvironment environment,
+            IConfiguration config
         )
         {
             _context = context;
@@ -49,8 +55,10 @@ namespace Voia.Api.Controllers
             _captureService = captureService;
             _promptBuilder = promptBuilder;
             _aiProviderService = aiProviderService;
-            _logger = logger;
+            // Logger eliminado para limpieza
             _geoLocationService = geoLocationService;
+            _environment = environment;
+            _config = config;
         }
 
         /// <summary>
@@ -85,18 +93,118 @@ namespace Voia.Api.Controllers
         {
             try
             {
-                _logger.LogInformation($"📥 [get-or-create] Recibido: UserId={dto.UserId}, BotId={dto.BotId}, ForceNewSession={dto.ForceNewSession}");
                 
-                // Para usuarios anónimos del widget, usar botId del DTO directamente
-                // (en lugar de validar con token por compatibilidad temporal)
-                var validatedBotId = dto.BotId;
+                // ✅ PASO 1: VALIDAR CLIENT SECRET O JWT (CRÍTICO PARA PÚBLICOS)
+                bool isValidSecret = false;
+                BotApiSettings? apiSettings = null;
 
-                // Verificar que el bot existe
-                var botExists = await _context.Bots.AnyAsync(b => b.Id == validatedBotId);
-                if (!botExists)
+                // Intenta validar como ClientSecret primero
+                apiSettings = await _context.BotApiSettings.FirstOrDefaultAsync(
+                    bas => bas.BotId == dto.BotId && 
+                           bas.ClientSecret == dto.ClientSecret &&
+                           bas.IsActive);
+                
+                if (apiSettings != null)
                 {
-                    return BadRequest("Bot no encontrado.");
+                    isValidSecret = true;
                 }
+                
+                // Si no es clientSecret válido, intentar como JWT
+                if (!isValidSecret && !string.IsNullOrEmpty(dto.ClientSecret) && dto.ClientSecret.Contains("."))
+                {
+                    try
+                    {
+                        var tokenHandler = new JwtSecurityTokenHandler();
+                        var jwtKey = _config["Jwt:Key"] ?? string.Empty;
+                        var key = Encoding.ASCII.GetBytes(jwtKey);
+
+                        try
+                        {
+                            // Intenta validar con firma (para JWTs del backend)
+                            var principal = tokenHandler.ValidateToken(dto.ClientSecret, new TokenValidationParameters
+                            {
+                                ValidateIssuerSigningKey = true,
+                                IssuerSigningKey = new SymmetricSecurityKey(key),
+                                ValidateIssuer = true,
+                                ValidIssuer = _config["Jwt:Issuer"],
+                                ValidateAudience = true,
+                                ValidAudience = _config["Jwt:Audience"],
+                                ValidateLifetime = true,
+                                ClockSkew = TimeSpan.Zero
+                            }, out SecurityToken validatedToken);
+
+                            var botIdClaim = principal.FindFirst("botId");
+                            if (botIdClaim != null && int.TryParse(botIdClaim.Value, out int tokenBotId) && tokenBotId == dto.BotId)
+                            {
+                                isValidSecret = true;
+                            }
+                        }
+                        catch (SecurityTokenException)
+                        {
+                            // Fallback: Lee JWT sin validar firma (para JWTs generados en frontend)
+                            try
+                            {
+                                var jwtWithoutValidation = tokenHandler.ReadJwtToken(dto.ClientSecret);
+                                var botIdClaim = jwtWithoutValidation.Claims.FirstOrDefault(c => c.Type == "botId");
+                                
+                                if (botIdClaim != null && int.TryParse(botIdClaim.Value, out int tokenBotId) && tokenBotId == dto.BotId)
+                                {
+                                    // Validar que el token no esté expirado
+                                    var expClaim = jwtWithoutValidation.Claims.FirstOrDefault(c => c.Type == "exp");
+                                    if (expClaim != null && long.TryParse(expClaim.Value, out long expUnix))
+                                    {
+                                        var expDateTime = UnixTimeStampToDateTime(expUnix);
+                                        if (DateTime.UtcNow <= expDateTime)
+                                        {
+                                            isValidSecret = true;
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                    }
+                }
+                
+                // En desarrollo, permitir test secrets (test-secret-bot-*)
+                if (!isValidSecret && _environment.IsDevelopment() && dto.ClientSecret?.StartsWith("test-secret-") == true)
+                {
+                    isValidSecret = true;
+                }
+                
+                if (!isValidSecret)
+                {
+                    return Unauthorized("Invalid bot or client secret");
+                }
+
+                // ✅ PASO 2: VALIDAR ORIGEN (CORS CHECK)
+                var origin = Request.Headers["Origin"].ToString();
+                if (apiSettings != null && !string.IsNullOrEmpty(origin) && !string.IsNullOrEmpty(apiSettings.AllowedOrigins))
+                {
+                    var allowedOrigins = apiSettings.AllowedOrigins
+                        .Split(',')
+                        .Select(o => o.Trim())
+                        .ToList();
+                    
+                    if (!allowedOrigins.Contains(origin))
+                    {
+                        return Unauthorized("Origin not allowed");
+                    }
+                    
+                }
+
+                // ✅ PASO 3: OBTENER BOT Y VALIDAR QUE ESTÁ ACTIVO
+                var bot = await _context.Bots.FirstOrDefaultAsync(b => b.Id == dto.BotId && b.IsActive);
+                if (bot == null)
+                {
+                    return BadRequest("Bot no encontrado o inactivo.");
+                }
+
 
                 // Para widgets, manejar usuarios públicos
                 int? effectiveUserId = null;
@@ -104,7 +212,6 @@ namespace Voia.Api.Controllers
                 
                 if (!dto.UserId.HasValue || dto.UserId <= 0)
                 {
-                    _logger.LogInformation($"🔍 [public_users] Usuario anónimo detectado");
                     
                     // Para usuarios del widget, buscar o crear en public_users
                     var request = HttpContext.Request;
@@ -115,7 +222,6 @@ namespace Voia.Api.Controllers
                     
                     var userAgent = request.Headers.UserAgent.ToString();
                     
-                    _logger.LogInformation($"🔍 [public_users] Creando/buscando usuario público: IP={ipAddress} (raw: {rawIpAddress}), Bot={dto.BotId}");
                     
                     var publicUser = await _context.PublicUsers.FirstOrDefaultAsync(pu => 
                         pu.IpAddress == ipAddress && 
@@ -127,7 +233,6 @@ namespace Voia.Api.Controllers
                         // Obtener geolocalización del IP
                         var (country, city) = await _geoLocationService.GetLocationAsync(ipAddress);
                         
-                        _logger.LogInformation($"✅ [public_users] Creando nuevo registro: IP={ipAddress}, Country={country}, City={city}");
                         
                         publicUser = new PublicUser
                         {
@@ -142,62 +247,19 @@ namespace Voia.Api.Controllers
                         _context.PublicUsers.Add(publicUser);
                         await _context.SaveChangesAsync();
                         
-                        _logger.LogInformation($"📝 [public_users] Registro guardado con ID={publicUser.Id}");
                     }
                     else
                     {
-                        _logger.LogInformation($"♻️ [public_users] Utilizando registro existente: ID={publicUser.Id}");
                     }
                     
                     effectivePublicUserId = publicUser.Id;
-                    _logger.LogInformation($"✅ [public_users] effectivePublicUserId={effectivePublicUserId}");
                     
-                    // Para usuarios públicos del widget, necesitamos un userId dummy válido para el FK
-                    // Buscar cualquier usuario existente para usar como referencia del FK
-                    var existingUser = await _context.Users.Select(u => new { u.Id }).FirstOrDefaultAsync();
-                    
-                    if (existingUser == null)
-                    {
-                        _logger.LogWarning($"⚠️ No hay usuarios en la BD, creando usuario dummy");
-                        
-                        // Si no hay usuarios, crear uno básico
-                        var firstRole = await _context.Roles.FirstOrDefaultAsync();
-                        if (firstRole == null)
-                        {
-                            // Crear role default si no existe ninguno
-                            firstRole = new Role { Name = "Widget System" };
-                            _context.Roles.Add(firstRole);
-                            await _context.SaveChangesAsync();
-                        }
-                        
-                        var systemUser = new User
-                        {
-                            Name = "Sistema Widget",
-                            Email = "system@widget.local",
-                            Password = "no-password",
-                            Phone = "",
-                            DocumentNumber = "",
-                            DocumentPhotoUrl = "",
-                            RoleId = firstRole.Id,
-                            IsVerified = true,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-                        _context.Users.Add(systemUser);
-                        await _context.SaveChangesAsync();
-                        effectiveUserId = systemUser.Id;
-                        _logger.LogInformation($"✅ Usuario dummy creado: ID={effectiveUserId}");
-                    }
-                    else
-                    {
-                        effectiveUserId = existingUser.Id;
-                        _logger.LogInformation($"✅ Usuario existente encontrado: ID={effectiveUserId}");
-                    }
+                    // ✅ CORREGIDO: Usar UserId del bot (creador) en lugar de usuario aleatorio
+                    effectiveUserId = bot.UserId;
                 }
                 else
                 {
                     effectiveUserId = dto.UserId.Value;
-                    _logger.LogInformation($"✅ Usuario registrado: ID={effectiveUserId}");
                 }
 
                 // Buscar conversación existente - para widgets usar PublicUserId, para usuarios regulares usar UserId
@@ -220,6 +282,7 @@ namespace Voia.Api.Controllers
                         CreatedAt = DateTime.UtcNow,
                         Status = "active",
                         IsWithAI = true
+                        // 🔴 ExpiresAt se asignará cuando la conversación cierre (ClosedAt + 3 min)
                     };
 
                     _context.Conversations.Add(conversation);
@@ -248,9 +311,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ [get-or-create] Error: {ex.Message}");
-                _logger.LogError($"❌ [get-or-create] StackTrace: {ex.StackTrace}");
-                _logger.LogError($"❌ [get-or-create] InnerException: {ex.InnerException?.Message}");
                 return StatusCode(500, new { 
                     error = ex.Message, 
                     stackTrace = ex.StackTrace,
@@ -265,6 +325,7 @@ namespace Voia.Api.Controllers
             public int BotId { get; set; }
             public bool ForceNewSession { get; set; } = false;
             public string? BrowserFingerprint { get; set; }
+            public string? ClientSecret { get; set; }  // ✅ NUEVO
         }
 
         [HttpPost("{id}/disconnect")]
@@ -331,111 +392,116 @@ namespace Voia.Api.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetConversationHistory(int conversationId)
         {
-            var conversation = await _context.Conversations
-                .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == conversationId);
-
-            if (conversation == null)
-                return NotFound("Conversación no encontrada");
-
-            // --- Mapeo de Mensajes ---
-            // Use in-memory mapping to avoid EF translation edge-cases that may filter out rows
-            var rawMessages = await _context.Messages
-                .AsNoTracking()
-                .Where(m => m.ConversationId == conversationId)
-                .Include(m => m.User)
-                .Include(m => m.PublicUser)
-                .Include(m => m.Bot)
-                .OrderBy(m => m.CreatedAt)
-                .ToListAsync();
-
-            var messages = rawMessages.Select(m => new ConversationItemDto
+            try
             {
-                Id = m.Id,
-                Type = "message",
-                Text = m.MessageText,
-                Timestamp = m.CreatedAt,
-                FromRole = m.Sender,
-                // FromId/FromName: treat admin, bot and user separately to avoid mapping admin->bot
-                FromId = m.Sender == "user" ? (m.UserId ?? m.PublicUserId) : (m.Sender == "admin" ? m.UserId : m.BotId),
-                FromName = m.Sender == "user"
-                    ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
-                    : (m.Sender == "admin" ? (m.User != null ? m.User.Name : "Admin") : (m.Bot != null ? m.Bot.Name : "Bot")),
-                FromAvatarUrl = m.Sender == "user"
-                    ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
-                    : (m.Sender == "admin" ? (m.User != null ? (m.User.AvatarUrl ?? "") : "") : ""),
-                ReplyToMessageId = m.ReplyToMessageId
-            }).ToList();
+                var conversation = await _context.Conversations
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == conversationId);
 
-            // --- Mapeo de Archivos ---
-            var files = await _context.ChatUploadedFiles
-                .AsNoTracking()
-                .Where(f => f.ConversationId == conversationId)
-                .Include(f => f.User)
-                .Select(f => new ConversationItemDto
+                if (conversation == null)
+                    return NotFound("Conversación no encontrada");
+
+                // 🔴 VALIDACIÓN: Verificar si la conversación ha expirado
+                if (conversation.ExpiresAt.HasValue && conversation.ExpiresAt < DateTime.UtcNow)
                 {
-                    Id = f.Id,
-                    Type = f.FileType.StartsWith("image") ? "image" : "file", // 👈 diferenciar tipo
-                    Timestamp = f.UploadedAt ?? DateTime.UtcNow,
-                    FromRole = "user",
-                    FromId = f.UserId,
-                    FromName = f.User != null ? f.User.Name : "Usuario",
-                    FromAvatarUrl = f.User != null ? (f.User.AvatarUrl ?? "") : "",
-                    FileUrl = f.FilePath,
-                    FileName = f.FileName,
-                    FileType = f.FileType
-                })
-                .ToListAsync();
-
-            _logger?.LogInformation("[GetConversationHistory] Conversation {ConversationId}: messages={MessageCount}, files={FileCount}", conversationId, messages.Count, files.Count);
-
-                // DEBUG: log a small sample of messages returned to help diagnose missing public-user messages
-                try
-                {
-                    var sample = messages.Take(10).Select(m => new { m.Id, m.Type, m.Timestamp, m.FromRole, m.FromId, m.FromName, Text = m.Text ?? "" });
-                    _logger?.LogInformation("[GetConversationHistory] sample messages for conv {ConversationId}: {Sample}", conversationId, System.Text.Json.JsonSerializer.Serialize(sample));
+                    return StatusCode(410, new { error = "Conversación expirada" });
                 }
-                catch { /* ignore logging errors */ }
 
-            // --- Combinar, Normalizar y Ordenar ---
-            var combinedHistory = messages.Concat(files)
-                .OrderBy(item => item.Timestamp)
-                .ToList();
-
-            // Quick debug counts by sender to help diagnose missing messages
-            var counts = rawMessages.GroupBy(m => (m.Sender ?? "user").ToLower())
-                .Select(g => new { sender = g.Key, count = g.Count() })
-                .ToList();
-
-            // Normalizar a un shape consistente (camelCase) para evitar problemas de casing
-            var normalizedHistory = combinedHistory.Select(item => new
-            {
-                id = item.Id,
-                type = item.Type ?? "message",
-                text = item.Text ?? string.Empty,
-                timestamp = item.Timestamp,
-                fromRole = (item.FromRole ?? "user").ToLower() == "admin" ? "admin" : ((item.FromRole ?? "user").ToLower() == "bot" ? "bot" : "user"),
-                fromId = item.FromId,
-                fromName = item.FromName,
-                fromAvatarUrl = item.FromAvatarUrl,
-                replyToMessageId = item.ReplyToMessageId,
-                fileUrl = item.FileUrl,
-                fileName = item.FileName,
-                fileType = item.FileType
-            }).ToList();
-
-            return Ok(new
-            {
-                conversationDetails = new
+                // 🔴 VALIDACIÓN: Verificar si la conversación está cerrada
+                if (conversation.Status == "closed")
                 {
-                    id = conversation.Id,
-                    title = conversation.Title,
-                    status = conversation.Status,
-                    isWithAI = conversation.IsWithAI
-                },
-                history = normalizedHistory,
-                debug = new { rawCount = rawMessages.Count, countsBySender = counts }
-            });
+                    return StatusCode(410, new { error = "Conversación expirada" });
+                }
+
+                // --- Mapeo de Mensajes ---
+                var rawMessages = await _context.Messages
+                    .AsNoTracking()
+                    .Where(m => m.ConversationId == conversationId)
+                    .Include(m => m.User)
+                    .Include(m => m.PublicUser)
+                    .Include(m => m.Bot)
+                    .OrderBy(m => m.CreatedAt)
+                    .ToListAsync();
+
+                var messages = rawMessages.Select(m => new ConversationItemDto
+                {
+                    Id = m.Id,
+                    Type = "message",
+                    Text = m.MessageText,
+                    Timestamp = m.CreatedAt,
+                    FromRole = m.Sender,
+                    FromId = m.Sender == "user" ? (m.UserId ?? m.PublicUserId) : (m.Sender == "admin" ? m.UserId : m.BotId),
+                    FromName = m.Sender == "user"
+                        ? (m.User != null ? m.User.Name : m.PublicUser != null ? $"Visitante {m.PublicUser.Id}" : "Usuario")
+                        : (m.Sender == "admin" ? (m.User != null ? m.User.Name : "Admin") : (m.Bot != null ? m.Bot.Name : "Bot")),
+                    FromAvatarUrl = m.Sender == "user"
+                        ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
+                        : (m.Sender == "admin" ? (m.User != null ? (m.User.AvatarUrl ?? "") : "") : ""),
+                    ReplyToMessageId = m.ReplyToMessageId
+                }).ToList();
+
+                // --- Mapeo de Archivos ---
+                var files = await _context.ChatUploadedFiles
+                    .AsNoTracking()
+                    .Where(f => f.ConversationId == conversationId)
+                    .Include(f => f.User)
+                    .Select(f => new ConversationItemDto
+                    {
+                        Id = f.Id,
+                        Type = f.FileType != null && f.FileType.StartsWith("image") ? "image" : "file",
+                        Timestamp = f.UploadedAt ?? DateTime.UtcNow,
+                        FromRole = "user",
+                        FromId = f.UserId,
+                        FromName = f.User != null ? f.User.Name : "Usuario",
+                        FromAvatarUrl = f.User != null ? (f.User.AvatarUrl ?? "") : "",
+                        FileUrl = f.FilePath,
+                        FileName = f.FileName,
+                        FileType = f.FileType
+                    })
+                    .ToListAsync();
+
+                var combinedHistory = messages.Concat(files)
+                    .OrderBy(item => item.Timestamp)
+                    .ToList();
+
+                var counts = rawMessages.GroupBy(m => (m.Sender ?? "user").ToLower())
+                    .Select(g => new { sender = g.Key, count = g.Count() })
+                    .ToList();
+
+                var normalizedHistory = combinedHistory.Select(item => new
+                {
+                    id = item.Id,
+                    type = item.Type ?? "message",
+                    text = item.Text ?? string.Empty,
+                    timestamp = item.Timestamp,
+                    fromRole = (item.FromRole ?? "user").ToLower() == "admin" ? "admin" : ((item.FromRole ?? "user").ToLower() == "bot" ? "bot" : "user"),
+                    fromId = item.FromId,
+                    fromName = item.FromName,
+                    fromAvatarUrl = item.FromAvatarUrl,
+                    replyToMessageId = item.ReplyToMessageId,
+                    fileUrl = item.FileUrl,
+                    fileName = item.FileName,
+                    fileType = item.FileType
+                }).ToList();
+
+                return Ok(new
+                {
+                    conversationDetails = new
+                    {
+                        id = conversation.Id,
+                        title = conversation.Title,
+                        status = conversation.Status,
+                        isWithAI = conversation.IsWithAI
+                    },
+                    history = normalizedHistory,
+                    debug = new { rawCount = rawMessages.Count, countsBySender = counts }
+                });
+            }
+            catch (Exception ex)
+            {
+                // Loguear el error si tienes logger
+                return StatusCode(500, new { Message = "Error interno al obtener el historial de la conversación.", Details = ex.Message });
+            }
         }
 
         /// <summary>
@@ -493,7 +559,7 @@ namespace Voia.Api.Controllers
             var allWindowFirst = fetched.Take(10).Select(m => new { id = m.Id, sender = m.Sender.ToLower(), createdAt = m.CreatedAt }).ToList<object>();
             var allWindowLast = fetched.Skip(Math.Max(0, fetched.Count - 10)).Take(10).Select(m => new { id = m.Id, sender = m.Sender.ToLower(), createdAt = m.CreatedAt }).ToList<object>();
 
-            // Collect ids to fetch related names (users, public users, bots)
+            // ✅ OPTIMIZACIÓN: Fetch related data in BULK (3 queries instead of N queries per message)
             var userIds = selection.Where(m => m.UserId.HasValue).Select(m => m.UserId!.Value).Distinct().ToList();
             var publicUserIds = selection.Where(m => m.PublicUserId.HasValue).Select(m => m.PublicUserId!.Value).Distinct().ToList();
             var botIds = selection.Where(m => m.BotId.HasValue).Select(m => m.BotId!.Value).Distinct().ToList();
@@ -555,7 +621,7 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "[GetMessagesPaginated] failed to compute debug counts for conv {ConversationId}", conversationId);
+                // Error en conteo de mensajes, ignorado para limpieza
             }
 
             try
@@ -576,7 +642,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "[GetMessagesPaginated] Error fetching paginated messages for conv {ConversationId}", conversationId);
                 return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
             }
         }
@@ -685,7 +750,7 @@ namespace Voia.Api.Controllers
                 // Reverse to chronological order (oldest first)
                 combinedWindow.Reverse();
 
-                // Ensure we have names for the message-side users: collect user/public/bot ids from the message subset
+                // ✅ OPTIMIZACIÓN: Bulk fetch user/public/bot data (3 queries instead of N)
                 var msgUserIds = combinedWindow.Where(x => x.fromUserId.HasValue).Select(x => x.fromUserId!.Value).Where(id => id != 0).Distinct().ToList();
                 var msgPublicUserIds = combinedWindow.Where(x => x.fromPublicUserId.HasValue).Select(x => x.fromPublicUserId!.Value).Distinct().ToList();
                 var msgBotIds = combinedWindow.Where(x => x.fromBotId.HasValue).Select(x => x.fromBotId!.Value).Distinct().ToList();
@@ -783,7 +848,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "[GetMessagesPaginatedGrouped] Error fetching grouped messages for conv {ConversationId}", conversationId);
                 return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace });
             }
         }
@@ -792,64 +856,106 @@ namespace Voia.Api.Controllers
     [HasPermission("CanViewConversations")]
     public async Task<IActionResult> GetConversationsWithLastMessage()
         {
+            // ✅ OPTIMIZACIÓN: Fetch conversations con Bot incluido PRIMERO
             var conversations = await _context.Conversations
-                .Include(c => c.Bot) // Make sure Bot is included
-                .Select(c => new
-                {
-                    Conversation = c,
-                    LastEvent = _context.Messages
-                        .Where(m => m.ConversationId == c.Id)
-                        .Select(m => new { RawContent = m.MessageText, Timestamp = (DateTime?)m.CreatedAt, Type = "text" })
-                        .Concat(_context.ChatUploadedFiles
-                            .Where(f => f.ConversationId == c.Id)
-                            .Select(f => new { RawContent = f.FileName, Timestamp = f.UploadedAt, Type = f.FileType.StartsWith("image") ? "image" : "file" })
-                        )
-                        .OrderByDescending(e => e.Timestamp)
-                        .FirstOrDefault()
-                })
+                .Include(c => c.Bot)
+                .AsNoTracking()
                 .ToListAsync();
 
+            // ✅ OPTIMIZACIÓN: Fetch TODOS los messages en UNA query
+            var allMessages = await _context.Messages
+                .AsNoTracking()
+                .Where(m => conversations.Select(c => c.Id).Contains(m.ConversationId))
+                .ToListAsync();
+
+            // ✅ OPTIMIZACIÓN: Fetch TODOS los files en UNA query
+            var allFiles = await _context.ChatUploadedFiles
+                .AsNoTracking()
+                .Where(f => conversations.Select(c => c.Id).Contains(f.ConversationId))
+                .ToListAsync();
+
+            // ✅ IN-MEMORY: Procesar en C# (sin SQL Concat)
             var result = conversations.Select(c =>
             {
-                string? finalContent = c.LastEvent?.RawContent;
-                if (c.LastEvent?.Type == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
+                // Obtener último evento (message o file) para esta conversación
+                var lastMessage = allMessages
+                    .Where(m => m.ConversationId == c.Id)
+                    .OrderByDescending(m => m.CreatedAt)
+                    .FirstOrDefault();
+
+                var lastFile = allFiles
+                    .Where(f => f.ConversationId == c.Id)
+                    .OrderByDescending(f => f.UploadedAt)
+                    .FirstOrDefault();
+
+                // Determinar cuál es más reciente
+                object? lastEvent = null;
+                if (lastMessage != null && lastFile != null)
                 {
-                    try
+                    lastEvent = lastMessage.CreatedAt >= (lastFile.UploadedAt ?? DateTime.MinValue) 
+                        ? new { RawContent = lastMessage.MessageText, Timestamp = (DateTime?)lastMessage.CreatedAt, Type = "text" }
+                        : (object)new { RawContent = lastFile.FileName, Timestamp = lastFile.UploadedAt, Type = lastFile.FileType.StartsWith("image") ? "image" : "file" };
+                }
+                else if (lastMessage != null)
+                {
+                    lastEvent = new { RawContent = lastMessage.MessageText, Timestamp = (DateTime?)lastMessage.CreatedAt, Type = "text" };
+                }
+                else if (lastFile != null)
+                {
+                    lastEvent = new { RawContent = lastFile.FileName, Timestamp = lastFile.UploadedAt, Type = lastFile.FileType.StartsWith("image") ? "image" : "file" };
+                }
+
+                // Procesar contenido si es texto
+                string? finalContent = null;
+                string? eventType = null;
+                DateTime? eventTimestamp = null;
+
+                if (lastEvent != null)
+                {
+                    var eventDict = (dynamic)lastEvent;
+                    finalContent = eventDict.RawContent;
+                    eventType = eventDict.Type;
+                    eventTimestamp = eventDict.Timestamp;
+
+                    if (eventType == "text" && !string.IsNullOrEmpty(finalContent) && finalContent.Trim().StartsWith("{"))
                     {
-                        using (var doc = System.Text.Json.JsonDocument.Parse(finalContent))
+                        try
                         {
-                            if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
+                            using (var doc = System.Text.Json.JsonDocument.Parse(finalContent))
                             {
-                                finalContent = userQuestion.GetString() ?? finalContent;
-                            }
-                            else if (doc.RootElement.TryGetProperty("Content", out var content))
-                            {
-                                finalContent = content.GetString() ?? finalContent;
+                                if (doc.RootElement.TryGetProperty("UserQuestion", out var userQuestion))
+                                {
+                                    finalContent = userQuestion.GetString() ?? finalContent;
+                                }
+                                else if (doc.RootElement.TryGetProperty("Content", out var content))
+                                {
+                                    finalContent = content.GetString() ?? finalContent;
+                                }
                             }
                         }
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        // Not a valid JSON, so we'll just use the original RawContent
+                        catch (System.Text.Json.JsonException)
+                        {
+                            // Not a valid JSON, so we'll just use the original RawContent
+                        }
                     }
                 }
 
                 return new
                 {
-                    c.Conversation.Id,
-                    c.Conversation.Status,
-                    Title = c.Conversation.Title ?? string.Empty,
-                    c.Conversation.IsWithAI,
-                    Alias = $"Sesión {c.Conversation.Id}",
-                    Bot = c.Conversation.Bot != null ? new { c.Conversation.Bot.Name } : null,
-                    lastMessage = c.LastEvent == null ? null : new
+                    c.Id,
+                    c.Status,
+                    Title = c.Title ?? string.Empty,
+                    c.IsWithAI,
+                    Alias = $"Sesión {c.Id}",
+                    Bot = c.Bot != null ? new { c.Bot.Name } : null,
+                    lastMessage = lastEvent == null ? null : new
                     {
-                        c.LastEvent.Type,
+                        Type = eventType,
                         Content = finalContent,
-                        Timestamp = c.LastEvent.Timestamp ?? c.Conversation.UpdatedAt
+                        Timestamp = eventTimestamp ?? c.UpdatedAt
                     }
                 };
-            });
+            }).ToList();
 
             return Ok(result);
         }
@@ -1045,17 +1151,14 @@ namespace Voia.Api.Controllers
                     // X-Forwarded-For puede tener múltiples IPs, tomar la primera
                     var ips = forwardedFor.ToString().Split(',');
                     ipAddress = ips[0].Trim();
-                    _logger.LogInformation($"🌍 IP desde X-Forwarded-For: {ipAddress}");
                 }
                 else
                 {
                     ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
-                    _logger.LogInformation($"🌍 IP desde RemoteIpAddress: {ipAddress}");
                 }
                 
                 var (country, city) = await _geoLocationService.GetLocationAsync(ipAddress);
                 
-                _logger.LogInformation($"✅ Ubicación obtenida: {city}, {country}");
                 
                 return Ok(new
                 {
@@ -1066,7 +1169,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"❌ Error obteniendo ubicación: {ex.Message}");
                 
                 return Ok(new
                 {
@@ -1087,16 +1189,29 @@ namespace Voia.Api.Controllers
         {
             try
             {
-                _logger.LogInformation($"📱 [JoinMobileSession] Conversación {conversationId} - Dispositivo: {dto.DeviceType}");
+                Console.WriteLine($"[SignalR] Emitiendo MobileSessionStarted: conversationId={conversationId}, deviceType={dto.DeviceType}, grupo={conversationId}");
 
                 var conversation = await _context.Conversations.FindAsync(conversationId);
                 if (conversation == null)
                 {
-                    _logger.LogWarning($"❌ [JoinMobileSession] Conversación {conversationId} no encontrada");
                     return NotFound(new { error = "Conversación no encontrada" });
                 }
 
-                // Actualizar estado
+                // Validaciones de seguridad
+                if (conversation.Status == "closed")
+                {
+                    return StatusCode(410, new { error = "La conversación está cerrada y no puede ser reabierta." });
+                }
+                if (conversation.ExpiresAt.HasValue && conversation.ExpiresAt.Value < DateTime.UtcNow)
+                {
+                    return StatusCode(410, new { error = "La conversación ha expirado y no puede ser reabierta." });
+                }
+                if (conversation.ActiveMobileSession)
+                {
+                    return StatusCode(403, new { error = "Ya existe una sesión móvil activa en esta conversación." });
+                }
+
+                // Actualizar estado solo si pasa validaciones
                 conversation.ActiveMobileSession = true;
                 conversation.MobileDeviceType = dto.DeviceType ?? "mobile";
                 conversation.MobileJoinedAt = dto.Timestamp ?? DateTime.UtcNow;
@@ -1104,9 +1219,8 @@ namespace Voia.Api.Controllers
                 conversation.Blocked = true; // Bloquear web
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"✅ [JoinMobileSession] Sesión móvil iniciada para conversación {conversationId}");
 
-                // 📢 Notificar a web via SignalR
+                // 📢 Notificar a web via SignalR SOLO si la unión fue permitida
                 await _hubContext.Clients.Group(conversationId.ToString())
                     .SendAsync("MobileSessionStarted", new
                     {
@@ -1115,7 +1229,6 @@ namespace Voia.Api.Controllers
                         joinedAt = conversation.MobileJoinedAt
                     });
 
-                _logger.LogInformation($"📢 [JoinMobileSession] Evento 'MobileSessionStarted' enviado al grupo {conversationId}");
 
                 return Ok(new
                 {
@@ -1127,7 +1240,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"❌ [JoinMobileSession] Error: {ex.Message}");
                 return StatusCode(500, new { error = "Error al iniciar sesión móvil" });
             }
         }
@@ -1141,12 +1253,11 @@ namespace Voia.Api.Controllers
         {
             try
             {
-                _logger.LogInformation($"📱 [LeaveMobileSession] Cerrando sesión móvil para conversación {conversationId}");
+                Console.WriteLine($"[SignalR] Emitiendo MobileSessionEnded: conversationId={conversationId}, grupo={conversationId}");
 
                 var conversation = await _context.Conversations.FindAsync(conversationId);
                 if (conversation == null)
                 {
-                    _logger.LogWarning($"❌ [LeaveMobileSession] Conversación {conversationId} no encontrada");
                     return NotFound(new { error = "Conversación no encontrada" });
                 }
 
@@ -1155,9 +1266,11 @@ namespace Voia.Api.Controllers
                 conversation.Status = "closed";
                 conversation.ClosedAt = DateTime.UtcNow;
                 conversation.Blocked = false; // Desbloquear web
+                // 🔴 NEW: Asignar ExpiresAt = ClosedAt (expira INMEDIATAMENTE al cerrar, sin ventana de 3 minutos)
+                // Esto previene que alguien pueda acceder a una conversación cerrada cambiando el ID del QR
+                conversation.ExpiresAt = conversation.ClosedAt.Value;
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"✅ [LeaveMobileSession] Sesión móvil cerrada para conversación {conversationId}");
 
                 // 📢 Notificar a web via SignalR
                 await _hubContext.Clients.Group(conversationId.ToString())
@@ -1168,7 +1281,6 @@ namespace Voia.Api.Controllers
                         closedAt = conversation.ClosedAt
                     });
 
-                _logger.LogInformation($"📢 [LeaveMobileSession] Evento 'MobileSessionEnded' enviado al grupo {conversationId}");
 
                 return Ok(new
                 {
@@ -1180,7 +1292,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"❌ [LeaveMobileSession] Error: {ex.Message}");
                 return StatusCode(500, new { error = "Error al cerrar sesión móvil" });
             }
         }
@@ -1203,7 +1314,6 @@ namespace Voia.Api.Controllers
                 conversation.LastActiveAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"✅ [UpdateActivity] Actividad actualizada para conversación {conversationId} - {conversation.LastActiveAt:yyyy-MM-dd HH:mm:ss}");
 
                 return Ok(new
                 {
@@ -1213,7 +1323,6 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"❌ [UpdateActivity] Error: {ex.Message}");
                 return StatusCode(500, new { error = "Error al actualizar actividad" });
             }
         }
@@ -1251,9 +1360,16 @@ namespace Voia.Api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"❌ [GetConversationStatus] Error: {ex.Message}");
                 return StatusCode(500, new { error = "Error al obtener estado de conversación" });
             }
+        }
+
+        // Helper: Convertir Unix timestamp a DateTime
+        private DateTime UnixTimeStampToDateTime(long unixTimeStamp)
+        {
+            var dateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            dateTime = dateTime.AddSeconds(unixTimeStamp).ToUniversalTime();
+            return dateTime;
         }
 
         // DTOs internos

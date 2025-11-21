@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using System.Security.Claims;
 using Voia.Api.Attributes;
+using Voia.Api.Services.Caching;
 
 namespace Voia.Api.Controllers
 {
@@ -20,10 +21,12 @@ namespace Voia.Api.Controllers
     public class BotStylesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICacheService _cacheService;
 
-        public BotStylesController(ApplicationDbContext context)
+        public BotStylesController(ApplicationDbContext context, ICacheService cacheService)
         {
             _context = context;
+            _cacheService = cacheService;
         }
 
         /// <summary>
@@ -35,7 +38,20 @@ namespace Voia.Api.Controllers
         {
             try
             {
+                var cacheKey = CacheConstants.GetAllStylesKey();
+                
+                // Intentar obtener del caché
+                var cached = await _cacheService.GetAsync<List<BotStyle>>(cacheKey);
+                if (cached != null)
+                {
+                    return Ok(cached);
+                }
+
                 var styles = await _context.BotStyles.ToListAsync();
+                
+                // Guardar en caché
+                await _cacheService.SetAsync(cacheKey, styles, CacheConstants.STYLE_TTL);
+                
                 return Ok(styles);
             }
             catch (Exception ex)

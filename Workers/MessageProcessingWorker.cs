@@ -334,6 +334,13 @@ public class MessageProcessingWorker : BackgroundService
                 db.Messages.Add(noAccessMessage);
                 await db.SaveChangesAsync(cancellationToken);
 
+                // 🆕 Actualizar campos de la conversación cuando no hay acceso
+                conversation.BotResponse = noAccessText;
+                conversation.LastMessage = noAccessText;
+                conversation.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation($"✅ [Worker] Conversación actualizada con mensaje de 'no access'");
+
                 await hubContext.Clients.Group(job.ConversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId = job.ConversationId,
@@ -378,6 +385,13 @@ public class MessageProcessingWorker : BackgroundService
         };
         db.Messages.Add(botMessage);
         await db.SaveChangesAsync(cancellationToken);
+
+        // 🆕 Actualizar campos de la conversación con la respuesta del bot
+        conversation.BotResponse = botAnswer;
+        conversation.LastMessage = botAnswer;
+        conversation.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation($"✅ [Worker] Conversación actualizada - bot_response y last_message");
 
         await hubContext.Clients.Group(job.ConversationId.ToString()).SendAsync("ReceiveMessage", new
         {

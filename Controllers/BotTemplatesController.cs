@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Voia.Api.Models.DTOs;
+using Voia.Api.Services.Caching;
+
+using Voia.Api.Services.Security;
 
 namespace Voia.Api.Controllers
 {
@@ -11,10 +14,14 @@ namespace Voia.Api.Controllers
     public class BotTemplatesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ICacheService _cacheService;
+        private readonly ISanitizationService _sanitizer;
 
-        public BotTemplatesController(ApplicationDbContext context)
+        public BotTemplatesController(ApplicationDbContext context, ICacheService cacheService, ISanitizationService sanitizer)
         {
             _context = context;
+            _cacheService = cacheService;
+            _sanitizer = sanitizer;
         }
 
         // GET: api/bottemplates
@@ -22,6 +29,15 @@ namespace Voia.Api.Controllers
     [HasPermission("CanViewBotTemplates")]
     public async Task<ActionResult<IEnumerable<BotTemplateResponseDto>>> GetAll()
         {
+            var cacheKey = CacheConstants.GetAllTemplatesKey();
+            
+            // Intentar obtener del caché
+            var cached = await _cacheService.GetAsync<List<BotTemplateResponseDto>>(cacheKey);
+            if (cached != null)
+            {
+                return Ok(cached);
+            }
+
             var templates = await _context
                 .BotTemplates.Select(t => new BotTemplateResponseDto
                 {
@@ -34,6 +50,9 @@ namespace Voia.Api.Controllers
                     UpdatedAt = t.UpdatedAt,
                 })
                 .ToListAsync();
+
+            // Guardar en caché
+            await _cacheService.SetAsync(cacheKey, templates, CacheConstants.TEMPLATE_TTL);
 
             return Ok(templates);
         }
@@ -138,8 +157,8 @@ namespace Voia.Api.Controllers
 
                 var template = new BotTemplate
                 {
-                    Name = string.IsNullOrWhiteSpace(dto.Name) ? "Plantilla sin nombre" : dto.Name,
-                    Description = dto.Description ?? "",
+                    Name = _sanitizer.SanitizeText(string.IsNullOrWhiteSpace(dto.Name) ? "Plantilla sin nombre" : dto.Name),
+                    Description = _sanitizer.SanitizeText(dto.Description ?? ""),
                     IaProviderId = dto.IaProviderId,
                     AiModelConfigId = dto.AiModelConfigId,
                     DefaultStyleId = dto.DefaultStyleId,
@@ -209,10 +228,10 @@ namespace Voia.Api.Controllers
 
             // Name y description
             if (!string.IsNullOrWhiteSpace(dto.Name))
-                template.Name = dto.Name;
+                template.Name = _sanitizer.SanitizeText(dto.Name);
 
             if (dto.Description != null)
-                template.Description = dto.Description;
+                template.Description = _sanitizer.SanitizeText(dto.Description);
 
             if (dto.DefaultStyleId.HasValue)
                 template.DefaultStyleId = dto.DefaultStyleId;
@@ -235,7 +254,7 @@ namespace Voia.Api.Controllers
                     template.Prompts.Add(new BotTemplatePrompt
                     {
                         Role = role,
-                        Content = promptDto.Content,
+                        Content = _sanitizer.SanitizeText(promptDto.Content),
                         CreatedAt = DateTime.UtcNow,
                         UpdatedAt = DateTime.UtcNow
                     });

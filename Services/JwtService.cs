@@ -19,22 +19,13 @@ namespace Voia.Api.Services
         // Método público para generar el token
         public string GenerateToken(User user)
         {
-            string normalizedRole = user.Role.Name switch
-            {
-                "Administrador" or "Admin" => "Admin",
-                "Usuario" or "User" => "User",
-                "Soporte" or "Support" => "Support",
-                "Entrenador" or "Trainer" => "Trainer",
-                "Espectador" or "Viewer" => "Viewer",
-                _ => user.Role.Name
-            };
-
-
+            // Obtener roles usando Identity (debe ser pasado como parámetro)
+            // Ejemplo: el controlador debe obtener el rol con UserManager y pasarlo aquí
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, normalizedRole)
+                new Claim(ClaimTypes.Email, user.Email)
+                // El rol debe agregarse en el controlador
             };
 
             var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);

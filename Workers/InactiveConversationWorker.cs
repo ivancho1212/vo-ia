@@ -48,6 +48,12 @@ public class InactiveConversationWorker : BackgroundService
                         conv.Status = "inactiva";
                         // ✅ ENVIAR NOTIFICACIÓN AL PANEL DE ADMIN
                         await _hubContext.Clients.Group("admin").SendAsync("ConversationStatusChanged", conv.Id, "inactiva", stoppingToken);
+                           // ✅ ENVIAR EVENTO MobileSessionEnded AL GRUPO DE LA CONVERSACIÓN
+                           await _hubContext.Clients.Group(conv.Id.ToString()).SendAsync("MobileSessionEnded", new {
+                               conversationId = conv.Id,
+                               reason = "expired",
+                               closedAt = DateTime.UtcNow
+                           }, stoppingToken);
                     }
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }

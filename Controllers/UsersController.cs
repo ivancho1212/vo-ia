@@ -1,5 +1,6 @@
 // Controllers/UsersController.cs
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Identity;
 using Voia.Api.Data;
 using Voia.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ using System.Security.Claims;
 using BCrypt.Net;
 using Voia.Api.Models.Subscriptions;
 using Voia.Api.Models.bot;
+using Voia.Api.Services.Caching;
 
 
 namespace Voia.Api.Controllers
@@ -21,11 +23,17 @@ namespace Voia.Api.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly JwtService _jwtService;
+        private readonly ICacheService _cacheService;
+        private readonly UserManager<User> _userManager;
+        private readonly RoleManager<Role> _roleManager;
 
-        public UsersController(ApplicationDbContext context, JwtService jwtService)
+        public UsersController(ApplicationDbContext context, JwtService jwtService, ICacheService cacheService, UserManager<User> userManager, RoleManager<Role> roleManager)
         {
             _context = context;
-            _jwtService = jwtService; // Inyección de dependencias
+            _jwtService = jwtService;
+            _cacheService = cacheService;
+            _userManager = userManager;
+            _roleManager = roleManager;
         }
         /// <summary>
         /// Obtiene la lista de todos los usuarios con su información de rol.
@@ -38,6 +46,16 @@ namespace Voia.Api.Controllers
         [HasPermission("CanViewUsers")]
         public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
         {
+            // Si no hay búsqueda, intentar obtener del caché
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                var cacheKey = CacheConstants.GetAllUsersKey(page, pageSize);
+                var cached = await _cacheService.GetAsync<object>(cacheKey);
+                if (cached != null)
+                {
+                    return Ok(cached);
+                }
+            }
 
             var query = _context.Users
                 .Include(u => u.Role)
@@ -66,57 +84,60 @@ namespace Voia.Api.Controllers
             var userDtos = users.Select(user => new GetUserDto
             {
                 Id = user.Id,
-                Name = user.Name,
-                Email = user.Email,
-                Phone = user.Phone,
-                Country = user.Country,
-                City = user.City,
-                Address = user.Address,
-                DocumentNumber = user.DocumentNumber,
-                DocumentPhotoUrl = user.DocumentPhotoUrl,
-                AvatarUrl = user.AvatarUrl,
+                Name = user.Name ?? string.Empty,
+                Email = user.Email ?? string.Empty,
+                Phone = user.Phone ?? string.Empty,
+                Country = user.Country ?? string.Empty,
+                City = user.City ?? string.Empty,
+                Address = user.Address ?? string.Empty,
+                DocumentNumber = user.DocumentNumber ?? string.Empty,
+                DocumentPhotoUrl = user.DocumentPhotoUrl ?? string.Empty,
+                AvatarUrl = user.AvatarUrl ?? string.Empty,
                 IsVerified = user.IsVerified,
                 IsActive = user.IsActive,
                 Status = string.IsNullOrEmpty(user.Status) ? (user.IsActive ? "active" : "inactive") : user.Status,
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt,
                 DocumentTypeName = user.DocumentType != null ? user.DocumentType.Name : null,
-                Role = new RoleDto
+                Role = user.Role != null ? new RoleDto
                 {
                     Id = user.Role.Id,
                     Name = user.Role.Name
-                },
-                // Plan asociado (última suscripción activa)
+                } : null,
                 Plan = user.Subscriptions?.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan != null
                     ? new PlanDto
                     {
-                        Id = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Id,
-                        Name = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Name,
-                        Description = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Description,
-                        Price = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.Price,
-                        MaxTokens = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.MaxTokens,
-                        BotsLimit = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active").Plan.BotsLimit
+                        Id = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.Id ?? 0,
+                        Name = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.Name ?? string.Empty,
+                        Description = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.Description ?? string.Empty,
+                        Price = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.Price ?? 0,
+                        MaxTokens = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.MaxTokens ?? 0,
+                        BotsLimit = user.Subscriptions.OrderByDescending(s => s.StartedAt).FirstOrDefault(s => s.Status == "active")?.Plan?.BotsLimit ?? 0
                     }
                     : null,
-                // Lista de bots activos
                 Bots = user.Bots?.Where(b => b.IsActive).Select(b => new BotDto
                 {
                     Id = b.Id,
                     Name = b.Name,
                     Description = b.Description
                 }).ToList() ?? new List<BotDto>(),
-                // Cantidad de bots asociados
-                // Puedes agregar un campo BotsCount en el DTO si lo deseas
-                // Tokens consumidos (requiere consulta a TokenUsageLog)
-                // Este campo lo puedes agregar en el DTO si lo necesitas
             }).ToList();
 
-            return Ok(new {
+            var response = new {
                 total,
                 page,
                 pageSize,
                 users = userDtos
-            });
+            };
+
+            // Guardar en caché solo si no hay búsqueda
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                var cacheKey = CacheConstants.GetAllUsersKey(page, pageSize);
+                await _cacheService.SetAsync(cacheKey, response, CacheConstants.USER_TTL);
+            }
+
+            return Ok(response);
         }
         /// <summary>
         /// Obtiene el perfil del usuario autenticado.
@@ -311,21 +332,20 @@ namespace Voia.Api.Controllers
         [HasPermission("CanEditUsers")]
         public async Task<IActionResult> PostUser(AdminCreateUserDto createUserDto)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            if (await _userManager.FindByEmailAsync(createUserDto.Email) != null)
             {
                 return BadRequest(new { Message = "Email is already in use" });
             }
 
             var user = new User
             {
+                UserName = createUserDto.Email,
                 Name = createUserDto.Name,
                 Email = createUserDto.Email,
-                Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                RoleId = createUserDto.RoleId,
                 DocumentTypeId = createUserDto.DocumentTypeId,
                 Phone = createUserDto.Phone,
-                Country = createUserDto.Country,  // ✅ nuevo
-                City = createUserDto.City,        // ✅ nuevo
+                Country = createUserDto.Country,
+                City = createUserDto.City,
                 Address = createUserDto.Address,
                 DocumentNumber = createUserDto.DocumentNumber,
                 DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
@@ -335,9 +355,22 @@ namespace Voia.Api.Controllers
                 UpdatedAt = DateTime.UtcNow
             };
 
+            var result = await _userManager.CreateAsync(user, createUserDto.Password);
+            if (!result.Succeeded)
+            {
+                return BadRequest(new { Message = "Error creating user", Errors = result.Errors });
+            }
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            // Asignar rol si se especifica
+            if (!string.IsNullOrWhiteSpace(createUserDto.RoleName))
+            {
+                var roleExists = await _roleManager.RoleExistsAsync(createUserDto.RoleName);
+                if (!roleExists)
+                {
+                    return BadRequest(new { Message = $"Role '{createUserDto.RoleName}' does not exist" });
+                }
+                await _userManager.AddToRoleAsync(user, createUserDto.RoleName);
+            }
 
             return CreatedAtAction(nameof(GetUsers), new { id = user.Id }, user);
         }
@@ -350,37 +383,20 @@ namespace Voia.Api.Controllers
             try
             {
                 // Validación de email duplicado
-                if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+                if (await _userManager.FindByEmailAsync(createUserDto.Email) != null)
                 {
                     return BadRequest(new { Message = "El email ya está en uso" });
                 }
 
-                // Validación de documento duplicado
-                if (await _context.Users.AnyAsync(u => u.DocumentNumber == createUserDto.DocumentNumber))
-                {
-                    return BadRequest(new { Message = "El número de documento ya está en uso" });
-                }
-
-                // Validación de teléfono duplicado
-                if (await _context.Users.AnyAsync(u => u.Phone == createUserDto.Phone))
-                {
-                    return BadRequest(new { Message = "El número de teléfono ya está en uso" });
-                }
-
-                // Asignar roleId fijo (2)
-                const int fixedRoleId = 2;
-
-                // Creación del usuario
                 var user = new User
                 {
+                    UserName = createUserDto.Email,
                     Name = createUserDto.Name,
                     Email = createUserDto.Email,
-                    Password = BCrypt.Net.BCrypt.HashPassword(createUserDto.Password),
-                    RoleId = fixedRoleId,
                     DocumentTypeId = createUserDto.DocumentTypeId,
                     Phone = createUserDto.Phone,
-                    Country = createUserDto.Country,  // ✅ nuevo
-                    City = createUserDto.City,        // ✅ nuevo
+                    Country = createUserDto.Country,
+                    City = createUserDto.City,
                     Address = createUserDto.Address,
                     DocumentNumber = createUserDto.DocumentNumber,
                     DocumentPhotoUrl = createUserDto.DocumentPhotoUrl,
@@ -390,9 +406,22 @@ namespace Voia.Api.Controllers
                     UpdatedAt = DateTime.UtcNow
                 };
 
+                var result = await _userManager.CreateAsync(user, createUserDto.Password);
+                if (!result.Succeeded)
+                {
+                    return BadRequest(new { Message = "Error registrando usuario", Errors = result.Errors });
+                }
 
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
+                // Asignar rol si se especifica
+                if (!string.IsNullOrWhiteSpace(createUserDto.RoleName))
+                {
+                    var roleExists = await _roleManager.RoleExistsAsync(createUserDto.RoleName);
+                    if (!roleExists)
+                    {
+                        return BadRequest(new { Message = $"Role '{createUserDto.RoleName}' does not exist" });
+                    }
+                    await _userManager.AddToRoleAsync(user, createUserDto.RoleName);
+                }
 
                 return Ok(new { Message = "Usuario registrado exitosamente" });
             }
@@ -432,7 +461,17 @@ namespace Voia.Api.Controllers
             user.DocumentPhotoUrl = updateUserDto.DocumentPhotoUrl;
             user.AvatarUrl = updateUserDto.AvatarUrl;
             user.IsVerified = updateUserDto.IsVerified;
-            user.RoleId = updateUserDto.RoleId;
+            // Actualizar rol usando Identity si RoleName está presente
+            if (!string.IsNullOrWhiteSpace(updateUserDto.RoleName))
+            {
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                var roleExists = await _roleManager.RoleExistsAsync(updateUserDto.RoleName);
+                if (roleExists)
+                {
+                    await _userManager.AddToRoleAsync(user, updateUserDto.RoleName);
+                }
+            }
             user.DocumentTypeId = updateUserDto.DocumentTypeId;
             user.UpdatedAt = DateTime.UtcNow;
             // Lógica de status
@@ -503,14 +542,14 @@ namespace Voia.Api.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto loginDto)
         {
-            var user = await _context.Users
+            var user = await _userManager.Users
                 .Include(u => u.Role)
                 .Include(u => u.Subscriptions)
                     .ThenInclude(s => s.Plan)
                 .AsSplitQuery()
                 .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.Password))
+            if (user == null || !(await _userManager.CheckPasswordAsync(user, loginDto.Password)))
             {
                 return Unauthorized(new { Message = "Invalid credentials" });
             }

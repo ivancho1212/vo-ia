@@ -61,6 +61,10 @@ namespace Voia.Api.Models.Conversations
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }
 
+        // 🔴 CAMPO DE EXPIRACIÓN: Fecha en que la conversación vence (QR links, sesiones temporales)
+        [Column("expires_at")]
+        public DateTime? ExpiresAt { get; set; }
+
         // Relaciones de navegación
         public virtual User? User { get; set; }
         public virtual Bot? Bot { get; set; }

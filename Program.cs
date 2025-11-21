@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -13,18 +13,69 @@ using System.Net.Http.Headers;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Services.Chat;
 using Voia.Api.Services.Upload;
+using Voia.Api.Services.Security;
 using Api.Services;
 using Voia.Api.Services.Mocks;
 using System.Text.Json.Serialization;
 using Voia.Api.Models.BotIntegrations;
+using Voia.Api.Middleware;
+using StackExchange.Redis;
+using Voia.Api.Data.Interceptors;
+using Serilog;
+using Serilog.Events;
+using Voia.Api.Services.Caching;
+using DotNetEnv;
+
+//  Load environment variables from .env file
+var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+}
 
 var builder = WebApplication.CreateBuilder(args);
+
+//  SERILOG CONFIGURATION
+// Configurar Serilog para structured logging con file sinks y rotacin
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .Enrich.FromLogContext()
+    .Enrich.WithEnvironmentUserName()
+    .Enrich.WithProperty("Application", "Voia.Api")
+    .WriteTo.Console(
+        outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.File(
+        path: Path.Combine("Logs", "voia-api-.txt"),
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 31457280, // 30 MB
+        retainedFileCountLimit: 30,
+        shared: true)
+    .WriteTo.File(
+        path: Path.Combine("Logs", "voia-api-errors-.txt"),
+        outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+        restrictedToMinimumLevel: LogEventLevel.Error,
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 31457280, // 30 MB
+        retainedFileCountLimit: 30,
+        shared: true)
+    .CreateLogger();
+
+// Reemplazar el logger de ASP.NET Core con Serilog
+builder.Host.UseSerilog();
 
 // CONFIGURAR SERVICIOS
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddSingleton<IGeoLocationService, GeoLocationService>();
+builder.Services.AddHttpContextAccessor();
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// Registrar Identity para habilitar UserManager<User> y dependencias
+builder.Services.AddIdentity<Voia.Api.Models.User, Voia.Api.Models.Role>()
+    .AddEntityFrameworkStores<ApplicationDbContext>();
+
+builder.Services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
+{
+    var auditInterceptor = serviceProvider.GetRequiredService<AuditInterceptor>();
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("DefaultConnection")),
@@ -32,7 +83,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
     .EnableSensitiveDataLogging()
     .LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Information)
-);
+    .AddInterceptors(auditInterceptor);
+});
+
+builder.Services.AddScoped<AuditInterceptor>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -76,36 +130,58 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+//  CORS CONFIGURATION - Extract origins from environment variables for production flexibility
+var frontendOrigins = (builder.Configuration["CORS:FrontendOrigins"] ?? 
+    "http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:5500,http://localhost:5500,https://voia-client.lat")
+    .Split(",")
+    .Select(o => o.Trim())
+    .Where(o => !string.IsNullOrEmpty(o))
+    .ToArray();
+
+var widgetOrigins = (builder.Configuration["CORS:WidgetOrigins"] ?? 
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5006,http://127.0.0.1:5006")
+    .Split(",")
+    .Select(o => o.Trim())
+    .Where(o => !string.IsNullOrEmpty(o))
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
+    //  Policy: AllowFrontend - Strict whitelist for dashboard access
+    // Only trusted frontend origins with credentials enabled
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:5500",
-                "http://localhost:5500",
-                "https://voia-client.lat"
-            )
+            .WithOrigins(frontendOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials()
             .WithExposedHeaders("X-Widget-Token");
     });
 
-    // Policy for widgets - allow any origin since widgets are embedded everywhere
-    // The /inline endpoint for file serving requires this for cross-origin img tag loading
+    //  Policy: AllowWidgets - For embedded widgets (carefully restricted)
+    // NOTE: Widgets require cross-origin access for image embedding.
+    // In production, consider:
+    // 1. Restricting to known CDN/hosting domains
+    // 2. Using Content-Security-Policy headers
+    // 3. Implementing origin validation in code for sensitive operations
     options.AddPolicy("AllowWidgets", policy =>
     {
+        //  DEVELOPMENT: Explicitly allow localhost for widget development
         policy
-            .AllowAnyOrigin()
+            .WithOrigins(
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "http://localhost:5006",
+                "http://127.0.0.1:5006"
+            )
             .AllowAnyMethod()
             .AllowAnyHeader()
+            .AllowCredentials()
             .WithExposedHeaders("X-Widget-Token", "Content-Type", "X-Content-Type-Options");
     });
 
-    // ✅ DEVELOPMENT: Allow localhost:5006 (widget origin when served from localhost:3000)
+    //  Policy: AllowLocalhost - Development policy for local testing
     options.AddPolicy("AllowLocalhost", policy =>
     {
         policy
@@ -122,6 +198,11 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Log CORS configuration for debugging
+Log.Information(" CORS Configuration Loaded");
+Log.Information("   Frontend Origins: {FrontendOrigins}", string.Join(", ", frontendOrigins));
+Log.Information("   Widget Origins: {WidgetOrigins}", string.Join(", ", widgetOrigins));
+
 
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -130,6 +211,61 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
         options.JsonSerializerOptions.WriteIndented = true;
     });
+
+//  GET REDIS CONNECTION STRING (needed early for cache configuration)
+var redisConnection = builder.Configuration["REDIS_CONNECTION"]; // env var or appsettings
+
+//  CSRF TOKEN SERVICE
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<ICsrfTokenService, CsrfTokenService>();
+
+//  REDIS DISTRIBUTED CACHE CONFIGURATION
+// Implementar IDistributedCache para cach distribuido (using Microsoft.Extensions.Caching.StackExchangeRedis)
+// TTLs: Bots (1h), Templates (24h), Users (1h)
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    try
+    {
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnection;
+            options.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConnection);
+            options.ConfigurationOptions.AbortOnConnectFail = false;
+        });
+        Log.Information(" Redis Distributed Cache configured successfully");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning($" Redis Distributed Cache configuration failed: {ex.Message}. Falling back to Distributed Memory Cache.");
+        builder.Services.AddDistributedMemoryCache();
+    }
+}
+else
+{
+    // Fallback to Distributed Memory Cache if Redis not available
+    Log.Warning(" REDIS_CONNECTION not configured. Using Distributed Memory Cache (single-instance only).");
+    builder.Services.AddDistributedMemoryCache();
+}
+
+//  REGISTER CACHE SERVICE
+// Centralizado para Get/Set/GetOrSet con TTL automtico
+builder.Services.AddScoped<ICacheService, CacheService>();
+
+//  REGISTER XXE PROTECTION SERVICE
+// Proteccin contra ataques XML External Entity
+builder.Services.AddScoped<IXxeProtectionService, XxeProtectionService>();
+
+//  REGISTER SANITIZATION SERVICE
+// Proteccin contra XSS mediante sanitizacin de HTML y texto
+builder.Services.AddScoped<ISanitizationService, SanitizationService>();
+
+//  REGISTER FILE ACCESS AUTHORIZATION SERVICE
+// Validacin de permisos de acceso a archivos basada en propiedad de recursos
+builder.Services.AddScoped<IFileAccessAuthorizationService, FileAccessAuthorizationService>();
+
+//  REGISTER PROMPT INJECTION PROTECTION SERVICE
+// Prevencin de prompt injection attacks en prompts de LLM
+builder.Services.AddScoped<IPromptInjectionProtectionService, PromptInjectionProtectionService>();
 
 // Configure SignalR and optional Redis backplane
 var signalRBuilder = builder.Services.AddSignalR(options =>
@@ -142,7 +278,6 @@ var signalRBuilder = builder.Services.AddSignalR(options =>
 // NuGet package Microsoft.AspNetCore.SignalR.StackExchangeRedis and uncomment the sample below.
 // signalRBuilder.AddStackExchangeRedis(redisConnection, options => { options.Configuration.ChannelPrefix = "voia-signalr"; });
 
-var redisConnection = builder.Configuration["REDIS_CONNECTION"]; // env var or appsettings
 if (!string.IsNullOrEmpty(redisConnection))
 {
     // Register RedisService and PresenceService when redis is configured
@@ -295,8 +430,38 @@ builder.Services.AddHttpClient<ChatHub>(client =>
 // Vector search service
 builder.Services.AddHttpClient<VectorSearchService>(client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(5); // Timeout más corto para evitar bloqueos
+    client.Timeout = TimeSpan.FromSeconds(5); // Timeout ms corto para evitar bloqueos
 });
+
+//  RATE LIMITING CONFIGURATION
+// Registrar Rate Limiting Middleware con opciones por defecto (60 req/min)
+var rateLimitOptions = new RateLimitOptions
+{
+    RequestsPerMinute = int.TryParse(builder.Configuration["RateLimit:RequestsPerMinute"], out var limit) ? limit : 60,
+    Enabled = builder.Configuration.GetValue("RateLimit:Enabled", true)
+};
+builder.Services.AddSingleton(rateLimitOptions);
+
+// Registrar IConnectionMultiplexer para Rate Limiting (si Redis est disponible)
+IConnectionMultiplexer? redisMultiplexer = null;
+if (!string.IsNullOrEmpty(redisConnection))
+{
+    try
+    {
+        redisMultiplexer = ConnectionMultiplexer.Connect(redisConnection);
+        builder.Services.AddSingleton(redisMultiplexer);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($" Redis connection failed for Rate Limiting: {ex.Message}. Falling back to in-memory.");
+    }
+}
+
+//  JWT REFRESH TOKEN CONFIGURATION
+builder.Services.AddScoped<IJwtRefreshTokenService, JwtRefreshTokenService>();
+
+//  NOTE: CORS policies already configured above - see "AllowFrontend", "AllowWidgets", "AllowLocalhost"
+// No need for additional CORS configuration here.
 
 // FIN CONFIGURACIN DE SERVICIOS
 
@@ -315,13 +480,38 @@ app.UseStaticFiles(new StaticFileOptions
 
 app.UseRouting();
 
-// CORS debe ir DESPUÉS de UseRouting pero ANTES de UseAuthentication
-// Use default policy, but allow controller-level [EnableCors] to override
+// CORS must go AFTER UseRouting() but BEFORE MapControllers()
+// This allows controller-level [EnableCors] attributes to work properly
 app.UseCors("AllowFrontend"); // Default for dashboard
-// Note: [EnableCors] on specific endpoints will override this default policy
 
+// Authentication/Authorization must be after UseRouting
 app.UseAuthentication();
 app.UseAuthorization();
+
+//  USE CSRF PROTECTION MIDDLEWARE
+// Valida CSRF tokens en POST, PUT, PATCH, DELETE
+// OPTIONS requests (CORS preflight) are always allowed through
+app.UseMiddleware<CsrfProtectionMiddleware>();
+
+//  USE SECURITY HEADERS MIDDLEWARE
+// Agrega headers de seguridad (X-Frame-Options, CSP, HSTS, etc)
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+//  USE CORS ORIGIN VALIDATION MIDDLEWARE
+// Validacin adicional de CORS para endpoints crticos (admin, security, data deletion)
+// Se ejecuta DESPUS del middleware CORS estndar
+app.UseMiddleware<CorsOriginValidationMiddleware>();
+
+//  REQUEST/RESPONSE LOGGING MIDDLEWARE
+// Registra informacin de requests, responses, duracin y contexto
+app.UseMiddleware<RequestResponseLoggingMiddleware>();
+
+//  USE RATE LIMITING MIDDLEWARE
+// Debe ir DESPUS de authentication/authorization pero ANTES de map endpoints
+if (rateLimitOptions.Enabled)
+{
+    app.UseMiddleware<RateLimitingMiddleware>();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -333,3 +523,5 @@ app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
 
 app.Run();
+
+
