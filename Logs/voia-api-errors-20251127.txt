@@ -1,0 +1,344 @@
+2025-11-27 14:14:20.869 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `bot_styles` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NULL,
+    `Name` longtext CHARACTER SET utf8mb4 NULL,
+    `style_template_id` int NULL,
+    `theme` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `primary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `secondary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `font_family` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+    `avatar_url` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `position` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `custom_css` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP(6),
+    `header_background_color` longtext CHARACTER SET utf8mb4 NULL,
+    `allow_image_upload` tinyint(1) NOT NULL,
+    `allow_file_upload` tinyint(1) NOT NULL,
+    `Title` longtext CHARACTER SET utf8mb4 NULL,
+    CONSTRAINT `PK_bot_styles` PRIMARY KEY (`id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:29:57.967 +01:00 [ERR] Failed executing DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `AspNetRoles` (
+    `Id` int NOT NULL AUTO_INCREMENT,
+    `Description` longtext CHARACTER SET utf8mb4 NULL,
+    `Name` varchar(256) CHARACTER SET utf8mb4 NULL,
+    `NormalizedName` varchar(256) CHARACTER SET utf8mb4 NULL,
+    `ConcurrencyStamp` longtext CHARACTER SET utf8mb4 NULL,
+    CONSTRAINT `PK_AspNetRoles` PRIMARY KEY (`Id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:32:36.222 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `bot_styles` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NULL,
+    `Name` longtext CHARACTER SET utf8mb4 NULL,
+    `style_template_id` int NULL,
+    `theme` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `primary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `secondary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `font_family` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+    `avatar_url` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `position` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `custom_css` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP(6),
+    `header_background_color` longtext CHARACTER SET utf8mb4 NULL,
+    `allow_image_upload` tinyint(1) NOT NULL,
+    `allow_file_upload` tinyint(1) NOT NULL,
+    `Title` longtext CHARACTER SET utf8mb4 NULL,
+    CONSTRAINT `PK_bot_styles` PRIMARY KEY (`id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:40:08.831 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `bot_styles` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `user_id` int NULL,
+    `Name` longtext CHARACTER SET utf8mb4 NULL,
+    `style_template_id` int NULL,
+    `theme` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `primary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `secondary_color` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+    `font_family` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+    `avatar_url` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `position` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `custom_css` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP(6),
+    `header_background_color` longtext CHARACTER SET utf8mb4 NULL,
+    `allow_image_upload` tinyint(1) NOT NULL,
+    `allow_file_upload` tinyint(1) NOT NULL,
+    `Title` longtext CHARACTER SET utf8mb4 NULL,
+    CONSTRAINT `PK_bot_styles` PRIMARY KEY (`id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:46:13.956 +01:00 [ERR] Failed executing DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `AspNetRoles` (
+    `Id` int NOT NULL AUTO_INCREMENT,
+    `Description` longtext CHARACTER SET utf8mb4 NULL,
+    `Name` varchar(256) CHARACTER SET utf8mb4 NULL,
+    `NormalizedName` varchar(256) CHARACTER SET utf8mb4 NULL,
+    `ConcurrencyStamp` longtext CHARACTER SET utf8mb4 NULL,
+    CONSTRAINT `PK_AspNetRoles` PRIMARY KEY (`Id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:46:52.822 +01:00 [ERR] Failed executing DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `Bots` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `name` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+    `description` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `api_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT TRUE,
+    `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP(6),
+    `is_deleted` tinyint(1) NOT NULL,
+    `is_ready` tinyint(1) NOT NULL,
+    `user_id` int NOT NULL,
+    `style_id` int NULL,
+    `ia_provider_id` int NOT NULL,
+    `ai_model_config_id` int NULL,
+    `bot_template_id` int NULL,
+    CONSTRAINT `PK_Bots` PRIMARY KEY (`id`),
+    CONSTRAINT `FK_Bots_AspNetUsers_user_id` FOREIGN KEY (`user_id`) REFERENCES `AspNetUsers` (`Id`) ON DELETE RESTRICT,
+    CONSTRAINT `FK_Bots_ai_model_configs_ai_model_config_id` FOREIGN KEY (`ai_model_config_id`) REFERENCES `ai_model_configs` (`id`),
+    CONSTRAINT `FK_Bots_bot_ia_providers_ia_provider_id` FOREIGN KEY (`ia_provider_id`) REFERENCES `bot_ia_providers` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `FK_Bots_bot_styles_style_id` FOREIGN KEY (`style_id`) REFERENCES `bot_styles` (`id`),
+    CONSTRAINT `FK_Bots_bot_templates_bot_template_id` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`Id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 14:47:57.100 +01:00 [ERR] Failed executing DbCommand (2ms) [Parameters=[], CommandType='"Text"', CommandTimeout='30']
+CREATE TABLE `Bots` (
+    `id` int NOT NULL AUTO_INCREMENT,
+    `name` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+    `description` longtext CHARACTER SET utf8mb4 NOT NULL,
+    `api_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL,
+    `is_active` tinyint(1) NOT NULL DEFAULT TRUE,
+    `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP(6),
+    `is_deleted` tinyint(1) NOT NULL,
+    `is_ready` tinyint(1) NOT NULL,
+    `user_id` int NOT NULL,
+    `style_id` int NULL,
+    `ia_provider_id` int NOT NULL,
+    `ai_model_config_id` int NULL,
+    `bot_template_id` int NULL,
+    CONSTRAINT `PK_Bots` PRIMARY KEY (`id`),
+    CONSTRAINT `FK_Bots_AspNetUsers_user_id` FOREIGN KEY (`user_id`) REFERENCES `AspNetUsers` (`Id`) ON DELETE RESTRICT,
+    CONSTRAINT `FK_Bots_ai_model_configs_ai_model_config_id` FOREIGN KEY (`ai_model_config_id`) REFERENCES `ai_model_configs` (`id`),
+    CONSTRAINT `FK_Bots_bot_ia_providers_ia_provider_id` FOREIGN KEY (`ia_provider_id`) REFERENCES `bot_ia_providers` (`Id`) ON DELETE CASCADE,
+    CONSTRAINT `FK_Bots_bot_styles_style_id` FOREIGN KEY (`style_id`) REFERENCES `bot_styles` (`id`),
+    CONSTRAINT `FK_Bots_bot_templates_bot_template_id` FOREIGN KEY (`bot_template_id`) REFERENCES `bot_templates` (`Id`)
+) CHARACTER SET=utf8mb4;
+2025-11-27 18:23:48.985 +01:00 [ERR] Failed executing DbCommand (3ms) [Parameters=[@p0='0', @p1='calle falsa' (Size = 4000), @p2='' (Size = 4000), @p3='Bogotá D.C.' (Size = 4000), @p4='75e88e3b-ab30-4d68-8099-5fdaafccb25d' (Size = 4000), @p5='Colombia' (Size = 4000), @p6='2025-11-27T17:23:48.6980051Z' (DbType = DateTime), @p7='1096188416' (Size = 4000), @p8='' (Size = 4000), @p9='1' (Nullable = true), @p10='iva@gmail.com' (Size = 256), @p11='False', @p12='False', @p13='False', @p14='True', @p15=NULL (DbType = DateTimeOffset), @p16='Ivan Herrera' (Size = 4000), @p17='IVA@GMAIL.COM' (Size = 256), @p18='IVA@GMAIL.COM' (Size = 256), @p19='AQAAAAIAAYagAAAAEJx9vCRBKLvTxUQuw9qbiKbwW/vmdCAwoZ5YEL9OlYbK8wW1euO8qT8yNbIRuOqfBQ==' (Size = 4000), @p20='3178531533' (Size = 4000), @p21=NULL (Size = 4000), @p22='False', @p23=NULL (Size = 4000), @p24=NULL (DbType = Int32), @p25='VURPLBBACUASFJIJ3LG3KSBOULVSSUZA' (Size = 4000), @p26=NULL (Size = 4000), @p27='False', @p28='2025-11-27T17:23:48.6980052Z' (DbType = DateTime), @p29='iva@gmail.com' (Size = 256), @p30='CREATE' (Size = 100), @p31='2025-11-27T17:23:48.9122695Z' (DbType = DateTime), @p32='Created new User' (Size = 4000), @p33='-2147482647' (Nullable = true), @p34='User' (Size = 100), @p35='127.0.0.1' (Size = 45), @p36='{"Id":-2147482647,"AccessFailedCount":0,"Address":"calle falsa","AvatarUrl":"","City":"Bogotá D.C.","ConcurrencyStamp":"75e88e3b-ab30-4d68-8099-5fdaafccb25d","Country":"Colombia","CreatedAt":"2025-11-27T17:23:48.6980051Z","DocumentNumber":"1096188416","DocumentPhotoUrl":"","DocumentTypeId":1,"Email":"iva@gmail.com","EmailConfirmed":false,"IsActive":false,"IsVerified":false,"LockoutEnabled":true,"LockoutEnd":null,"Name":"Ivan Herrera","NormalizedEmail":"IVA@GMAIL.COM","NormalizedUserName":"IVA@GMAIL.COM","PasswordHash":"AQAAAAIAAYagAAAAEJx9vCRBKLvTxUQuw9qbiKbwW/vmdCAwoZ5YEL9OlYbK8wW1euO8qT8yNbIRuOqfBQ==","Phone":"3178531533","PhoneNumber":null,"PhoneNumberConfirmed":false,"PublicDataToken":null,"RoleId":null,"SecurityStamp":"VURPLBBACUASFJIJ3LG3KSBOULVSSUZA","Status":null,"TwoFactorEnabled":false,"UpdatedAt":"2025-11-27T17:23:48.6980052Z","UserName":"iva@gmail.com"}' (Size = 4000), @p37='' (Size = 4000), @p38='0HNHDQORIDVB2:00000009' (Size = 50), @p39='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0' (Size = 500), @p40=NULL (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO `AspNetUsers` (`AccessFailedCount`, `Address`, `AvatarUrl`, `City`, `ConcurrencyStamp`, `Country`, `CreatedAt`, `DocumentNumber`, `document_photo_url`, `DocumentTypeId`, `Email`, `EmailConfirmed`, `IsActive`, `IsVerified`, `LockoutEnabled`, `LockoutEnd`, `Name`, `NormalizedEmail`, `NormalizedUserName`, `PasswordHash`, `Phone`, `PhoneNumber`, `PhoneNumberConfirmed`, `PublicDataToken`, `role_id`, `SecurityStamp`, `Status`, `TwoFactorEnabled`, `UpdatedAt`, `UserName`)
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23, @p24, @p25, @p26, @p27, @p28, @p29);
+SELECT `Id`
+FROM `AspNetUsers`
+WHERE ROW_COUNT() = 1 AND `Id` = LAST_INSERT_ID();
+
+INSERT INTO `activity_logs` (`action`, `created_at`, `description`, `entity_id`, `entity_type`, `ip_address`, `new_values`, `old_values`, `request_id`, `user_agent`, `user_id`)
+VALUES (@p30, @p31, @p32, @p33, @p34, @p35, @p36, @p37, @p38, @p39, @p40);
+SELECT `id`
+FROM `activity_logs`
+WHERE ROW_COUNT() = 1 AND `id` = LAST_INSERT_ID();
+2025-11-27 18:23:49.016 +01:00 [ERR] An exception occurred in the database while saving changes for context type 'Voia.Api.Data.ApplicationDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2025-11-27 18:24:36.870 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[@p0='0', @p1='calle falsa' (Size = 4000), @p2='' (Size = 4000), @p3='Bogotá D.C.' (Size = 4000), @p4='b5f559bc-c4a6-48f2-bed2-be0e24515b03' (Size = 4000), @p5='Colombia' (Size = 4000), @p6='2025-11-27T17:24:36.8057842Z' (DbType = DateTime), @p7='1096188416' (Size = 4000), @p8='' (Size = 4000), @p9='1' (Nullable = true), @p10='iva@gmail.com' (Size = 256), @p11='False', @p12='False', @p13='False', @p14='True', @p15=NULL (DbType = DateTimeOffset), @p16='Ivan Herrera' (Size = 4000), @p17='IVA@GMAIL.COM' (Size = 256), @p18='IVA@GMAIL.COM' (Size = 256), @p19='AQAAAAIAAYagAAAAENi83CFsg6GDLHQoqJ1zPZzEVZ9Ca2y7ypcD4nU/N0crrf9OesIxCI6vI1g26S/xMg==' (Size = 4000), @p20='3178531533' (Size = 4000), @p21=NULL (Size = 4000), @p22='False', @p23=NULL (Size = 4000), @p24=NULL (DbType = Int32), @p25='5FSZXUW5ALKHKOT4MJBJNAQYMA7OF4H2' (Size = 4000), @p26=NULL (Size = 4000), @p27='False', @p28='2025-11-27T17:24:36.8057842Z' (DbType = DateTime), @p29='iva@gmail.com' (Size = 256), @p30='CREATE' (Size = 100), @p31='2025-11-27T17:24:36.8681232Z' (DbType = DateTime), @p32='Created new User' (Size = 4000), @p33='-2147482646' (Nullable = true), @p34='User' (Size = 100), @p35='127.0.0.1' (Size = 45), @p36='{"Id":-2147482646,"AccessFailedCount":0,"Address":"calle falsa","AvatarUrl":"","City":"Bogotá D.C.","ConcurrencyStamp":"b5f559bc-c4a6-48f2-bed2-be0e24515b03","Country":"Colombia","CreatedAt":"2025-11-27T17:24:36.8057842Z","DocumentNumber":"1096188416","DocumentPhotoUrl":"","DocumentTypeId":1,"Email":"iva@gmail.com","EmailConfirmed":false,"IsActive":false,"IsVerified":false,"LockoutEnabled":true,"LockoutEnd":null,"Name":"Ivan Herrera","NormalizedEmail":"IVA@GMAIL.COM","NormalizedUserName":"IVA@GMAIL.COM","PasswordHash":"AQAAAAIAAYagAAAAENi83CFsg6GDLHQoqJ1zPZzEVZ9Ca2y7ypcD4nU/N0crrf9OesIxCI6vI1g26S/xMg==","Phone":"3178531533","PhoneNumber":null,"PhoneNumberConfirmed":false,"PublicDataToken":null,"RoleId":null,"SecurityStamp":"5FSZXUW5ALKHKOT4MJBJNAQYMA7OF4H2","Status":null,"TwoFactorEnabled":false,"UpdatedAt":"2025-11-27T17:24:36.8057842Z","UserName":"iva@gmail.com"}' (Size = 4000), @p37='' (Size = 4000), @p38='0HNHDQORIDVB2:0000000C' (Size = 50), @p39='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0' (Size = 500), @p40=NULL (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO `AspNetUsers` (`AccessFailedCount`, `Address`, `AvatarUrl`, `City`, `ConcurrencyStamp`, `Country`, `CreatedAt`, `DocumentNumber`, `document_photo_url`, `DocumentTypeId`, `Email`, `EmailConfirmed`, `IsActive`, `IsVerified`, `LockoutEnabled`, `LockoutEnd`, `Name`, `NormalizedEmail`, `NormalizedUserName`, `PasswordHash`, `Phone`, `PhoneNumber`, `PhoneNumberConfirmed`, `PublicDataToken`, `role_id`, `SecurityStamp`, `Status`, `TwoFactorEnabled`, `UpdatedAt`, `UserName`)
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23, @p24, @p25, @p26, @p27, @p28, @p29);
+SELECT `Id`
+FROM `AspNetUsers`
+WHERE ROW_COUNT() = 1 AND `Id` = LAST_INSERT_ID();
+
+INSERT INTO `activity_logs` (`action`, `created_at`, `description`, `entity_id`, `entity_type`, `ip_address`, `new_values`, `old_values`, `request_id`, `user_agent`, `user_id`)
+VALUES (@p30, @p31, @p32, @p33, @p34, @p35, @p36, @p37, @p38, @p39, @p40);
+SELECT `id`
+FROM `activity_logs`
+WHERE ROW_COUNT() = 1 AND `id` = LAST_INSERT_ID();
+2025-11-27 18:24:36.875 +01:00 [ERR] An exception occurred in the database while saving changes for context type 'Voia.Api.Data.ApplicationDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2025-11-27 18:25:38.424 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[@p0='0', @p1='calle falsa' (Size = 4000), @p2='' (Size = 4000), @p3='Bogotá D.C.' (Size = 4000), @p4='a9f62967-850f-4d38-ab83-2de2d0681b23' (Size = 4000), @p5='Colombia' (Size = 4000), @p6='2025-11-27T17:25:38.3686218Z' (DbType = DateTime), @p7='1096188416' (Size = 4000), @p8='' (Size = 4000), @p9='1' (Nullable = true), @p10='iva@gmail.com' (Size = 256), @p11='False', @p12='False', @p13='False', @p14='True', @p15=NULL (DbType = DateTimeOffset), @p16='Ivan Herrera' (Size = 4000), @p17='IVA@GMAIL.COM' (Size = 256), @p18='IVA@GMAIL.COM' (Size = 256), @p19='AQAAAAIAAYagAAAAEO4ASqTjykwIDjr7mBRL2P2CUo4Z2OMKziuoFcegyDqQqR1yX1tauiFvb/HGEEjoHw==' (Size = 4000), @p20='3178531533' (Size = 4000), @p21=NULL (Size = 4000), @p22='False', @p23=NULL (Size = 4000), @p24=NULL (DbType = Int32), @p25='VPADAMZ6FW6ZSKVTFWDFMN3NHUNMPPXJ' (Size = 4000), @p26=NULL (Size = 4000), @p27='False', @p28='2025-11-27T17:25:38.3686219Z' (DbType = DateTime), @p29='iva@gmail.com' (Size = 256), @p30='CREATE' (Size = 100), @p31='2025-11-27T17:25:38.4222147Z' (DbType = DateTime), @p32='Created new User' (Size = 4000), @p33='-2147482645' (Nullable = true), @p34='User' (Size = 100), @p35='127.0.0.1' (Size = 45), @p36='{"Id":-2147482645,"AccessFailedCount":0,"Address":"calle falsa","AvatarUrl":"","City":"Bogotá D.C.","ConcurrencyStamp":"a9f62967-850f-4d38-ab83-2de2d0681b23","Country":"Colombia","CreatedAt":"2025-11-27T17:25:38.3686218Z","DocumentNumber":"1096188416","DocumentPhotoUrl":"","DocumentTypeId":1,"Email":"iva@gmail.com","EmailConfirmed":false,"IsActive":false,"IsVerified":false,"LockoutEnabled":true,"LockoutEnd":null,"Name":"Ivan Herrera","NormalizedEmail":"IVA@GMAIL.COM","NormalizedUserName":"IVA@GMAIL.COM","PasswordHash":"AQAAAAIAAYagAAAAEO4ASqTjykwIDjr7mBRL2P2CUo4Z2OMKziuoFcegyDqQqR1yX1tauiFvb/HGEEjoHw==","Phone":"3178531533","PhoneNumber":null,"PhoneNumberConfirmed":false,"PublicDataToken":null,"RoleId":null,"SecurityStamp":"VPADAMZ6FW6ZSKVTFWDFMN3NHUNMPPXJ","Status":null,"TwoFactorEnabled":false,"UpdatedAt":"2025-11-27T17:25:38.3686219Z","UserName":"iva@gmail.com"}' (Size = 4000), @p37='' (Size = 4000), @p38='0HNHDQORIDVB2:00000012' (Size = 50), @p39='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0' (Size = 500), @p40=NULL (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO `AspNetUsers` (`AccessFailedCount`, `Address`, `AvatarUrl`, `City`, `ConcurrencyStamp`, `Country`, `CreatedAt`, `DocumentNumber`, `document_photo_url`, `DocumentTypeId`, `Email`, `EmailConfirmed`, `IsActive`, `IsVerified`, `LockoutEnabled`, `LockoutEnd`, `Name`, `NormalizedEmail`, `NormalizedUserName`, `PasswordHash`, `Phone`, `PhoneNumber`, `PhoneNumberConfirmed`, `PublicDataToken`, `role_id`, `SecurityStamp`, `Status`, `TwoFactorEnabled`, `UpdatedAt`, `UserName`)
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23, @p24, @p25, @p26, @p27, @p28, @p29);
+SELECT `Id`
+FROM `AspNetUsers`
+WHERE ROW_COUNT() = 1 AND `Id` = LAST_INSERT_ID();
+
+INSERT INTO `activity_logs` (`action`, `created_at`, `description`, `entity_id`, `entity_type`, `ip_address`, `new_values`, `old_values`, `request_id`, `user_agent`, `user_id`)
+VALUES (@p30, @p31, @p32, @p33, @p34, @p35, @p36, @p37, @p38, @p39, @p40);
+SELECT `id`
+FROM `activity_logs`
+WHERE ROW_COUNT() = 1 AND `id` = LAST_INSERT_ID();
+2025-11-27 18:25:38.429 +01:00 [ERR] An exception occurred in the database while saving changes for context type 'Voia.Api.Data.ApplicationDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+2025-11-27 18:28:02.295 +01:00 [ERR] Failed executing DbCommand (1ms) [Parameters=[@p0='0', @p1='calle falsa' (Size = 4000), @p2='' (Size = 4000), @p3='Bogotá D.C.' (Size = 4000), @p4='ac32b274-854a-48ed-8633-75719b8d1b5f' (Size = 4000), @p5='Colombia' (Size = 4000), @p6='2025-11-27T17:28:02.2356495Z' (DbType = DateTime), @p7='1096188416' (Size = 4000), @p8='' (Size = 4000), @p9='1' (Nullable = true), @p10='iva@gmail.com' (Size = 256), @p11='False', @p12='False', @p13='False', @p14='True', @p15=NULL (DbType = DateTimeOffset), @p16='Ivan Herrera' (Size = 4000), @p17='IVA@GMAIL.COM' (Size = 256), @p18='IVA@GMAIL.COM' (Size = 256), @p19='AQAAAAIAAYagAAAAEFB28k0t8Jl2uKUO+G63LrVF+dWk90N7lcm8e/OL1N2ESiCKRSp3UoFtKsRDAtd2sg==' (Size = 4000), @p20='3178531533' (Size = 4000), @p21=NULL (Size = 4000), @p22='False', @p23=NULL (Size = 4000), @p24=NULL (DbType = Int32), @p25='LXJ6WO6EAWT7LZAP2OF3N46TKNMGZYVX' (Size = 4000), @p26=NULL (Size = 4000), @p27='False', @p28='2025-11-27T17:28:02.2356496Z' (DbType = DateTime), @p29='iva@gmail.com' (Size = 256), @p30='CREATE' (Size = 100), @p31='2025-11-27T17:28:02.2939225Z' (DbType = DateTime), @p32='Created new User' (Size = 4000), @p33='-2147482644' (Nullable = true), @p34='User' (Size = 100), @p35='127.0.0.1' (Size = 45), @p36='{"Id":-2147482644,"AccessFailedCount":0,"Address":"calle falsa","AvatarUrl":"","City":"Bogotá D.C.","ConcurrencyStamp":"ac32b274-854a-48ed-8633-75719b8d1b5f","Country":"Colombia","CreatedAt":"2025-11-27T17:28:02.2356495Z","DocumentNumber":"1096188416","DocumentPhotoUrl":"","DocumentTypeId":1,"Email":"iva@gmail.com","EmailConfirmed":false,"IsActive":false,"IsVerified":false,"LockoutEnabled":true,"LockoutEnd":null,"Name":"Ivan Herrera","NormalizedEmail":"IVA@GMAIL.COM","NormalizedUserName":"IVA@GMAIL.COM","PasswordHash":"AQAAAAIAAYagAAAAEFB28k0t8Jl2uKUO+G63LrVF+dWk90N7lcm8e/OL1N2ESiCKRSp3UoFtKsRDAtd2sg==","Phone":"3178531533","PhoneNumber":null,"PhoneNumberConfirmed":false,"PublicDataToken":null,"RoleId":null,"SecurityStamp":"LXJ6WO6EAWT7LZAP2OF3N46TKNMGZYVX","Status":null,"TwoFactorEnabled":false,"UpdatedAt":"2025-11-27T17:28:02.2356496Z","UserName":"iva@gmail.com"}' (Size = 4000), @p37='' (Size = 4000), @p38='0HNHDQORIDVB3:00000003' (Size = 50), @p39='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0' (Size = 500), @p40=NULL (DbType = Int32)], CommandType='"Text"', CommandTimeout='30']
+INSERT INTO `AspNetUsers` (`AccessFailedCount`, `Address`, `AvatarUrl`, `City`, `ConcurrencyStamp`, `Country`, `CreatedAt`, `DocumentNumber`, `document_photo_url`, `DocumentTypeId`, `Email`, `EmailConfirmed`, `IsActive`, `IsVerified`, `LockoutEnabled`, `LockoutEnd`, `Name`, `NormalizedEmail`, `NormalizedUserName`, `PasswordHash`, `Phone`, `PhoneNumber`, `PhoneNumberConfirmed`, `PublicDataToken`, `role_id`, `SecurityStamp`, `Status`, `TwoFactorEnabled`, `UpdatedAt`, `UserName`)
+VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14, @p15, @p16, @p17, @p18, @p19, @p20, @p21, @p22, @p23, @p24, @p25, @p26, @p27, @p28, @p29);
+SELECT `Id`
+FROM `AspNetUsers`
+WHERE ROW_COUNT() = 1 AND `Id` = LAST_INSERT_ID();
+
+INSERT INTO `activity_logs` (`action`, `created_at`, `description`, `entity_id`, `entity_type`, `ip_address`, `new_values`, `old_values`, `request_id`, `user_agent`, `user_id`)
+VALUES (@p30, @p31, @p32, @p33, @p34, @p35, @p36, @p37, @p38, @p39, @p40);
+SELECT `id`
+FROM `activity_logs`
+WHERE ROW_COUNT() = 1 AND `id` = LAST_INSERT_ID();
+2025-11-27 18:28:02.300 +01:00 [ERR] An exception occurred in the database while saving changes for context type 'Voia.Api.Data.ApplicationDbContext'.
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+Microsoft.EntityFrameworkCore.DbUpdateException: An error occurred while saving the entity changes. See the inner exception for details.
+ ---> MySqlConnector.MySqlException (0x80004005): Cannot add or update a child row: a foreign key constraint fails (`chatbot_platform`.`aspnetusers`, CONSTRAINT `FK_AspNetUsers_document_types_DocumentTypeId` FOREIGN KEY (`DocumentTypeId`) REFERENCES `document_types` (`Id`))
+   at MySqlConnector.Core.ServerSession.ReceiveReplyAsync(IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 894
+   at MySqlConnector.Core.ResultSet.ReadResultSetHeaderAsync(IOBehavior ioBehavior) in /_/src/MySqlConnector/Core/ResultSet.cs:line 37
+   at MySqlConnector.MySqlDataReader.ActivateResultSet(CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 130
+   at MySqlConnector.MySqlDataReader.InitAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, IDictionary`2 cachedProcedures, IMySqlCommand command, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlDataReader.cs:line 483
+   at MySqlConnector.Core.CommandExecutor.ExecuteReaderAsync(CommandListPosition commandListPosition, ICommandPayloadCreator payloadCreator, CommandBehavior behavior, Activity activity, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/CommandExecutor.cs:line 56
+   at MySqlConnector.MySqlCommand.ExecuteReaderAsync(CommandBehavior behavior, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 357
+   at MySqlConnector.MySqlCommand.ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySqlCommand.cs:line 350
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)

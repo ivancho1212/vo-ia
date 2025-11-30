@@ -49,8 +49,9 @@ namespace Voia.Api.Middleware
                 return;
             }
 
-            // Solo validar requests protegidos
-            if (!ProtectedMethods.Contains(request.Method) || IsExcludedPath(request.Path))
+
+            // Excluir todas las rutas /api/* de la protección CSRF
+            if (!ProtectedMethods.Contains(request.Method) || IsExcludedPath(request.Path) || request.Path.StartsWithSegments("/api"))
             {
                 await _next(context);
                 return;

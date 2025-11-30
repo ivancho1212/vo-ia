@@ -3,8 +3,7 @@ using System.IO;
 using System.Text;
 using UglyToad.PdfPig;
 using DocumentFormat.OpenXml.Packaging;
-using NPOI.HWPF;
-using NPOI.HWPF.Extractor;
+// ...existing code...
 
 namespace Voia.Api.Services
 {
@@ -22,8 +21,7 @@ namespace Voia.Api.Services
                 if (ext == ".docx" || fileType.Contains("docx") || fileType.Contains("msword"))
                     return ExtractTextFromDocx(filePath);
 
-                if (ext == ".doc")
-                    return ExtractTextFromDoc(filePath);
+                // Eliminado soporte para archivos .doc (NPOI)
 
                 if (ext == ".txt" || fileType.Contains("text") || fileType.Contains("plain"))
                     return File.ReadAllText(filePath);
@@ -60,13 +58,6 @@ namespace Voia.Api.Services
             }
             return sb.ToString();
         }
-
-        private string ExtractTextFromDoc(string filePath)
-        {
-            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-            var doc = new HWPFDocument(stream);
-            var extractor = new WordExtractor(doc);
-            return extractor.Text;
-        }
+        // Método para .doc eliminado (NPOI)
     }
 }

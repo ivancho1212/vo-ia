@@ -146,7 +146,7 @@ namespace Voia.Api.Controllers
         /// <response code="200">Usuario encontrado.</response>
         /// <response code="404">Usuario no encontrado.</response>
         [HttpGet("me")]
-        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+            [Authorize(Roles = "Admin,User,Support,Trainer,Viewer,Super Admin")]
         public async Task<IActionResult> GetMyProfile()
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -217,7 +217,7 @@ namespace Voia.Api.Controllers
         }
 
         [HttpPut("me/avatar")]
-        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+            [Authorize(Roles = "Admin,User,Support,Trainer,Viewer,Super Admin")]
         public async Task<IActionResult> UploadAvatar(IFormFile file)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -245,7 +245,7 @@ namespace Voia.Api.Controllers
 
 
         [HttpPut("me/document-photo")]
-        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+            [Authorize(Roles = "Admin,User,Support,Trainer,Viewer,Super Admin")]
         public async Task<IActionResult> UploadDocumentPhoto(IFormFile file)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -276,7 +276,7 @@ namespace Voia.Api.Controllers
         /// <param name="updateDto">Datos a actualizar.</param>
         /// <returns>Perfil actualizado.</returns>
         [HttpPut("me")]
-        [Authorize(Roles = "Admin,User,Support,Trainer,Viewer")]
+            [Authorize(Roles = "Admin,User,Support,Trainer,Viewer,Super Admin")]
         public async Task<IActionResult> UpdateMyProfile(UpdateMyProfileDto updateDto)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -380,6 +380,7 @@ namespace Voia.Api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(CreateUserDto createUserDto)
         {
+            Console.WriteLine($"[Register] Email recibido: {createUserDto.Email}");
             try
             {
                 // Validación de email duplicado

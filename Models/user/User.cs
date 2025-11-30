@@ -7,7 +7,6 @@ using Voia.Api.Models.Bots; // 👈 Asegúrate de tener el namespace correcto
 
 namespace Voia.Api.Models
 {
-    [Table("users")]
     // Usar tabla estándar de Identity
     public class User : Microsoft.AspNetCore.Identity.IdentityUser<int>
     {

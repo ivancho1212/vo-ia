@@ -6,9 +6,10 @@ using Voia.Api.Models.DTOs;
 
 namespace Voia.Api.Controllers
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class BotIaProvidersController : ControllerBase
+        [ApiController]
+        [Route("api/[controller]")]
+        [IgnoreAntiforgeryToken]
+        public class BotIaProvidersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
 

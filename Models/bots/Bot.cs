@@ -31,10 +31,10 @@ namespace Voia.Api.Models
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
 
-        [Column("created_at")]
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+            [Column("created_at", TypeName = "timestamp")]
+            public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        [Column("updated_at")]
+        [Column("updated_at", TypeName = "timestamp")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
         [Column("is_deleted")]

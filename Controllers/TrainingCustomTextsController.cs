@@ -205,6 +205,7 @@ namespace Voia.Api.Controllers
             {
                 using (var httpClient = new HttpClient())
                 {
+                    httpClient.Timeout = TimeSpan.FromMinutes(5); // Aumenta el timeout a 5 minutos
                     var response = await httpClient.GetAsync($"http://localhost:8000/process_texts?bot_id={dto.BotId}");
 
                     if (!response.IsSuccessStatusCode)

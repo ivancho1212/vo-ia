@@ -21,21 +21,35 @@ namespace Voia.Api.Services
         {
             // Obtener roles usando Identity (debe ser pasado como parámetro)
             // Ejemplo: el controlador debe obtener el rol con UserManager y pasarlo aquí
-            var claims = new[]
+
+            var claims = new List<Claim>
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email)
-                // El rol debe agregarse en el controlador
             };
+
+            // Agregar el rol si está presente
+            if (user.Role != null && !string.IsNullOrWhiteSpace(user.Role.Name))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, user.Role.Name));
+            }
 
             var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
             var credentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+
+            // Leer minutos de expiración desde configuración, default 15 si no existe
+            int expiryMinutes = 15;
+            var expiryConfig = _config["Jwt:AccessTokenExpiryMinutes"];
+            if (!string.IsNullOrWhiteSpace(expiryConfig) && int.TryParse(expiryConfig, out int configMinutes))
+            {
+                expiryMinutes = configMinutes;
+            }
 
             var token = new JwtSecurityToken(
                 issuer: _config["Jwt:Issuer"],
                 audience: _config["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.Now.AddHours(1),
+                expires: DateTime.UtcNow.AddMinutes(expiryMinutes),
                 signingCredentials: credentials
             );
 

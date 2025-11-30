@@ -249,7 +249,7 @@ namespace Voia.Api.Controllers
             _context.UploadedDocuments.Add(document);
             await _context.SaveChangesAsync();
 
-            // 🧠 Paso 2: Dividir en chunks y guardar
+            // 🧠 Paso 2: Dividir en chunks y guardar solo si tienen embedding
             var chunks = chunkingService.SplitTextIntoChunks(
                 extractedText,
                 "uploaded_document",
@@ -258,31 +258,35 @@ namespace Voia.Api.Controllers
                 document.Id
             );
 
-            _context.KnowledgeChunks.AddRange(chunks);
-            await _context.SaveChangesAsync();
-
-            // 🔄 Paso 3: Llamar al servicio de vectorización
-            try
+            var chunksWithEmbeddings = new List<KnowledgeChunk>();
+            using (var httpClient = new HttpClient())
             {
-                using (var httpClient = new HttpClient())
+                httpClient.Timeout = TimeSpan.FromMinutes(5); // Aumenta el timeout a 5 minutos
+                foreach (var chunk in chunks)
                 {
-                    var response = await httpClient.GetAsync($"http://localhost:8000/process_documents?bot_id={document.BotId}");
-
-                    if (!response.IsSuccessStatusCode)
+                    // Llama al servicio de embedding para cada chunk
+                    var embeddingResponse = await httpClient.PostAsync(
+                        "http://localhost:8000/embed",
+                        new StringContent(chunk.Content)
+                    );
+                    if (embeddingResponse.IsSuccessStatusCode)
                     {
-                        var error = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"❌ Error al llamar al servicio de vectorización: {error}");
+                        var embeddingBytes = await embeddingResponse.Content.ReadAsByteArrayAsync();
+                        chunk.EmbeddingVector = embeddingBytes;
+                        chunksWithEmbeddings.Add(chunk);
                     }
                     else
                     {
-                        Console.WriteLine($"✅ Documento enviado a vectorización para el bot {document.BotId}");
+                        var error = await embeddingResponse.Content.ReadAsStringAsync();
+                        Console.WriteLine($"❌ Error al obtener embedding para chunk: {error}");
                     }
                 }
             }
-            catch (Exception ex)
+
+            if (chunksWithEmbeddings.Count > 0)
             {
-                Console.WriteLine($"❌ Error al contactar el servicio de vectorización: {ex.Message}");
-                // No lanzamos la excepción para no interrumpir el flujo principal
+                _context.KnowledgeChunks.AddRange(chunksWithEmbeddings);
+                await _context.SaveChangesAsync();
             }
 
             // Nota: No marcamos 'data_capture' aquí.
@@ -304,7 +308,6 @@ namespace Voia.Api.Controllers
                 Indexed = document.Indexed
             });
         }
-
 
         /// <summary>
         /// Elimina un documento subido.

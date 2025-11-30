@@ -78,47 +78,6 @@ namespace Voia.Api.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Mapeo de la entidad User a la tabla "users"
-            modelBuilder.Entity<User>().ToTable("users");
-
-            // Relación User - DocumentType
-            modelBuilder.Entity<User>()
-                .HasOne(u => u.DocumentType)
-                .WithMany()
-                .HasForeignKey(u => u.DocumentTypeId)
-                .OnDelete(DeleteBehavior.Restrict);
-            // --- MAPEO CAMPOS User ---
-            modelBuilder
-                .Entity<User>()
-                .Property(u => u.DocumentNumber)
-                .HasColumnName("document_number");
-
-            modelBuilder
-                .Entity<User>()
-                .Property(u => u.DocumentTypeId)
-                .HasColumnName("document_type_id");
-
-            modelBuilder.Entity<User>().Property(u => u.Phone).HasColumnName("phone");
-
-            modelBuilder.Entity<User>().Property(u => u.Address).HasColumnName("address");
-
-            modelBuilder.Entity<User>().Property(u => u.IsVerified).HasColumnName("is_verified");
-
-            modelBuilder
-                .Entity<User>()
-                .Property(u => u.CreatedAt)
-                .HasColumnName("created_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-            modelBuilder
-                .Entity<User>()
-                .Property(u => u.UpdatedAt)
-                .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
-                .ValueGeneratedOnAddOrUpdate();
-
-            modelBuilder.Entity<User>().Property(u => u.AvatarUrl).HasColumnName("avatar_url");
-
             modelBuilder
                 .Entity<User>()
                 .Property(u => u.DocumentPhotoUrl)
@@ -183,13 +142,15 @@ namespace Voia.Api.Data
                 .Entity<Bot>()
                 .Property(b => b.CreatedAt)
                 .HasColumnName("created_at")
+                .HasColumnType("timestamp")
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             modelBuilder
                 .Entity<Bot>()
                 .Property(b => b.UpdatedAt)
                 .HasColumnName("updated_at")
-                .HasDefaultValueSql("CURRENT_TIMESTAMP")
+                .HasColumnType("timestamp")
+                .HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
                 .ValueGeneratedOnAddOrUpdate();
 
             modelBuilder
@@ -301,6 +262,7 @@ namespace Voia.Api.Data
                 entity.Property(e => e.CustomCss).HasColumnName("custom_css");
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnName("updated_at")
+                    .HasColumnType("timestamp")
                     .HasDefaultValueSql("CURRENT_TIMESTAMP")
                     .ValueGeneratedOnAddOrUpdate();
             });

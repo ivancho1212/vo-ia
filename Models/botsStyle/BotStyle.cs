@@ -31,7 +31,7 @@ namespace Voia.Api.Models
 
         public string CustomCss { get; set; }
 
-        [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+        [Column("updated_at", TypeName = "timestamp")]
         public DateTime UpdatedAt { get; set; }
 
         [Column("header_background_color")]
