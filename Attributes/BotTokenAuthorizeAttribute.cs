@@ -73,10 +73,14 @@ namespace Voia.Api.Attributes
                 var botIdClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "botId")?.Value;
                 var allowedDomainClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "allowedDomain")?.Value;
 
+                // Permitir tokens sin botId/allowedDomain SOLO en desarrollo
                 if (string.IsNullOrEmpty(botIdClaim) || string.IsNullOrEmpty(allowedDomainClaim))
                 {
-                    context.Result = new ForbidResult(); // Token malformado
-                    return;
+                    if (!env.IsDevelopment())
+                    {
+                        context.Result = new ForbidResult(); // Token malformado
+                        return;
+                    }
                 }
 
                 // 4. Validar dominio del request solo si no estamos en desarrollo

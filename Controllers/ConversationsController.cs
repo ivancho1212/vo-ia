@@ -26,7 +26,7 @@ namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Super Admin,Admin")]
     public class ConversationsController : ControllerBase
     {
     private readonly ApplicationDbContext _context;
