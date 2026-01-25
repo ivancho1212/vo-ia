@@ -541,10 +541,126 @@ namespace Voia.Api.Controllers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var deletionSummary = new
+                {
+                    conversations = 0,
+                    messages = 0,
+                    welcomeMessages = 0,
+                    dataCaptureFields = 0,
+                    integrations = 0,
+                    phases = 0,
+                    trainingConfigs = 0,
+                    trainingSessions = 0,
+                    customPrompts = 0
+                };
+
+                // 🗑️ 1. Eliminar conversaciones y mensajes del bot
+                var conversations = await _context.Conversations
+                    .Where(c => c.BotId == id)
+                    .ToListAsync();
+                
+                int totalMessages = 0;
+                if (conversations.Any())
+                {
+                    var conversationIds = conversations.Select(c => c.Id).ToList();
+                    
+                    // Eliminar mensajes de esas conversaciones
+                    var messages = await _context.Messages
+                        .Where(m => conversationIds.Contains(m.ConversationId))
+                        .ToListAsync();
+                    
+                    if (messages.Any())
+                    {
+                        _context.Messages.RemoveRange(messages);
+                        totalMessages = messages.Count;
+                    }
+                    
+                    // Eliminar conversaciones
+                    _context.Conversations.RemoveRange(conversations);
+                    deletionSummary = deletionSummary with { conversations = conversations.Count, messages = totalMessages };
+                }
+
+                // 🗑️ 2. Eliminar mensajes de bienvenida
+                var welcomeMessages = await _context.BotWelcomeMessages
+                    .Where(m => m.BotId == id)
+                    .ToListAsync();
+                if (welcomeMessages.Any())
+                {
+                    _context.BotWelcomeMessages.RemoveRange(welcomeMessages);
+                    deletionSummary = deletionSummary with { welcomeMessages = welcomeMessages.Count };
+                }
+
+                // 🗑️ 3. Eliminar configuración de campos a captar
+                var dataCaptureFields = await _context.BotDataCaptureFields
+                    .Where(f => f.BotId == id)
+                    .ToListAsync();
+                if (dataCaptureFields.Any())
+                {
+                    _context.BotDataCaptureFields.RemoveRange(dataCaptureFields);
+                    deletionSummary = deletionSummary with { dataCaptureFields = dataCaptureFields.Count };
+                }
+
+                // 🗑️ 4. Eliminar integraciones (scripts)
+                var integrations = await _context.BotIntegrations
+                    .Where(i => i.BotId == id)
+                    .ToListAsync();
+                if (integrations.Any())
+                {
+                    _context.BotIntegrations.RemoveRange(integrations);
+                    deletionSummary = deletionSummary with { integrations = integrations.Count };
+                }
+
+                // 🗑️ 5. Eliminar fases completadas
+                var phases = await _context.BotPhases
+                    .Where(p => p.BotId == id)
+                    .ToListAsync();
+                if (phases.Any())
+                {
+                    _context.BotPhases.RemoveRange(phases);
+                    deletionSummary = deletionSummary with { phases = phases.Count };
+                }
+
+                // 🗑️ 6. Eliminar configuraciones de entrenamiento
+                var trainingConfigs = await _context.BotTrainingConfigs
+                    .Where(c => c.BotId == id)
+                    .ToListAsync();
+                if (trainingConfigs.Any())
+                {
+                    _context.BotTrainingConfigs.RemoveRange(trainingConfigs);
+                    deletionSummary = deletionSummary with { trainingConfigs = trainingConfigs.Count };
+                }
+
+                // 🗑️ 7. Eliminar sesiones de entrenamiento
+                var trainingSessions = await _context.BotTrainingSessions
+                    .Where(s => s.BotId == id)
+                    .ToListAsync();
+                if (trainingSessions.Any())
+                {
+                    _context.BotTrainingSessions.RemoveRange(trainingSessions);
+                    deletionSummary = deletionSummary with { trainingSessions = trainingSessions.Count };
+                }
+
+                // 🗑️ 8. Eliminar custom prompts (role user/assistant)
+                var customPrompts = await _context.BotCustomPrompts
+                    .Where(p => p.BotId == id)
+                    .ToListAsync();
+                if (customPrompts.Any())
+                {
+                    _context.BotCustomPrompts.RemoveRange(customPrompts);
+                    deletionSummary = deletionSummary with { customPrompts = customPrompts.Count };
+                }
+
+                // 🔗 Romper relaciones con plantilla, modelo y estilo (desacoplar)
+                bot.BotTemplateId = null;
+                bot.AiModelConfigId = null;
+                bot.StyleId = null;
+
+                // 🗑️ Marcar bot como eliminado (soft delete)
                 bot.IsDeleted = true;
                 bot.IsActive = false;
                 bot.UpdatedAt = DateTime.UtcNow;
                 _context.Bots.Update(bot);
+                
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -556,8 +672,9 @@ namespace Voia.Api.Controllers
                 return Ok(new
                 {
                     success = true,
-                    message = "Bot eliminado correctamente (soft delete).",
-                    botId = id
+                    message = "Bot eliminado correctamente con todos sus datos asociados.",
+                    botId = id,
+                    deletedResources = deletionSummary
                 });
             }
             catch (Exception ex)
@@ -777,6 +894,7 @@ namespace Voia.Api.Controllers
         }
 
         [HttpGet("{id}/context")]
+        [EnableCors("AllowWidgets")]
         public async Task<ActionResult<object>> GetBotContext(int id, string query = "")
         {
             var bot = await _context.Bots

@@ -31,6 +31,7 @@ namespace Voia.Api.Hubs
             botId = null;
             try
             {
+                _logger.LogInformation($"[DEBUG][ValidateWidgetJwt] Token recibido: {token}");
                 var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
                 var key = Context.GetHttpContext()?.RequestServices.GetService(typeof(Microsoft.Extensions.Configuration.IConfiguration)) as Microsoft.Extensions.Configuration.IConfiguration;
                 var jwtKey = key?["Jwt:Key"];
@@ -54,28 +55,54 @@ namespace Voia.Api.Hubs
                     if (botIdClaim != null)
                     {
                         botId = botIdClaim.Value;
+                        _logger.LogInformation($"[DEBUG][ValidateWidgetJwt] Validación estándar exitosa. botId: {botId}");
                         return true;
                     }
-                }
-                catch (Microsoft.IdentityModel.Tokens.SecurityTokenException)
-                {
-                    // Fallback: leer sin validar firma
-                    var jwt = handler.ReadJwtToken(token);
-                    var botIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == "botId");
-                    var expClaim = jwt.Claims.FirstOrDefault(c => c.Type == "exp");
-                    if (botIdClaim != null && expClaim != null)
+                    else
                     {
-                        botId = botIdClaim.Value;
-                        var expUnix = long.TryParse(expClaim.Value, out var expVal) ? expVal : 0;
-                        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                        if (expUnix > nowUnix)
+                        _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Validación estándar: botId claim no encontrado.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Excepción en validación estándar: {ex.Message}");
+                    // Fallback: leer sin validar firma
+                    try
+                    {
+                        var jwt = handler.ReadJwtToken(token);
+                        var botIdClaim = jwt.Claims.FirstOrDefault(c => c.Type == "botId");
+                        var expClaim = jwt.Claims.FirstOrDefault(c => c.Type == "exp");
+                        if (botIdClaim != null && expClaim != null)
                         {
-                            return true;
+                            botId = botIdClaim.Value;
+                            var expUnix = long.TryParse(expClaim.Value, out var expVal) ? expVal : 0;
+                            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                            if (expUnix > nowUnix)
+                            {
+                                _logger.LogInformation($"[DEBUG][ValidateWidgetJwt] Fallback exitosa. botId: {botId}, exp: {expUnix}, now: {nowUnix}");
+                                return true;
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Fallback: token expirado. exp: {expUnix}, now: {nowUnix}");
+                            }
                         }
+                        else
+                        {
+                            _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Fallback: botId o exp claim no encontrado.");
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Excepción en fallback: {ex2.Message}");
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Excepción general: {ex.Message}");
+            }
+            _logger.LogWarning($"[DEBUG][ValidateWidgetJwt] Token inválido para widget.");
             return false;
         }
         private readonly IAiProviderService _aiProviderService;
@@ -144,10 +171,13 @@ namespace Voia.Api.Hubs
 
             try
             {
+                _logger.LogInformation("🚪 [JoinRoom] Intentando unir ConnectionId '{connId}' al grupo '{group}'", Context.ConnectionId, conversationId.ToString());
                 await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
+                _logger.LogInformation("✅ [JoinRoom] ConnectionId '{connId}' unido exitosamente al grupo '{group}'", Context.ConnectionId, conversationId.ToString());
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "❌ [JoinRoom] Error al unir ConnectionId '{connId}' al grupo '{group}'", Context.ConnectionId, conversationId.ToString());
                 _logger.LogError(ex, "❌ Error en JoinRoom.");
                 throw;
             }
@@ -749,127 +779,43 @@ namespace Voia.Api.Hubs
                 // Enqueue message for background processing (AI) to keep Hub responsive
                 try
                 {
+                    // Si no hay message queue, fallback inmediato
                     if (_messageQueue == null)
                     {
-                        _logger.LogWarning("Message queue not available, falling back to inline processing for conversation {conv}", conversationId);
-                        // As fallback, we keep previous behavior (could be improved) - but to avoid duplication we simply return
+                        _logger.LogWarning("⚠️ [SendMessage] Message queue no disponible, enviando fallback para conv {conv}", conversationId);
+                        _logger.LogInformation("📤 [SendMessage] Intentando enviar fallback al grupo '{group}'", conversationId.ToString());
+                        await SendFallbackBotMessage(conversation, request?.TempId);
+                        _logger.LogInformation("✅ [SendMessage] Fallback enviado exitosamente");
                         return;
                     }
 
-                    // 🆕 Obtener ubicación del usuario público
-                    string? userCountry = null;
-                    string? userCity = null;
-                    string? contextMessage = null;
-
-                    if (conversation.PublicUserId.HasValue)
-                    {
-                        var publicUser = await _context.PublicUsers
-                            .FirstOrDefaultAsync(p => p.Id == conversation.PublicUserId.Value);
-
-                        if (publicUser != null)
-                        {
-                            userCountry = publicUser.Country;
-                            userCity = publicUser.City;
-                            _logger.LogInformation("📍 [ChatHub] Ubicación del usuario público: {city}, {country}", userCity, userCountry);
-                        }
-                    }
-
-                    // 🆕 Extraer contextMessage del payload si viene del request
-                    if (request != null)
-                    {
-                        // Intentar obtener contextMessage del request (si existe como propiedad dinámica)
-                        var requestDict = request as System.Collections.Generic.IDictionary<string, object>;
-                        if (requestDict != null && requestDict.TryGetValue("contextMessage", out var ctxMsg))
-                        {
-                            contextMessage = ctxMsg?.ToString();
-                        }
-                    }
-
+                    // Encolar mensaje para procesamiento por worker (IA)
                     var job = new MessageJob
                     {
                         ConversationId = conversation.Id,
-                        BotId = request?.BotId ?? 0,
-                        UserId = request?.UserId,
+                        BotId = request.BotId,
+                        UserId = request.UserId,
                         MessageId = userMessage.Id,
-                        Question = request?.Question ?? string.Empty,
-                        TempId = request?.TempId ?? string.Empty,
-                        UserCountry = userCountry,      // 🆕
-                        UserCity = userCity,            // 🆕
-                        ContextMessage = contextMessage, // 🆕
-                        CapturedFields = currentCapturedFields // 🆕 Pasar los campos capturados actuales
+                        Question = request.Question,
+                        TempId = request.TempId ?? string.Empty,
+                        CapturedFields = currentCapturedFields,
+                        // 🌍 Pasar ubicación del usuario al Worker
+                        UserCountry = request.UserLocation?.Country,
+                        UserCity = request.UserLocation?.City,
+                        ContextMessage = null // Opcional: agregar contexto adicional
                     };
-
-                    // If the conversation has AI paused, do NOT enqueue a job. Admin should reply manually.
-                    if (!conversation.IsWithAI)
-                    {
-                        _logger.LogInformation("AI is paused for conversation {conv}. Not enqueuing job {msg}", conversationId, userMessage.Id);
-
-                        // Only send the 'paused' system message once per conversation (avoid spamming the widget).
-                        try
-                        {
-                            var pausedTextSnippet = "El asistente está temporalmente pausado";
-                            var lastSystem = await _context.Messages
-                                .Where(m => m.ConversationId == conversation.Id && m.Sender == "system")
-                                .OrderByDescending(m => m.CreatedAt)
-                                .Select(m => new { m.MessageText, m.CreatedAt })
-                                .FirstOrDefaultAsync();
-
-                            var shouldSendPaused = true;
-                            if (lastSystem != null && !string.IsNullOrEmpty(lastSystem.MessageText) && lastSystem.MessageText.Contains(pausedTextSnippet))
-                            {
-                                shouldSendPaused = false;
-                            }
-
-                            if (shouldSendPaused)
-                            {
-                                // Persist a system message so it becomes part of the conversation history
-                                var sysMsg = new Voia.Api.Models.Messages.Message
-                                {
-                                    BotId = conversation.BotId,
-                                    UserId = null,
-                                    PublicUserId = conversation.PublicUserId,
-                                    ConversationId = conversation.Id,
-                                    Sender = "system",
-                                    MessageText = "El asistente está temporalmente pausado. Un agente humano te responderá.",
-                                    Source = "system",
-                                    CreatedAt = DateTime.UtcNow
-                                };
-                                _context.Messages.Add(sysMsg);
-                                await _context.SaveChangesAsync();
-
-                                await Clients.Caller.SendAsync("ReceiveMessage", new
-                                {
-                                    conversationId,
-                                    from = "system",
-                                    text = sysMsg.MessageText,
-                                    timestamp = sysMsg.CreatedAt,
-                                    id = sysMsg.Id,
-                                    status = "paused",
-                                    tempId = request?.TempId
-                                });
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Error checking/sending paused notification for conversation {conv}", conversationId);
-                            // Best-effort: do not block the request flow if this check fails
-                        }
-
-                        return;
-                    }
-
+                    
+                    _logger.LogInformation("📬 [SendMessage] Encolando mensaje para procesamiento IA - conv {conv}, msg {msgId}", conversationId, userMessage.Id);
                     await _messageQueue.EnqueueAsync(job);
-
-                    _logger.LogInformation("Message enqueued for conversation {conv} message {msg}", conversationId, userMessage.Id);
-
-                    // Optionally notify the client that the message was queued (status: queued)
-                    await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request?.TempId });
-
-                    return;
+                    _logger.LogInformation("📤 [SendMessage] Enviando MessageQueued a Caller - conv {conv}, msg {msgId}, tempId {tempId}", conversationId, userMessage.Id, request.TempId);
+                    await Clients.Caller.SendAsync("MessageQueued", new { conversationId, messageId = userMessage.Id, tempId = request.TempId });
+                    _logger.LogInformation("✅ [SendMessage] Mensaje encolado exitosamente y MessageQueued enviado para conv {conv}", conversationId);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to enqueue message job for conversation {conv}", conversationId);
+                    // Fallback en caso de error en el procesamiento de IA
+                    await SendFallbackBotMessage(conversation, request?.TempId);
                 }
             }
             catch (Exception ex)
@@ -886,6 +832,50 @@ namespace Voia.Api.Hubs
                     tempId = request.TempId
                 });
             }
+        }
+
+        // Método auxiliar para enviar y guardar el mensaje de fallback IA
+        private async Task SendFallbackBotMessage(Conversation conversation, string tempId)
+        {
+            var fallbackText = $"✅ Mensaje recibido correctamente: '{conversation.UserMessage ?? "sin texto"}'. El sistema de IA no está conectado aún, pero el flujo de mensajería funciona.";
+            _logger.LogInformation("🤖 [SendFallbackBotMessage] Preparando mensaje de fallback para conv {conv}", conversation.Id);
+            var botFallbackMessage = new Voia.Api.Models.Messages.Message
+            {
+                BotId = conversation.BotId,
+                UserId = null,
+                PublicUserId = conversation.PublicUserId,
+                ConversationId = conversation.Id,
+                Sender = "bot",
+                MessageText = fallbackText,
+                Source = "ai-fallback",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Messages.Add(botFallbackMessage);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("💾 [SendFallbackBotMessage] Mensaje guardado en BD - ID: {msgId}", botFallbackMessage.Id);
+
+            _logger.LogInformation("📤 [SendFallbackBotMessage] Enviando ReceiveMessage al grupo '{group}'", conversation.Id.ToString());
+            await Clients.Group(conversation.Id.ToString()).SendAsync("ReceiveMessage", new
+            {
+                conversationId = conversation.Id,
+                from = "bot",
+                text = fallbackText,
+                timestamp = botFallbackMessage.CreatedAt,
+                id = botFallbackMessage.Id,
+                status = "sent",
+                tempId
+            });
+            _logger.LogInformation("✅ [SendFallbackBotMessage] ReceiveMessage enviado exitosamente al grupo");
+            await Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+            {
+                conversationId = conversation.Id,
+                from = "bot",
+                text = fallbackText,
+                timestamp = botFallbackMessage.CreatedAt,
+                id = botFallbackMessage.Id,
+                alias = $"Sesión {conversation.Id}",
+                lastMessage = fallbackText
+            });
         }
 
         public async Task AdminMessage(int conversationId, string text, int? replyToMessageId = null, string? replyToText = null)

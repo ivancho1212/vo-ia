@@ -284,7 +284,20 @@ namespace Voia.Api.Controllers
             var template = await _context.BotTemplates.FindAsync(id);
 
             if (template == null)
-                return NotFound();
+                return NotFound(new { message = "Plantilla no encontrada." });
+
+            // ✅ Verificar si hay bots usando esta plantilla
+            var botsUsingTemplate = await _context.Bots
+                .Where(b => b.BotTemplateId == id)
+                .CountAsync();
+
+            if (botsUsingTemplate > 0)
+            {
+                return BadRequest(new { 
+                    message = $"No se puede eliminar la plantilla porque está siendo usada por {botsUsingTemplate} bot(s).",
+                    botsCount = botsUsingTemplate
+                });
+            }
 
             _context.BotTemplates.Remove(template);
             await _context.SaveChangesAsync();

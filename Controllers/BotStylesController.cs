@@ -291,9 +291,10 @@ namespace Voia.Api.Controllers
         }
 
         /// <summary>
-        /// Obtiene el estilo de un bot para widgets (sin autenticación)
+        /// Obtiene el estilo de un bot para widgets
+        /// REQUIERE TOKEN VÁLIDO - Si la integración se elimina, rechaza el request
         /// </summary>
-        [AllowAnonymous]
+        [BotTokenAuthorize] // ✅ CRÍTICO: Valida que la integración existe
         [EnableCors("AllowWidgets")] // 🔧 CORS para widgets
         [HttpGet("widget/{botId}")]
         public async Task<ActionResult<object>> GetStyleForWidget(int botId)

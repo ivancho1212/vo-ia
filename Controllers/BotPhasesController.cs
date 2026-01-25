@@ -27,7 +27,13 @@ namespace Voia.Api.Controllers
                 .Where(p => p.BotId == botId)
                 .ToListAsync();
 
-            var result = rows.ToDictionary(r => r.Phase, r => new { completed = r.CompletedAt != null, completedAt = r.CompletedAt, meta = r.Meta });
+            var result = rows
+                .GroupBy(r => r.Phase)
+                .ToDictionary(g => g.Key, g =>
+                {
+                    var latest = g.OrderByDescending(x => x.CompletedAt ?? DateTime.MinValue).First();
+                    return new { completed = latest.CompletedAt != null, completedAt = latest.CompletedAt, meta = latest.Meta };
+                });
 
             return Ok(new { phases = result });
         }
@@ -46,7 +52,7 @@ namespace Voia.Api.Controllers
             }
             else
             {
-                existing = new BotPhase
+                existing = new Voia.Api.Models.Bots.BotPhase
                 {
                     BotId = req.BotId,
                     Phase = req.Phase,

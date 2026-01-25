@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Cors;
 using Voia.Api.Data;
 using Voia.Api.Models.BotIntegrations;
 using System.Threading.Tasks;
@@ -119,7 +120,7 @@ namespace Voia.Api.Controllers
                     new Claim("botId", dto.BotId.ToString()),
                     new Claim("allowedDomain", dto.Settings?.AllowedDomain?.Trim() ?? string.Empty)
                 }),
-                Expires = DateTime.UtcNow.AddHours(2), // Expiración corta
+                Expires = DateTime.UtcNow.AddYears(1), // Token de larga duración para widgets embebidos
                 Issuer = _config["Jwt:Issuer"],
                 Audience = _config["Jwt:Audience"],
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -174,7 +175,16 @@ namespace Voia.Api.Controllers
                 // Marcar fase de integración como completada
                 try
                 {
-                    _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = dto.BotId, Phase = "integration", CompletedAt = DateTime.UtcNow, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                    var phase = await _context.BotPhases.FirstOrDefaultAsync(p => p.BotId == dto.BotId && p.Phase == "integration");
+                    if (phase == null)
+                    {
+                        _context.BotPhases.Add(new Voia.Api.Models.Bots.BotPhase { BotId = dto.BotId, Phase = "integration", CompletedAt = DateTime.UtcNow, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                    }
+                    else
+                    {
+                        phase.CompletedAt = DateTime.UtcNow;
+                        phase.UpdatedAt = DateTime.UtcNow;
+                    }
                     await _context.SaveChangesAsync();
                 }
                 catch { /* non-blocking */ }
@@ -211,6 +221,7 @@ namespace Voia.Api.Controllers
         }
 
         [HttpPost("generate-widget-token")]
+        [EnableCors("AllowWidgets")]
         public async Task<ActionResult<object>> GenerateWidgetToken([FromBody] GenerateWidgetTokenRequest request)
         {
             // Verificar que el bot existe

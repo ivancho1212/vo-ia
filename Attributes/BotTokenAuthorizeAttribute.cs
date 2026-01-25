@@ -17,6 +17,12 @@ namespace Voia.Api.Attributes
     {
         public void OnAuthorization(AuthorizationFilterContext context)
         {
+            // ✅ Permitir requests OPTIONS para CORS preflight
+            if (context.HttpContext.Request.Method == "OPTIONS")
+            {
+                return;
+            }
+
             // Verificar si el endpoint tiene [AllowAnonymous]
             var allowAnonymous = context.ActionDescriptor.EndpointMetadata
                 .Any(em => em.GetType() == typeof(AllowAnonymousAttribute));
@@ -83,7 +89,16 @@ namespace Voia.Api.Attributes
                     }
                 }
 
-                // 4. Validar dominio del request solo si no estamos en desarrollo
+                // 4. Validar que el token siga existiendo en la base de datos (no revocado)
+                var db = context.HttpContext.RequestServices.GetRequiredService<Voia.Api.Data.ApplicationDbContext>();
+                var integration = db.BotIntegrations.FirstOrDefault(i => i.BotId.ToString() == botIdClaim && i.ApiTokenHash == token);
+                if (integration == null)
+                {
+                    context.Result = new UnauthorizedObjectResult(new { error = "Token is revoked or integration deleted." });
+                    return;
+                }
+
+                // 5. Validar dominio del request solo si no estamos en desarrollo
                 if (!env.IsDevelopment())
                 {
                     var requestOrigin = request.Headers["Origin"].FirstOrDefault() 
@@ -96,7 +111,7 @@ namespace Voia.Api.Attributes
                     }
                 }
 
-                // 5. Validar que el botId del token coincide con el de la ruta (si aplica)
+                // 6. Validar que el botId del token coincide con el de la ruta (si aplica)
                 if (context.RouteData.Values.TryGetValue("botId", out var routeBotId))
                 {
                     if (!string.Equals(routeBotId?.ToString(), botIdClaim, StringComparison.Ordinal))
@@ -106,7 +121,7 @@ namespace Voia.Api.Attributes
                     }
                 }
 
-                // 6. Para endpoints sin botId en ruta, almacenar botId del token en HttpContext
+                // 7. Para endpoints sin botId en ruta, almacenar botId del token en HttpContext
                 context.HttpContext.Items["TokenBotId"] = botIdClaim;
                 context.HttpContext.Items["TokenAllowedDomain"] = allowedDomainClaim;
             }

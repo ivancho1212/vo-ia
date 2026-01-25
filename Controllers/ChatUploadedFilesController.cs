@@ -5,9 +5,11 @@ using Voia.Api.Data;
 using Voia.Api.Models.Chat;
 using Voia.Api.Attributes;
 using Voia.Api.Services.Upload;
+using Microsoft.AspNetCore.Cors;
 
 namespace Voia.Api.Controllers
 {
+    [EnableCors("AllowWidgets")]
     [ApiController]
     [Route("api/[controller]")]
     [BotTokenAuthorize]

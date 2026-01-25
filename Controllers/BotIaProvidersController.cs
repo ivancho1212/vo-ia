@@ -118,7 +118,33 @@ namespace Voia.Api.Controllers
             var entity = await _context.BotIaProviders.FindAsync(id);
 
             if (entity == null)
-                return NotFound();
+                return NotFound(new { message = "Proveedor no encontrado." });
+
+            // ✅ Verificar si hay plantillas usando este proveedor
+            var templatesUsingProvider = await _context.BotTemplates
+                .Where(t => t.IaProviderId == id)
+                .CountAsync();
+
+            if (templatesUsingProvider > 0)
+            {
+                return BadRequest(new { 
+                    message = $"No se puede eliminar el proveedor porque está siendo usado por {templatesUsingProvider} plantilla(s).",
+                    templatesCount = templatesUsingProvider
+                });
+            }
+
+            // ✅ Verificar si hay modelos de IA usando este proveedor
+            var modelsUsingProvider = await _context.AiModelConfigs
+                .Where(m => m.IaProviderId == id)
+                .CountAsync();
+
+            if (modelsUsingProvider > 0)
+            {
+                return BadRequest(new { 
+                    message = $"No se puede eliminar el proveedor porque está siendo usado por {modelsUsingProvider} modelo(s) de IA.",
+                    modelsCount = modelsUsingProvider
+                });
+            }
 
             _context.BotIaProviders.Remove(entity);
             await _context.SaveChangesAsync();

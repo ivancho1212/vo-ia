@@ -179,7 +179,20 @@ namespace Voia.Api.Controllers
         {
             var config = await _context.AiModelConfigs.FindAsync(id);
             if (config == null)
-                return NotFound(new { message = "Config not found." });
+                return NotFound(new { message = "Configuración no encontrada." });
+
+            // ✅ Verificar si hay plantillas usando este modelo
+            var templatesUsingModel = await _context.BotTemplates
+                .Where(t => t.AiModelConfigId == id)
+                .CountAsync();
+
+            if (templatesUsingModel > 0)
+            {
+                return BadRequest(new { 
+                    message = $"No se puede eliminar el modelo porque está siendo usado por {templatesUsingModel} plantilla(s).",
+                    templatesCount = templatesUsingModel
+                });
+            }
 
             _context.AiModelConfigs.Remove(config);
             await _context.SaveChangesAsync();

@@ -341,6 +341,7 @@ public class MessageProcessingWorker : BackgroundService
                 await db.SaveChangesAsync(cancellationToken);
                 _logger.LogInformation($"✅ [Worker] Conversación actualizada con mensaje de 'no access'");
 
+                _logger.LogInformation($"📤 [Worker] Enviando ReceiveMessage 'no access' al grupo '{job.ConversationId}'");
                 await hubContext.Clients.Group(job.ConversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId = job.ConversationId,
@@ -349,6 +350,7 @@ public class MessageProcessingWorker : BackgroundService
                     timestamp = noAccessMessage.CreatedAt,
                     id = noAccessMessage.Id
                 }, cancellationToken: cancellationToken);
+                _logger.LogInformation($"✅ [Worker] ReceiveMessage 'no access' enviado exitosamente al grupo '{job.ConversationId}'");
 
                 return;
             }
@@ -393,6 +395,7 @@ public class MessageProcessingWorker : BackgroundService
         await db.SaveChangesAsync(cancellationToken);
         _logger.LogInformation($"✅ [Worker] Conversación actualizada - bot_response y last_message");
 
+        _logger.LogInformation($"📤 [Worker] Enviando ReceiveMessage con respuesta de IA al grupo '{job.ConversationId}'");
         await hubContext.Clients.Group(job.ConversationId.ToString()).SendAsync("ReceiveMessage", new
         {
             conversationId = job.ConversationId,
@@ -401,6 +404,7 @@ public class MessageProcessingWorker : BackgroundService
             timestamp = botMessage.CreatedAt,
             id = botMessage.Id
         }, cancellationToken: cancellationToken);
+        _logger.LogInformation($"✅ [Worker] ReceiveMessage enviado exitosamente al grupo '{job.ConversationId}'");
         // Notify any connected admins in real-time about this bot response so admin panels update immediately
         try
         {

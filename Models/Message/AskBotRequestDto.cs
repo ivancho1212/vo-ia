@@ -14,5 +14,15 @@ namespace Voia.Api.Models.Conversations
         
         public int? ReplyToMessageId { get; set; }
         public string? TempId { get; set; }
+        
+        // 🌍 Ubicación del usuario para contextualizar respuestas
+        public UserLocationDto? UserLocation { get; set; }
+    }
+    
+    public class UserLocationDto
+    {
+        public string? Country { get; set; }
+        public string? City { get; set; }
+        public string? Language { get; set; }
     }
 }

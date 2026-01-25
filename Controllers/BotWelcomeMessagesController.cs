@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.EntityFrameworkCore;
 using Voia.Api.Data;
 using Voia.Api.Models.Bots;
@@ -47,6 +48,7 @@ namespace Voia.Api.Controllers
         /// <returns>Mensaje de bienvenida personalizado</returns>
         [HttpGet("get-by-location")]
         [AllowAnonymous]
+        [EnableCors("AllowWidgets")]
         public async Task<IActionResult> GetByLocation(
             [FromQuery] int botId,
             [FromQuery] string country = "Unknown",

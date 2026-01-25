@@ -4,8 +4,10 @@ using System.Text;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Models.AiModelConfigs;
 
-public class GeminiClient : IAApiClient
+namespace Voia.Api.Services.IAProviders
 {
+    public class GeminiClient : IAApiClient
+    {
     private readonly string _apiKey;
     private readonly string _endpoint;
 
@@ -50,5 +52,6 @@ public class GeminiClient : IAApiClient
     {
         // Método opcional para testear conexión
         return true;
+    }
     }
 }

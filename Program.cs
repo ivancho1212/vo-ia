@@ -139,7 +139,7 @@ var frontendOrigins = (builder.Configuration["CORS:FrontendOrigins"] ??
     .ToArray();
 
 var widgetOrigins = (builder.Configuration["CORS:WidgetOrigins"] ?? 
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5006,http://127.0.0.1:5006")
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5006,http://127.0.0.1:5006,http://localhost:8000,http://127.0.0.1:8000")
     .Split(",")
     .Select(o => o.Trim())
     .Where(o => !string.IsNullOrEmpty(o))
@@ -169,12 +169,7 @@ builder.Services.AddCors(options =>
     {
         //  DEVELOPMENT: Explicitly allow localhost for widget development
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                "http://localhost:5006",
-                "http://127.0.0.1:5006"
-            )
+            .WithOrigins(widgetOrigins)
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials()
@@ -520,7 +515,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
-app.MapHub<ChatHub>("/chatHub");
+app.MapHub<ChatHub>("/chatHub")
+    .RequireCors("AllowWidgets"); // ✅ CORS para SignalR desde widgets
 
 app.Run();
 

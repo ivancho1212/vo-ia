@@ -4,8 +4,10 @@ using System.Text;
 using Voia.Api.Services.IAProviders;
 using Voia.Api.Models.AiModelConfigs;
 
-public class DeepSeekClient : IAApiClient
+namespace Voia.Api.Services.IAProviders
 {
+    public class DeepSeekClient : IAApiClient
+    {
     private readonly string _apiKey;
     private readonly string _endpoint;
 
@@ -35,6 +37,7 @@ public class DeepSeekClient : IAApiClient
 
         var jsonResponse = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(jsonResponse);
-        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+    }
     }
 }

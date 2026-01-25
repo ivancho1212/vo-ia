@@ -19,7 +19,7 @@ namespace Voia.Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [BotTokenAuthorize]
+    [Authorize(Roles = "Admin,Super Admin")]
     public class MessagesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

@@ -8,6 +8,7 @@ using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Voia.Api.Hubs;
+using Microsoft.AspNetCore.Cors;
 using Voia.Api.Models.Messages;
 using System.Linq;
 using Voia.Api.Services;
@@ -89,6 +90,7 @@ namespace Voia.Api.Controllers
 
         [HttpPost("get-or-create")]
         [AllowAnonymous]
+        [EnableCors("AllowWidgets")]
         public async Task<IActionResult> CreateOrGetConversation([FromBody] CreateConversationDto dto)
         {
             try
@@ -340,6 +342,24 @@ namespace Voia.Api.Controllers
             }
             return Ok();
         }
+
+        [HttpPost("{id}/expire")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ExpireConversation(int id)
+        {
+            var conversation = await _context.Conversations.FindAsync(id);
+            if (conversation != null)
+            {
+                conversation.Status = "expired";
+                conversation.ClosedAt = DateTime.UtcNow;
+                conversation.LastActiveAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                
+                Console.WriteLine($"[API] Conversación {id} marcada como expirada por inactividad en widget cerrado");
+            }
+            return Ok();
+        }
+
         /// <summary>
         /// Devuelve las conversaciones asociadas a los bots de un usuario específico.
         /// </summary>
@@ -388,6 +408,7 @@ namespace Voia.Api.Controllers
             }
         }
 
+        [EnableCors("AllowWidgets")] // ✅ CORS para widgets
         [HttpGet("history/{conversationId}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetConversationHistory(int conversationId)
@@ -1139,6 +1160,7 @@ namespace Voia.Api.Controllers
         /// </summary>
         [HttpGet("user-location")]
         [AllowAnonymous]
+        [EnableCors("AllowWidgets")]
         public async Task<IActionResult> GetUserLocation()
         {
             try

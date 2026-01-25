@@ -17,12 +17,12 @@ using Voia.Api.Models.UserBotRelations;
 using Voia.Api.Models.UserPreferences;
 using Voia.Api.Models.Chat;
 using Voia.Api.Models.ConversationTag;
-using Voia.Api.Models.Users;
 using Voia.Api.Models.Bots;
+using Voia.Api.Models.Users;
 
 namespace Voia.Api.Data
 {
-    public class ApplicationDbContext : Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityDbContext<User, Role, int>
+    public class ApplicationDbContext : Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityDbContext<Voia.Api.Models.User, Voia.Api.Models.Role, int>
     {
         public DbSet<DocumentType> DocumentTypes { get; set; }
         public DbSet<Conversation> Conversations { get; set; }
