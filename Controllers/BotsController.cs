@@ -880,7 +880,9 @@ namespace Voia.Api.Controllers
                         CustomCss = style2?.CustomCss,
                         HeaderBackgroundColor = style2?.HeaderBackgroundColor,
                         AllowImageUpload = style2?.AllowImageUpload ?? true,
-                        AllowFileUpload = style2?.AllowFileUpload ?? true
+                        AllowFileUpload = style2?.AllowFileUpload ?? true,
+                        Width = style2?.Width ?? 380,
+                        Height = style2?.Height ?? 600
                     },
                     WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
                 };
@@ -1095,7 +1097,9 @@ namespace Voia.Api.Controllers
                     CustomCss = style?.CustomCss,
                     HeaderBackgroundColor = style?.HeaderBackgroundColor,
                     AllowImageUpload = style?.AllowImageUpload ?? true,
-                    AllowFileUpload = style?.AllowFileUpload ?? true
+                    AllowFileUpload = style?.AllowFileUpload ?? true,
+                    Width = style?.Width ?? 380,
+                    Height = style?.Height ?? 600
                 },
                 WelcomeMessage = "¡Hola! ¿En qué puedo ayudarte?"
             };

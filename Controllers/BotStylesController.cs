@@ -188,6 +188,8 @@ namespace Voia.Api.Controllers
                 style.Title = dto.Title;
                 style.AllowImageUpload = dto.AllowImageUpload;
                 style.AllowFileUpload = dto.AllowFileUpload;
+                if (dto.Width.HasValue) style.Width = dto.Width.Value;
+                if (dto.Height.HasValue) style.Height = dto.Height.Value;
                 style.UpdatedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();
@@ -229,6 +231,8 @@ namespace Voia.Api.Controllers
                     Title = dto.Title,
                     AllowImageUpload = dto.AllowImageUpload,
                     AllowFileUpload = dto.AllowFileUpload,
+                    Width = dto.Width ?? 380,
+                    Height = dto.Height ?? 600,
                     UpdatedAt = DateTime.UtcNow
                 };
 
@@ -326,7 +330,9 @@ namespace Voia.Api.Controllers
                         allowImageUpload = bot.Style.AllowImageUpload,
                         allowFileUpload = bot.Style.AllowFileUpload,
                         theme = bot.Style.Theme ?? "light",
-                        title = bot.Style.Title ?? bot.Name ?? "Asistente Virtual"
+                        title = bot.Style.Title ?? bot.Name ?? "Asistente Virtual",
+                        width = bot.Style.Width ?? 380,
+                        height = bot.Style.Height ?? 600
                     }
                 };
 

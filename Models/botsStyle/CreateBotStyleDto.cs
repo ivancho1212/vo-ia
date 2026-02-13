@@ -16,4 +16,6 @@ public class CreateBotStyleDto
     public string? Title { get; set; }
     public bool AllowImageUpload { get; set; } = true;
     public bool AllowFileUpload { get; set; } = true;
+    public int? Width { get; set; } = 380;
+    public int? Height { get; set; } = 600;
 }

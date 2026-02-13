@@ -14,7 +14,9 @@ namespace Voia.Api.Models
         public string? CustomCss { get; set; }
         public string? HeaderBackgroundColor { get; set; }
         public string? Title { get; set; }
-        public bool AllowImageUpload { get; set; } = true; // Default value
-        public bool AllowFileUpload { get; set; } = true; // Default value
+        public bool AllowImageUpload { get; set; } = true;
+        public bool AllowFileUpload { get; set; } = true;
+        public int? Width { get; set; } = 380;
+        public int? Height { get; set; } = 600;
     }
 }

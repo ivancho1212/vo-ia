@@ -560,7 +560,7 @@ namespace Voia.Api.Hubs
                     ConversationId = conversation.Id,
                     Sender = "user",
                     MessageText = request.Question ?? string.Empty,
-                    Source = "widget",
+                    Source = string.IsNullOrWhiteSpace(request.Origen) ? "widget" : request.Origen.ToLower(),
                     CreatedAt = DateTime.UtcNow,
                     ReplyToMessageId = request.ReplyToMessageId
                 };

@@ -61,5 +61,11 @@ namespace Voia.Api.Models.Bots
 
     [JsonPropertyName("allowFileUpload")]
     public bool AllowFileUpload { get; set; } = true;
+
+    [JsonPropertyName("width")]
+    public int? Width { get; set; } = 380;
+
+    [JsonPropertyName("height")]
+    public int? Height { get; set; } = 600;
     }
 }

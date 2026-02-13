@@ -43,7 +43,11 @@ namespace Voia.Api.Models
         public bool AllowFileUpload { get; set; } = true;
         public string? Title { get; set; }
 
+        [Column("width")]
+        public int? Width { get; set; } = 380;
 
+        [Column("height")]
+        public int? Height { get; set; } = 600;
     }
 
 }

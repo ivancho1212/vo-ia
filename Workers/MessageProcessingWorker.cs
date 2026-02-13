@@ -176,10 +176,11 @@ public class MessageProcessingWorker : BackgroundService
             return;
         }
 
-        // Defense-in-depth: if the conversation has AI paused, skip processing the job.
+        // Si la IA está pausada, enviar contestador (respuesta establecida) para que el usuario siempre reciba respuesta.
         if (!conversation.IsWithAI)
         {
-            _logger.LogInformation("Skipping job {job} because AI is paused for conversation {conv}", job.MessageId, job.ConversationId);
+            _logger.LogInformation("IA pausada en conversación {conv} - enviando contestador (respuesta establecida)", job.ConversationId);
+            await SendContestadorMessageAsync(db, hubContext, conversation, job, cancellationToken);
             return;
         }
 
@@ -424,5 +425,56 @@ public class MessageProcessingWorker : BackgroundService
         {
             _logger.LogWarning(ex, "Failed to notify admins about bot message {MessageId} for conv {ConversationId}", botMessage.Id, botMessage.ConversationId);
         }
+    }
+
+    /// <summary>
+    /// Envía un mensaje de contestador (respuesta establecida) cuando la IA está pausada.
+    /// Así el usuario público siempre recibe una respuesta y el admin ve el mismo flujo.
+    /// </summary>
+    private static async Task SendContestadorMessageAsync(
+        ApplicationDbContext db,
+        IHubContext<ChatHub> hubContext,
+        Voia.Api.Models.Conversations.Conversation conversation,
+        MessageJob job,
+        CancellationToken cancellationToken)
+    {
+        var contestadorText = "✅ Mensaje recibido. Un agente te atenderá pronto. ¿Algo más en lo que pueda ayudarte?";
+        var botMessage = new Voia.Api.Models.Messages.Message
+        {
+            BotId = job.BotId,
+            UserId = job.UserId,
+            PublicUserId = conversation.PublicUserId,
+            ConversationId = job.ConversationId,
+            Sender = "bot",
+            MessageText = contestadorText,
+            Source = "contestador",
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Messages.Add(botMessage);
+        conversation.BotResponse = contestadorText;
+        conversation.LastMessage = contestadorText;
+        conversation.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(cancellationToken);
+
+        await hubContext.Clients.Group(job.ConversationId.ToString()).SendAsync("ReceiveMessage", new
+        {
+            conversationId = job.ConversationId,
+            from = "bot",
+            text = contestadorText,
+            timestamp = botMessage.CreatedAt,
+            id = botMessage.Id,
+            status = "sent"
+        }, cancellationToken: cancellationToken);
+
+        await hubContext.Clients.Group("admin").SendAsync("NewConversationOrMessage", new
+        {
+            conversationId = job.ConversationId,
+            from = "bot",
+            text = contestadorText,
+            timestamp = botMessage.CreatedAt,
+            id = botMessage.Id,
+            alias = $"Sesión {job.ConversationId}",
+            lastMessage = contestadorText
+        }, cancellationToken: cancellationToken);
     }
 }
