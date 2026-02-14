@@ -19,10 +19,11 @@ using Voia.Api.Models.DTOs;
 using Voia.Api.Services;
 using Voia.Api.Models.Users;
 using Voia.Api.Models.Messages.DTOs;
+using Microsoft.AspNetCore.Authorization; // ✅ Para [Authorize] y [AllowAnonymous]
 
 namespace Voia.Api.Hubs
 {
-    // [Authorize] // <--- QUITADO para permitir validación manual en JoinRoom
+    [Authorize] // ✅ Habilitado para que Context.User se popule con el token JWT
     public class ChatHub : Hub
     {
         // Validación manual de JWT para SignalR (acepta tokens del widget)
@@ -120,6 +121,10 @@ namespace Voia.Api.Hubs
         // Optional presence service - may be null if Redis not configured
         private readonly PresenceService? _presenceService;
         private readonly IMessageQueue? _messageQueue;
+        
+        // Email notifications for offline admins
+        private readonly IEmailService _emailService;
+        private readonly Microsoft.AspNetCore.Identity.UserManager<User> _userManager;
 
         public ChatHub(
             IAiProviderService aiProviderService,
@@ -131,6 +136,8 @@ namespace Voia.Api.Hubs
             HttpClient httpClient,
             PromptBuilderService promptBuilderService,
             Voia.Api.Services.Upload.IFileSignatureChecker checker,
+            IEmailService emailService,
+            Microsoft.AspNetCore.Identity.UserManager<User> userManager,
             PresenceService? presenceService = null,
             IMessageQueue? messageQueue = null
         )
@@ -146,8 +153,11 @@ namespace Voia.Api.Hubs
             _checker = checker;
             _presenceService = presenceService;
             _messageQueue = messageQueue;
+            _emailService = emailService;
+            _userManager = userManager;
         }
 
+        [AllowAnonymous] // ✅ Permitir acceso anónimo para validar tokens del widget manualmente
         public async Task JoinRoom(int conversationId)
         {
             if (conversationId <= 0)
@@ -155,18 +165,32 @@ namespace Voia.Api.Hubs
                 throw new HubException("El ID de conversación debe ser un número positivo.");
             }
 
-            // Validar JWT manualmente si el usuario es anónimo (widget)
-            var httpContext = Context.GetHttpContext();
-            var token = httpContext?.Request.Query["access_token"].FirstOrDefault();
-            string? botIdFromToken = null;
-            if (!string.IsNullOrEmpty(token))
+            // ✅ Verificar si es un usuario autenticado (admin/dashboard)
+            var isAuthenticated = Context.User?.Identity?.IsAuthenticated ?? false;
+            
+            if (!isAuthenticated)
             {
-                if (!ValidateWidgetJwt(token, out botIdFromToken))
+                // Validar JWT manualmente si el usuario es anónimo (widget)
+                var httpContext = Context.GetHttpContext();
+                var token = httpContext?.Request.Query["access_token"].FirstOrDefault();
+                string? botIdFromToken = null;
+                if (!string.IsNullOrEmpty(token))
                 {
-                    throw new HubException("Token JWT inválido para widget.");
+                    if (!ValidateWidgetJwt(token, out botIdFromToken))
+                    {
+                        throw new HubException("Token JWT inválido para widget.");
+                    }
+                    _logger.LogInformation("✅ [JoinRoom] Usuario widget validado para conversación {conv}", conversationId);
                 }
-                // Opcional: Validar que conversationId corresponda al botId del token
-                // (puedes agregar lógica extra aquí si lo necesitas)
+                else
+                {
+                    _logger.LogWarning("⚠️ [JoinRoom] Usuario no autenticado sin token JWT intentando unirse a conversación {conv}", conversationId);
+                }
+            }
+            else
+            {
+                var userId = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                _logger.LogInformation("✅ [JoinRoom] Usuario autenticado {userId} uniéndose a conversación {conv}", userId, conversationId);
             }
 
             try
@@ -280,6 +304,7 @@ namespace Voia.Api.Hubs
 
             await Clients.Caller.SendAsync("InitialConversations", result);
         }
+        [AllowAnonymous] // ✅ Widget puede notificar actividad
         public async Task UserIsActive(int conversationId)
         {
             var conversation = await _context.Conversations.FindAsync(conversationId);
@@ -303,6 +328,7 @@ namespace Voia.Api.Hubs
                 await Clients.Group("admin").SendAsync("Heartbeat", conversationId);
             }
         }
+        [AllowAnonymous] // ✅ Permitir que el widget cree conversaciones sin autenticación
         public async Task<int> InitializeContext(object data)
         {
             try
@@ -358,6 +384,7 @@ namespace Voia.Api.Hubs
             }
         }
 
+        [AllowAnonymous] // ✅ Widget puede notificar expiración
         public async Task NotifyWidgetExpired(int conversationId)
         {
             try
@@ -398,6 +425,7 @@ namespace Voia.Api.Hubs
         }
         // ✅ Método para pausar o activar la IA desde el admin
 
+        [AllowAnonymous] // ✅ Widget puede enviar mensajes sin autenticación JWT de usuario
         public async Task SendMessage(int conversationId, AskBotRequestDto request)
         {
             // LOG explícito: registro de payload y contexto de conexión
@@ -774,6 +802,9 @@ namespace Voia.Api.Hubs
                     id = userMessage.Id
                 });
 
+                // 📧 Verificar si admin está offline y enviar notificación por email
+                await NotifyAdminIfOfflineAsync(conversationId, request.Question ?? string.Empty);
+
                 await StopTyping(conversationId, "user");
 
                 // Enqueue message for background processing (AI) to keep Hub responsive
@@ -965,6 +996,7 @@ namespace Voia.Api.Hubs
         /// Este mensaje se guarda directamente en la BD como respuesta del bot
         /// NO como entrada del usuario
         /// </summary>
+        [AllowAnonymous] // ✅ Widget puede guardar mensaje de bienvenida
         [HubMethodName("SaveWelcomeMessage")]
         public async Task SaveWelcomeMessage(int conversationId, string welcomeText, int botId)
         {
@@ -1032,6 +1064,7 @@ namespace Voia.Api.Hubs
             }
         }
 
+        [AllowAnonymous] // ✅ Widget puede enviar imágenes
         [HubMethodName("SendGroupedImages")]
         public async Task SendGroupedImages(int conversationId, int? userId, List<ChatFileDto> multipleFiles)
         {
@@ -1101,6 +1134,7 @@ namespace Voia.Api.Hubs
                         {
                             BotId = convo.BotId,
                             UserId = userId,
+                            PublicUserId = convo.PublicUserId,  // ✅ Incluir PublicUserId para consistencia
                             ConversationId = conversationId,
                             Sender = "user",
                             MessageText = $"📎 {file.FileName}",
@@ -1165,6 +1199,7 @@ namespace Voia.Api.Hubs
             }
         }
         // ✅ Renombrado para claridad y corregido para notificar solo a los OTROS clientes.
+        [AllowAnonymous] // ✅ Widget puede notificar que está escribiendo
         public async Task Typing(int conversationId, string userId)
         {
             if (conversationId > 0 && !string.IsNullOrWhiteSpace(userId))
@@ -1177,6 +1212,7 @@ namespace Voia.Api.Hubs
         }
 
         // ✅ Renombrado para claridad y corregido para notificar solo a los OTROS clientes.
+        [AllowAnonymous] // ✅ Widget puede notificar que dejó de escribir
         public async Task StopTyping(int conversationId, string userId)
         {
             if (conversationId > 0 && !string.IsNullOrWhiteSpace(userId))
@@ -1188,6 +1224,7 @@ namespace Voia.Api.Hubs
             }
         }
 
+        [AllowAnonymous] // ✅ Widget puede enviar archivos
         public async Task SendFile(int conversationId, object payload)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, conversationId.ToString());
@@ -1292,8 +1329,29 @@ namespace Voia.Api.Hubs
                 fileObj.FileName = fileObj.FileName ?? "archivo";
                 fileObj.FileType = fileObj.FileType ?? "application/octet-stream";
 
-                var existing = await _context.ChatUploadedFiles
-                    .FirstOrDefaultAsync(f => f.FilePath == finalPath && f.ConversationId == conversationId);
+                // ✅ BUSCAR archivo existente: primero por ID en URL /api/files/chat/{id}, luego por FilePath
+                ChatUploadedFile? existing = null;
+                
+                if (finalPath.Contains("/api/files/chat/"))
+                {
+                    // El cliente envió la URL de API — extraer el ID para buscar directamente
+                    var idStr = finalPath.Replace("/api/files/chat/", "").Split('/')[0].Split('?')[0];
+                    if (int.TryParse(idStr, out var parsedFileId) && parsedFileId > 0)
+                    {
+                        existing = await _context.ChatUploadedFiles.FindAsync(parsedFileId);
+                        if (existing != null)
+                        {
+                            _logger.LogInformation($"✅ [SendFile] ChatUploadedFile encontrado por ID de API URL: {parsedFileId}");
+                        }
+                    }
+                }
+                
+                // Fallback: buscar por FilePath exacto
+                if (existing == null)
+                {
+                    existing = await _context.ChatUploadedFiles
+                        .FirstOrDefaultAsync(f => f.FilePath == finalPath && f.ConversationId == conversationId);
+                }
 
                 ChatUploadedFile dbFile;
                 if (existing != null)
@@ -1319,6 +1377,34 @@ namespace Voia.Api.Hubs
                     await _context.SaveChangesAsync();
                 }
 
+                // ✅ Crear un registro Message vinculado al archivo para que aparezca en el historial
+                var existingMessage = await _context.Messages
+                    .FirstOrDefaultAsync(m => m.FileId == dbFile.Id && m.ConversationId == conversationId);
+                
+                if (existingMessage == null)
+                {
+                    var convo = await _context.Conversations.FindAsync(conversationId);
+                    var fileMessage = new Message
+                    {
+                        BotId = convo?.BotId,
+                        UserId = fileObj.UserId,
+                        PublicUserId = convo?.PublicUserId,
+                        ConversationId = conversationId,
+                        Sender = "user",
+                        MessageText = $"📎 {dbFile.FileName}",
+                        FileId = dbFile.Id,
+                        Source = "widget",
+                        CreatedAt = DateTime.UtcNow,
+                        Status = "sent"
+                    };
+                    _context.Messages.Add(fileMessage);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation($"✅ [SendFile] Mensaje creado para archivo: {dbFile.FileName} (FileId: {dbFile.Id}, MessageId: {fileMessage.Id})");
+                }
+
+                // ✅ Siempre usar URL de API segura, no la ruta física
+                var safeFileUrl = $"/api/files/chat/{dbFile.Id}";
+
                 await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", new
                 {
                     conversationId,
@@ -1327,7 +1413,7 @@ namespace Voia.Api.Hubs
                     {
                         fileName = dbFile.FileName,
                         fileType = dbFile.FileType,
-                        fileUrl = dbFile.FilePath
+                        fileUrl = safeFileUrl
                     }},
                     timestamp = DateTime.UtcNow
                 });
@@ -1337,14 +1423,14 @@ namespace Voia.Api.Hubs
                     conversationId,
                     from = "user",
                     text = "📎 Se envió un archivo.",
-                    alias = $"Sesión {conversationId}", // Changed from Usuario {fileObj.UserId}
+                    alias = $"Sesión {conversationId}",
                     lastMessage = "📎 Se envió un archivo.",
                     timestamp = DateTime.UtcNow,
                     files = new[] { new
                     {
                         fileName = dbFile.FileName,
                         fileType = dbFile.FileType,
-                        fileUrl = dbFile.FilePath
+                        fileUrl = safeFileUrl
                     }}
                 });
             }
@@ -1380,6 +1466,7 @@ namespace Voia.Api.Hubs
         /// - Retry automático si falla
         /// - Sin duplicación de datos (base64 solo local)
         /// </summary>
+        [AllowAnonymous] // ✅ Widget puede actualizar estado de mensajes/archivos
         public async Task UpdateMessage(UpdateFileUploadStatusDto dto)
         {
             try
@@ -1529,6 +1616,77 @@ namespace Voia.Api.Hubs
             catch (Exception ex)
             {
                 _logger.LogError(ex, "❌ [NotifyMobileClosed] Error: {msg}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 📧 EMAIL NOTIFICATIONS: Verificar si hay admins online y enviar email si están offline
+        /// </summary>
+        private async Task NotifyAdminIfOfflineAsync(int conversationId, string messageText)
+        {
+            try
+            {
+                var conversation = await _context.Conversations
+                    .Include(c => c.AssignedUser)
+                    .FirstOrDefaultAsync(c => c.Id == conversationId);
+
+                if (conversation == null) return;
+
+                // Verificar si hay admins conectados en los últimos 5 minutos
+                var recentlyActiveAdminIds = await _context.ActivityLogs
+                    .Where(log => log.CreatedAt >= DateTime.UtcNow.AddMinutes(-5))
+                    .Select(log => log.UserId)
+                    .Distinct()
+                    .ToListAsync();
+
+                bool hasOnlineAdmin = recentlyActiveAdminIds.Any();
+
+                if (!hasOnlineAdmin)
+                {
+                    // No hay admins online - incrementar contador y enviar email
+                    conversation.UnreadAdminMessages++;
+                    await _context.SaveChangesAsync();
+
+                    // Buscar un admin para notificar (el asignado o cualquier admin)
+                    string? adminEmail = null;
+                    if (conversation.AssignedUserId.HasValue && conversation.AssignedUser != null)
+                    {
+                        adminEmail = conversation.AssignedUser.Email;
+                    }
+                    else
+                    {
+                        // Buscar cualquier admin con role "Admin"
+                        var admin = await _userManager.GetUsersInRoleAsync("Admin");
+                        adminEmail = admin.FirstOrDefault()?.Email;
+                    }
+
+                    if (!string.IsNullOrEmpty(adminEmail))
+                    {
+                        await _emailService.SendAdminNotificationAsync(
+                            adminEmail,
+                            conversationId.ToString(),
+                            messageText,
+                            conversation.UnreadAdminMessages
+                        );
+
+                        _logger.LogInformation(
+                            $"📧 Email de notificación enviado a {adminEmail} - Sesión {conversationId}, " +
+                            $"{conversation.UnreadAdminMessages} mensajes sin leer");
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"⚠️ No se encontró admin para notificar - Sesión {conversationId}");
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug($"👤 Hay admins online, no enviar email - Sesión {conversationId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ Error al notificar admin offline - Sesión {conversationId}");
+                // No relanzar para evitar que falle el flujo del mensaje
             }
         }
 

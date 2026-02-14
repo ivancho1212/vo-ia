@@ -48,16 +48,40 @@ namespace Voia.Api.Controllers
             return Ok(messages);
         }
 
-        // Obtener mensajes por conversación
+        // Obtener mensajes por conversación (incluye datos de archivos adjuntos)
         [HttpGet("by-conversation/{conversationId}")]
-        public async Task<ActionResult<IEnumerable<Message>>> GetMessagesByConversation(int conversationId)
+        public async Task<ActionResult> GetMessagesByConversation(int conversationId)
         {
             var messages = await _context.Messages
                 .Where(m => m.ConversationId == conversationId)
+                .Include(m => m.ChatUploadedFile)
                 .OrderBy(m => m.CreatedAt)
                 .ToListAsync();
 
-            return Ok(messages);
+            var result = messages.Select(m => new
+            {
+                id = m.Id,
+                conversationId = m.ConversationId,
+                botId = m.BotId,
+                userId = m.UserId,
+                publicUserId = m.PublicUserId,
+                sender = m.Sender,
+                messageText = m.MessageText,
+                tokensUsed = m.TokensUsed,
+                source = m.Source,
+                createdAt = m.CreatedAt,
+                read = m.Read,
+                replyToMessageId = m.ReplyToMessageId,
+                tempId = m.TempId,
+                fileId = m.FileId,
+                status = m.Status,
+                // ✅ Datos del archivo adjunto con URL de API segura
+                fileName = m.ChatUploadedFile?.FileName,
+                fileType = m.ChatUploadedFile?.FileType,
+                fileUrl = m.ChatUploadedFile != null ? $"/api/files/chat/{m.ChatUploadedFile.Id}" : null
+            });
+
+            return Ok(result);
         }
 
         // Obtener solo mensajes no leídos de una conversación

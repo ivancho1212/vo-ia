@@ -25,6 +25,7 @@ using Serilog;
 using Serilog.Events;
 using Voia.Api.Services.Caching;
 using DotNetEnv;
+using Voia.Api.Workers;
 
 //  Load environment variables from .env file
 var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
@@ -300,8 +301,14 @@ else
 
 builder.Services.AddEndpointsApiExplorer();
 
+//  EMAIL NOTIFICATION SERVICE
+// Configure EmailSettings from appsettings.json
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+builder.Services.AddScoped<IEmailService, EmailService>();
+
 // Hosted services
 builder.Services.AddHostedService<InactiveConversationWorker>();
+builder.Services.AddHostedService<EmailNotificationWorker>();
 
 // Message processing queue and worker - use RedisStreamMessageQueue when Redis is configured, otherwise fallback to in-memory
 if (!string.IsNullOrEmpty(redisConnection))

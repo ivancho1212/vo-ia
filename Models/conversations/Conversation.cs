@@ -65,6 +65,14 @@ namespace Voia.Api.Models.Conversations
         [Column("expires_at")]
         public DateTime? ExpiresAt { get; set; }
 
+        // 📧 EMAIL NOTIFICATIONS: Contador de mensajes sin leer por el admin
+        [Column("unread_admin_messages")]
+        public int UnreadAdminMessages { get; set; } = 0;
+
+        // 👤 ADMIN ASIGNADO: Usuario admin asignado a esta conversación
+        [Column("assigned_user_id")]
+        public int? AssignedUserId { get; set; }
+
         // Relaciones de navegación
         public virtual User? User { get; set; }
         public virtual Bot? Bot { get; set; }
@@ -73,6 +81,9 @@ namespace Voia.Api.Models.Conversations
 
         [ForeignKey("PublicUserId")]
         public virtual PublicUser? PublicUser { get; set; }
+
+        [ForeignKey("AssignedUserId")]
+        public virtual User? AssignedUser { get; set; }
 
     }
 }

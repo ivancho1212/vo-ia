@@ -441,13 +441,22 @@ namespace Voia.Api.Controllers
                     .Include(m => m.User)
                     .Include(m => m.PublicUser)
                     .Include(m => m.Bot)
+                    .Include(m => m.ChatUploadedFile)
                     .OrderBy(m => m.CreatedAt)
                     .ToListAsync();
+
+                // ✅ Recopilar IDs de archivos ya vinculados a mensajes para evitar duplicados
+                var linkedFileIds = rawMessages
+                    .Where(m => m.FileId.HasValue)
+                    .Select(m => m.FileId!.Value)
+                    .ToHashSet();
 
                 var messages = rawMessages.Select(m => new ConversationItemDto
                 {
                     Id = m.Id,
-                    Type = "message",
+                    Type = m.ChatUploadedFile != null
+                        ? (m.ChatUploadedFile.FileType != null && m.ChatUploadedFile.FileType.StartsWith("image") ? "image" : "file")
+                        : "message",
                     Text = m.MessageText,
                     Timestamp = m.CreatedAt,
                     FromRole = m.Sender,
@@ -458,13 +467,17 @@ namespace Voia.Api.Controllers
                     FromAvatarUrl = m.Sender == "user"
                         ? (m.User != null ? (m.User.AvatarUrl ?? "") : "")
                         : (m.Sender == "admin" ? (m.User != null ? (m.User.AvatarUrl ?? "") : "") : ""),
-                    ReplyToMessageId = m.ReplyToMessageId
+                    ReplyToMessageId = m.ReplyToMessageId,
+                    // ✅ Incluir datos del archivo con URL de API segura
+                    FileUrl = m.ChatUploadedFile != null ? $"/api/files/chat/{m.ChatUploadedFile.Id}" : null,
+                    FileName = m.ChatUploadedFile?.FileName,
+                    FileType = m.ChatUploadedFile?.FileType
                 }).ToList();
 
-                // --- Mapeo de Archivos ---
+                // --- Mapeo de Archivos (solo los NO vinculados a mensajes) ---
                 var files = await _context.ChatUploadedFiles
                     .AsNoTracking()
-                    .Where(f => f.ConversationId == conversationId)
+                    .Where(f => f.ConversationId == conversationId && !linkedFileIds.Contains(f.Id))
                     .Include(f => f.User)
                     .Select(f => new ConversationItemDto
                     {
@@ -475,7 +488,7 @@ namespace Voia.Api.Controllers
                         FromId = f.UserId,
                         FromName = f.User != null ? f.User.Name : "Usuario",
                         FromAvatarUrl = f.User != null ? (f.User.AvatarUrl ?? "") : "",
-                        FileUrl = f.FilePath,
+                        FileUrl = $"/api/files/chat/{f.Id}",
                         FileName = f.FileName,
                         FileType = f.FileType
                     })
@@ -695,6 +708,7 @@ namespace Voia.Api.Controllers
                 var fetchedMessages = await _context.Messages
                     .AsNoTracking()
                     .Where(m => m.ConversationId == conversationId && (!before.HasValue || m.CreatedAt < before.Value))
+                    .Include(m => m.ChatUploadedFile)
                     .Select(m => new {
                         Id = m.Id,
                         UserId = m.UserId,
@@ -703,13 +717,26 @@ namespace Voia.Api.Controllers
                         Sender = (m.Sender ?? "user"),
                         Text = m.MessageText,
                         ReplyToMessageId = m.ReplyToMessageId,
-                        Timestamp = m.CreatedAt
+                        Timestamp = m.CreatedAt,
+                        // ✅ Incluir datos del archivo vinculado con URL de API segura
+                        FileId = m.FileId,
+                        FileUrl = m.ChatUploadedFile != null ? $"/api/files/chat/{m.ChatUploadedFile.Id}" : null,
+                        FileName = m.ChatUploadedFile != null ? m.ChatUploadedFile.FileName : null,
+                        FileType = m.ChatUploadedFile != null ? m.ChatUploadedFile.FileType : null
                     })
                     .ToListAsync();
 
+                // ✅ Recopilar IDs de archivos ya vinculados a mensajes para evitar duplicados
+                var linkedFileIds = fetchedMessages
+                    .Where(m => m.FileId.HasValue)
+                    .Select(m => m.FileId!.Value)
+                    .ToHashSet();
+
                 var fetchedFiles = await _context.ChatUploadedFiles
                     .AsNoTracking()
-                    .Where(f => f.ConversationId == conversationId && (!before.HasValue || (f.UploadedAt.HasValue && f.UploadedAt < before.Value)))
+                    .Where(f => f.ConversationId == conversationId 
+                        && !linkedFileIds.Contains(f.Id)
+                        && (!before.HasValue || (f.UploadedAt.HasValue && f.UploadedAt < before.Value)))
                     .Include(f => f.User)
                     .Select(f => new {
                         Id = f.Id,
@@ -721,7 +748,7 @@ namespace Voia.Api.Controllers
                         Text = (string?)null,
                         ReplyToMessageId = (int?)null,
                         Timestamp = f.UploadedAt ?? DateTime.UtcNow,
-                        FileUrl = f.FilePath,
+                        FileUrl = $"/api/files/chat/{f.Id}",
                         FileName = f.FileName,
                         FileType = f.FileType,
                         UploaderName = f.User != null ? f.User.Name : "Usuario"
@@ -731,7 +758,9 @@ namespace Voia.Api.Controllers
                 // Project both sets into a common anonymous shape and merge
                 var combinedWindow = fetchedMessages.Select(m => new {
                     id = m.Id,
-                    type = "message",
+                    type = m.FileUrl != null 
+                        ? (m.FileType != null && m.FileType.StartsWith("image") ? "image" : "file") 
+                        : "message",
                     text = m.Text ?? string.Empty,
                     timestamp = m.Timestamp,
                     fromRole = m.Sender.ToLower() == "admin" ? "admin" : (m.Sender.ToLower() == "bot" ? "bot" : "user"),
@@ -742,14 +771,14 @@ namespace Voia.Api.Controllers
                     fromName = (string?)null,
                     fromAvatarUrl = string.Empty,
                     replyToMessageId = m.ReplyToMessageId,
-                    fileUrl = (string?)null,
-                    fileName = (string?)null,
-                    fileType = (string?)null
+                    fileUrl = m.FileUrl,
+                    fileName = m.FileName,
+                    fileType = m.FileType
                 }).Concat(
                     fetchedFiles.Select(f => new {
                         id = f.Id,
-                        type = f.FileType.StartsWith("image") ? "image" : "file",
-                        text = (string?)null,
+                        type = (f.FileType ?? "").StartsWith("image") ? "image" : "file",
+                        text = string.Empty,
                         timestamp = f.Timestamp,
                         fromRole = "user",
                         fromId = f.UserId,
@@ -761,7 +790,7 @@ namespace Voia.Api.Controllers
                         replyToMessageId = (int?)null,
                         fileUrl = f.FileUrl,
                         fileName = f.FileName,
-                        fileType = f.FileType
+                        fileType = (string?)f.FileType
                     })
                 )
                 .OrderByDescending(x => x.timestamp)
